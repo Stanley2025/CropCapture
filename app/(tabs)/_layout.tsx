@@ -3,8 +3,32 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Typography } from '../../src/constants/theme';
 import { Platform } from 'react-native';
+import { useAppStore } from '../../src/store/useAppStore';
 
 export default function TabLayout() {
+  const { currentRole } = useAppStore();
+
+  const getFarmsTitle = () => {
+    if (currentRole === 'extension_officer') return 'Assigned Farms';
+    if (currentRole === 'quality_inspector') return 'Parcels';
+    if (currentRole === 'cooperative_manager') return 'Coop Land';
+    return 'My Farms';
+  };
+
+  const getActivitiesTitle = () => {
+    if (currentRole === 'extension_officer') return 'Field Visits';
+    if (currentRole === 'quality_inspector') return 'Operations';
+    if (currentRole === 'cooperative_manager') return 'Union Logs';
+    return 'Activities';
+  };
+
+  const getHarvestsTitle = () => {
+    if (currentRole === 'quality_inspector') return 'Inspection Queue';
+    if (currentRole === 'extension_officer') return 'Yield Batches';
+    if (currentRole === 'cooperative_manager') return 'Harvests';
+    return 'Harvests';
+  };
+
   return (
     <Tabs
       screenOptions={{
@@ -33,7 +57,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: currentRole === 'farmer' ? 'Home' : 'Command',
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'home' : 'home-outline'}
@@ -46,7 +70,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="farms"
         options={{
-          title: 'My Farms',
+          title: getFarmsTitle(),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'map' : 'map-outline'}
@@ -59,7 +83,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="activities"
         options={{
-          title: 'Activities',
+          title: getActivitiesTitle(),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'calendar' : 'calendar-outline'}
@@ -72,7 +96,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="harvests"
         options={{
-          title: 'Harvests',
+          title: getHarvestsTitle(),
           tabBarIcon: ({ color, size, focused }) => (
             <Ionicons
               name={focused ? 'leaf' : 'leaf-outline'}

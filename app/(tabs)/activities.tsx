@@ -21,6 +21,7 @@ import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
+import { useAppStore } from '../../src/store/useAppStore';
 
 const CATEGORIES = [
   'All',
@@ -35,6 +36,7 @@ const CATEGORIES = [
 
 export default function ActivitiesScreen() {
   const router = useRouter();
+  const { currentRole } = useAppStore();
   const [activities, setActivities] = useState<FarmActivity[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -158,11 +160,19 @@ export default function ActivitiesScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
-          <Button
-            title="+ Record"
-            size="sm"
-            onPress={() => router.push('/activity/record' as any)}
-          />
+          {currentRole === 'extension_officer' ? (
+            <Button
+              title="+ Log Visit"
+              size="sm"
+              onPress={() => router.push('/extension/visit' as any)}
+            />
+          ) : (
+            <Button
+              title="+ Record"
+              size="sm"
+              onPress={() => router.push('/activity/record' as any)}
+            />
+          )}
         </View>
 
         {/* Filter Chips */}

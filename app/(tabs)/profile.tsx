@@ -20,14 +20,17 @@ import { RoleSwitcherModal } from '../../src/components/RoleSwitcherModal';
 
 export default function ProfileScreen() {
   const router = useRouter();
-  const { currentFarmer, currentRole, pendingSyncCount, isOfflineMode, toggleOfflineMode } =
+  const { currentFarmer, currentUserProfile, currentRole, pendingSyncCount, isOfflineMode, toggleOfflineMode, logout } =
     useAppStore();
 
   const [roleModalVisible, setRoleModalVisible] = useState(false);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="Farmer Profile" subtitle="Identification & settings" />
+      <Header
+        title={currentRole === 'farmer' ? 'Farmer Profile' : 'Staff Profile'}
+        subtitle="Identification & account settings"
+      />
       <OfflineBanner />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -38,12 +41,24 @@ export default function ProfileScreen() {
               <Ionicons name="person" size={36} color={Colors.primary} />
             </View>
             <View style={{ flex: 1, marginLeft: Spacing.md }}>
-              <Text style={styles.farmerName}>{currentFarmer.full_name}</Text>
+              <Text style={styles.farmerName}>{currentUserProfile.full_name || currentFarmer.full_name}</Text>
               <Text style={styles.farmerLocation}>
-                {currentFarmer.community}, {currentFarmer.district}, {currentFarmer.county}
+                {currentUserProfile.community || currentFarmer.community}, {currentUserProfile.county || currentFarmer.county}
               </Text>
               <View style={styles.idBadgeRow}>
-                <Badge label={currentFarmer.farmer_id_code} variant="gold" size="sm" />
+                <Badge
+                  label={
+                    currentRole === 'farmer'
+                      ? currentFarmer.farmer_id_code
+                      : currentRole === 'extension_officer'
+                      ? 'EXT-LR-0042'
+                      : currentRole === 'quality_inspector'
+                      ? 'INSP-LR-0019'
+                      : 'COOP-MGR-003'
+                  }
+                  variant="gold"
+                  size="sm"
+                />
                 <Badge label={currentRole.replace('_', ' ').toUpperCase()} variant="success" size="sm" />
               </View>
             </View>
@@ -225,6 +240,32 @@ export default function ProfileScreen() {
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionRow, { borderBottomWidth: 0 }]}
+            onPress={() => {
+              Alert.alert('Sign Out', 'Are you sure you want to log out of CropCapture?', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Sign Out',
+                  style: 'destructive',
+                  onPress: async () => {
+                    await logout();
+                    router.replace('/login');
+                  },
+                },
+              ]);
+            }}
+          >
+            <View style={styles.actionLeft}>
+              <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
+              <View>
+                <Text style={[styles.actionTitle, { color: Colors.danger }]}>Sign Out</Text>
+                <Text style={styles.actionSub}>Switch account or return to Login</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.danger} />
           </TouchableOpacity>
         </Card>
 

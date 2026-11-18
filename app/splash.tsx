@@ -13,6 +13,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAppStore } from '../src/store/useAppStore';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -80,13 +81,15 @@ export default function SplashScreen() {
     };
   }, [currentIndex]);
 
+  const { isAuthenticated } = useAppStore();
+
   const handleFinish = async () => {
     try {
       await AsyncStorage.setItem('@cropcapture_has_seen_splash', 'true');
     } catch (e) {
       // ignore
     }
-    router.replace('/(tabs)');
+    router.replace(isAuthenticated ? '/(tabs)' : '/login');
   };
 
   const handleNext = () => {

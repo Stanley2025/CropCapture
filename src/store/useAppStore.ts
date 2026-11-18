@@ -1,9 +1,114 @@
 import { create } from 'zustand';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserRole, Farmer, Profile, SyncStatusType, AppNotification } from '../types/database';
 import { localDb } from '../services/storage/localDatabase';
 import { syncEngine } from '../services/sync/syncEngine';
 
+export interface PersonaDetails {
+  title: string;
+  badge: string;
+  description: string;
+  badgeVariant: 'success' | 'info' | 'warning' | 'accent';
+  profile: Profile;
+  farmer?: Farmer;
+}
+
+export const PERSONAS: Record<string, PersonaDetails> = {
+  farmer: {
+    title: 'Farmer Persona',
+    badge: 'FARMER',
+    badgeVariant: 'success',
+    description: 'Manage personal farm parcels, cropping cycles, activities, harvests, and inputs.',
+    profile: {
+      id: 'p0000000-0000-0000-0000-000000000001',
+      full_name: 'Emmanuel Gaye',
+      phone: '+231-77-654-3210',
+      email: 'farmer@cropcapture.app',
+      role: 'farmer',
+      county: 'Nimba',
+      district: 'Sanniquellie-Mahn',
+      community: 'Gbehley',
+      cooperative_id: '33333333-3333-3333-3333-333333333301',
+      created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+    farmer: {
+      id: 'f0000000-0000-0000-0000-000000000001',
+      profile_id: 'p0000000-0000-0000-0000-000000000001',
+      farmer_id_code: 'AGR-F-000001',
+      full_name: 'Emmanuel Gaye',
+      gender: 'Male',
+      date_of_birth: '1984-05-12',
+      phone_number: '+231-77-654-3210',
+      email: 'farmer@cropcapture.app',
+      county: 'Nimba',
+      district: 'Sanniquellie-Mahn',
+      community: 'Gbehley',
+      cooperative_id: '33333333-3333-3333-3333-333333333301',
+      created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  },
+  extension_officer: {
+    title: 'Extension Officer',
+    badge: 'EXTENSION',
+    badgeVariant: 'info',
+    description: 'Conduct field diagnostics, GPS farm visits, advisory recommendations, and follow-ups.',
+    profile: {
+      id: 'p0000000-0000-0000-0000-000000000002',
+      full_name: 'Kebbeh Flomo',
+      phone: '+231-88-123-4567',
+      email: 'extension@cropcapture.app',
+      role: 'extension_officer',
+      county: 'Bong & Nimba',
+      district: 'Central Agricultural Zone',
+      community: 'Suakoko Extension Hub',
+      cooperative_id: '33333333-3333-3333-3333-333333333301',
+      created_at: new Date(Date.now() - 120 * 86400000).toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  },
+  quality_inspector: {
+    title: 'Quality Inspector',
+    badge: 'INSPECTOR',
+    badgeVariant: 'warning',
+    description: 'Inspect harvested batches, evaluate moisture/defects, and issue certification stamps.',
+    profile: {
+      id: 'p0000000-0000-0000-0000-000000000003',
+      full_name: 'Varney Fahnbulleh',
+      phone: '+231-77-888-9999',
+      email: 'inspector@cropcapture.app',
+      role: 'quality_inspector',
+      county: 'Montserrado & Nimba',
+      district: 'National Standards & Metrology',
+      community: 'National Rice & Cocoa Quality Bureau',
+      created_at: new Date(Date.now() - 150 * 86400000).toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  },
+  cooperative_manager: {
+    title: 'Cooperative Manager',
+    badge: 'COOPERATIVE',
+    badgeVariant: 'accent',
+    description: 'Review aggregate member production, audit sync status, and export trade manifests.',
+    profile: {
+      id: 'p0000000-0000-0000-0000-000000000004',
+      full_name: 'Arthur Sherman',
+      phone: '+231-77-555-1122',
+      email: 'admin@cropcapture.app',
+      role: 'cooperative_manager',
+      county: 'Nimba',
+      district: 'Sanniquellie',
+      community: 'Nimba Farmers Multipurpose Union',
+      cooperative_id: '33333333-3333-3333-3333-333333333301',
+      created_at: new Date(Date.now() - 200 * 86400000).toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  },
+};
+
 interface AppState {
+  isAuthenticated: boolean;
   currentRole: UserRole;
   isOfflineMode: boolean;
   syncStatus: SyncStatusType;
@@ -16,6 +121,9 @@ interface AppState {
 
   // Actions
   initialize: () => Promise<void>;
+  login: (email: string, password?: string, role?: UserRole) => Promise<boolean>;
+  loginAsRole: (role: UserRole) => Promise<void>;
+  logout: () => Promise<void>;
   setRole: (role: UserRole) => void;
   toggleOfflineMode: () => void;
   triggerManualSync: () => Promise<void>;
@@ -23,50 +131,19 @@ interface AppState {
   markNotificationRead: (id: string) => void;
 }
 
-const DEMO_FARMER: Farmer = {
-  id: 'f0000000-0000-0000-0000-000000000001',
-  profile_id: 'p0000000-0000-0000-0000-000000000001',
-  farmer_id_code: 'AGR-F-000001',
-  full_name: 'Emmanuel Gaye',
-  gender: 'Male',
-  date_of_birth: '1984-05-12',
-  phone_number: '+231-77-654-3210',
-  email: 'emmanuel.gaye@cropcapture.app',
-  county: 'Nimba',
-  district: 'Sanniquellie-Mahn',
-  community: 'Gbehley',
-  cooperative_id: '33333333-3333-3333-3333-333333333301',
-  created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
-const DEMO_PROFILE: Profile = {
-  id: 'p0000000-0000-0000-0000-000000000001',
-  full_name: 'Emmanuel Gaye',
-  phone: '+231-77-654-3210',
-  email: 'emmanuel.gaye@cropcapture.app',
-  role: 'farmer',
-  county: 'Nimba',
-  district: 'Sanniquellie-Mahn',
-  community: 'Gbehley',
-  cooperative_id: '33333333-3333-3333-3333-333333333301',
-  created_at: new Date(Date.now() - 90 * 86400000).toISOString(),
-  updated_at: new Date().toISOString(),
-};
-
 const DEMO_NOTIFICATIONS: AppNotification[] = [
   {
     id: 'n1',
-    user_id: DEMO_PROFILE.id,
+    user_id: PERSONAS.farmer.profile.id,
     title: 'Harvest Batch Approved',
-    message: 'Batch AGR-2026-RICE-000001 has been inspected and received Grade A verification.',
+    message: 'Batch CRP-2026-RICE-000001 has been inspected and received Grade A verification.',
     type: 'inspection',
     is_read: false,
     created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
   },
   {
     id: 'n2',
-    user_id: DEMO_PROFILE.id,
+    user_id: PERSONAS.farmer.profile.id,
     title: 'Extension Visit Scheduled',
     message: 'Extension Officer Kebbeh Flomo has scheduled a field visit for Gbehley Swamp Farm.',
     type: 'visit',
@@ -75,7 +152,7 @@ const DEMO_NOTIFICATIONS: AppNotification[] = [
   },
   {
     id: 'n3',
-    user_id: DEMO_PROFILE.id,
+    user_id: PERSONAS.farmer.profile.id,
     title: 'Weather & Planting Alert',
     message: 'Favorable rainfall forecast across Nimba County. Recommended time for weeding & fertilizer application.',
     type: 'system',
@@ -85,13 +162,14 @@ const DEMO_NOTIFICATIONS: AppNotification[] = [
 ];
 
 export const useAppStore = create<AppState>((set, get) => ({
+  isAuthenticated: false,
   currentRole: 'farmer',
   isOfflineMode: false,
   syncStatus: 'synced',
   pendingSyncCount: 0,
   lastSyncTime: null,
-  currentFarmer: DEMO_FARMER,
-  currentUserProfile: DEMO_PROFILE,
+  currentFarmer: PERSONAS.farmer.farmer!,
+  currentUserProfile: PERSONAS.farmer.profile,
   notifications: DEMO_NOTIFICATIONS,
   isInitialized: false,
 
@@ -104,12 +182,39 @@ export const useAppStore = create<AppState>((set, get) => ({
         (i) => i.status === 'waiting_to_sync' || i.status === 'sync_failed'
       ).length;
 
+      // Check stored auth session
+      const savedAuth = await AsyncStorage.getItem('@cropcapture_auth_session');
+      let isAuth = false;
+      let activeRole: UserRole = 'farmer';
+      let activeProfile = PERSONAS.farmer.profile;
+      let activeFarmer = PERSONAS.farmer.farmer!;
+
+      if (savedAuth) {
+        try {
+          const parsed = JSON.parse(savedAuth);
+          if (parsed && parsed.role && PERSONAS[parsed.role]) {
+            isAuth = true;
+            activeRole = parsed.role;
+            activeProfile = PERSONAS[parsed.role].profile;
+            if (PERSONAS[parsed.role].farmer) {
+              activeFarmer = PERSONAS[parsed.role].farmer!;
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+
       // Subscribe to sync engine status
       syncEngine.subscribeStatus((status) => {
         set({ syncStatus: status });
       });
 
       set({
+        isAuthenticated: isAuth,
+        currentRole: activeRole,
+        currentUserProfile: activeProfile,
+        currentFarmer: activeFarmer,
         isInitialized: true,
         lastSyncTime: lastSync,
         pendingSyncCount: pendingCount,
@@ -121,9 +226,80 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  login: async (email: string, _password?: string, role?: UserRole) => {
+    let targetRole: string = role || 'farmer';
+
+    if (!role) {
+      const cleanEmail = email.toLowerCase().trim();
+      if (cleanEmail.includes('extension')) targetRole = 'extension_officer';
+      else if (cleanEmail.includes('inspect')) targetRole = 'quality_inspector';
+      else if (cleanEmail.includes('admin') || cleanEmail.includes('coop')) targetRole = 'cooperative_manager';
+      else targetRole = 'farmer';
+    }
+
+    const persona = PERSONAS[targetRole] || PERSONAS.farmer;
+
+    await AsyncStorage.setItem(
+      '@cropcapture_auth_session',
+      JSON.stringify({
+        role: persona.profile.role,
+        email: email || persona.profile.email,
+        loggedInAt: new Date().toISOString(),
+      })
+    );
+
+    set({
+      isAuthenticated: true,
+      currentRole: persona.profile.role,
+      currentUserProfile: {
+        ...persona.profile,
+        email: email ? email.trim() : persona.profile.email,
+      },
+      currentFarmer: persona.farmer || get().currentFarmer,
+    });
+
+    return true;
+  },
+
+  loginAsRole: async (role: UserRole) => {
+    const roleKey = role === 'agricultural_admin' || role === 'super_admin' ? 'cooperative_manager' : role;
+    const persona = PERSONAS[roleKey] || PERSONAS.farmer;
+
+    await AsyncStorage.setItem(
+      '@cropcapture_auth_session',
+      JSON.stringify({
+        role: persona.profile.role,
+        email: persona.profile.email,
+        loggedInAt: new Date().toISOString(),
+      })
+    );
+
+    set({
+      isAuthenticated: true,
+      currentRole: persona.profile.role,
+      currentUserProfile: persona.profile,
+      currentFarmer: persona.farmer || get().currentFarmer,
+    });
+  },
+
+  logout: async () => {
+    await AsyncStorage.removeItem('@cropcapture_auth_session');
+    set({
+      isAuthenticated: false,
+      currentRole: 'farmer',
+      currentUserProfile: PERSONAS.farmer.profile,
+      currentFarmer: PERSONAS.farmer.farmer!,
+    });
+  },
+
   setRole: (role: UserRole) => {
-    const profile = { ...get().currentUserProfile, role };
-    set({ currentRole: role, currentUserProfile: profile });
+    const roleKey = role === 'agricultural_admin' || role === 'super_admin' ? 'cooperative_manager' : role;
+    const persona = PERSONAS[roleKey] || PERSONAS.farmer;
+    set({
+      currentRole: role,
+      currentUserProfile: persona.profile,
+      currentFarmer: persona.farmer || get().currentFarmer,
+    });
   },
 
   toggleOfflineMode: () => {

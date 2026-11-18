@@ -19,9 +19,11 @@ import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
+import { useAppStore } from '../../src/store/useAppStore';
 
 export default function HarvestsScreen() {
   const router = useRouter();
+  const { currentRole } = useAppStore();
   const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'approved' | 'pending'>('all');
   const [refreshing, setRefreshing] = useState(false);
@@ -162,11 +164,19 @@ export default function HarvestsScreen() {
             </TouchableOpacity>
           </View>
 
-          <Button
-            title="+ Register"
-            size="sm"
-            onPress={() => router.push('/harvest/register' as any)}
-          />
+          {currentRole === 'quality_inspector' ? (
+            <Button
+              title="Audit Queue"
+              size="sm"
+              onPress={() => router.push('/inspector' as any)}
+            />
+          ) : (
+            <Button
+              title="+ Register"
+              size="sm"
+              onPress={() => router.push('/harvest/register' as any)}
+            />
+          )}
         </View>
 
         {totalYield > 0 && (

@@ -19,9 +19,11 @@ import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
+import { useAppStore } from '../../src/store/useAppStore';
 
 export default function FarmsListScreen() {
   const router = useRouter();
+  const { currentRole } = useAppStore();
   const [farms, setFarms] = useState<Farm[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -111,7 +113,24 @@ export default function FarmsListScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header title="My Farms" subtitle="Parcels, GPS boundaries & soil types" />
+      <Header
+        title={
+          currentRole === 'extension_officer'
+            ? 'Assigned Parcels'
+            : currentRole === 'quality_inspector'
+            ? 'Production Parcels'
+            : currentRole === 'cooperative_manager'
+            ? 'Cooperative Land'
+            : 'My Farms'
+        }
+        subtitle={
+          currentRole === 'extension_officer'
+            ? 'Supervised community farm boundaries & GPS'
+            : currentRole === 'quality_inspector'
+            ? 'Traceability origin & soil classification'
+            : 'Parcels, GPS boundaries & soil types'
+        }
+      />
       <OfflineBanner />
 
       <View style={styles.container}>
@@ -119,11 +138,13 @@ export default function FarmsListScreen() {
           <Text style={styles.counterText}>
             {farms.length} Registered {farms.length === 1 ? 'Farm' : 'Farms'}
           </Text>
-          <Button
-            title="+ Register Farm"
-            size="sm"
-            onPress={() => router.push('/farm/register' as any)}
-          />
+          {currentRole === 'farmer' && (
+            <Button
+              title="+ Register Farm"
+              size="sm"
+              onPress={() => router.push('/farm/register' as any)}
+            />
+          )}
         </View>
 
         <FlatList
