@@ -37,14 +37,14 @@ const ACTIVITY_TYPES = [
 
 export default function RecordActivityScreen() {
   const router = useRouter();
-  const { farmId } = useLocalSearchParams<{ farmId?: string }>();
+  const { farmId, initialType } = useLocalSearchParams<{ farmId?: string; initialType?: string }>();
   const { currentFarmer, currentUserProfile, refreshPendingSyncCount } = useAppStore();
 
   const [farms, setFarms] = useState<Farm[]>([]);
   const [seasons, setSeasons] = useState<FarmSeason[]>([]);
   const [selectedFarmId, setSelectedFarmId] = useState<string>(farmId || '');
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>('');
-  const [activityType, setActivityType] = useState('Land preparation');
+  const [activityType, setActivityType] = useState(initialType || 'Land preparation');
   const [activityDate, setActivityDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
   const [quantity, setQuantity] = useState('');
@@ -321,12 +321,15 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
   },
   chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.surfaceAlt,
     borderWidth: 1,
     borderColor: Colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
+    paddingHorizontal: 14,
+    height: 34,
+    borderRadius: 17,
     marginRight: Spacing.xs,
   },
   chipActive: {

@@ -23,16 +23,34 @@ import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
 import { useAppStore } from '../../src/store/useAppStore';
 
-const CATEGORIES = [
-  'All',
-  'Land preparation',
-  'Planting',
-  'Fertilizer application',
-  'Weeding',
-  'Pest management',
-  'Irrigation',
-  'Field inspection',
+interface CategoryFilter {
+  key: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+}
+
+const CATEGORIES: CategoryFilter[] = [
+  { key: 'All', label: 'All', icon: 'grid-outline' },
+  { key: 'Land preparation', label: 'Land prep', icon: 'construct-outline' },
+  { key: 'Planting', label: 'Planting', icon: 'leaf-outline' },
+  { key: 'Fertilizer application', label: 'Fertilizer', icon: 'flask-outline' },
+  { key: 'Weeding', label: 'Weeding', icon: 'cut-outline' },
+  { key: 'Pest management', label: 'Pest control', icon: 'shield-outline' },
+  { key: 'Irrigation', label: 'Irrigation', icon: 'water-outline' },
+  { key: 'Field inspection', label: 'Inspection', icon: 'checkmark-circle-outline' },
 ];
+
+const getActivityTheme = (type: string) => {
+  const lower = (type || '').toLowerCase();
+  if (lower.includes('plant')) return { icon: 'leaf-outline' as const, bg: '#DCFCE7', color: '#15803D' };
+  if (lower.includes('fertiliz')) return { icon: 'flask-outline' as const, bg: '#FEF3C7', color: '#B45309' };
+  if (lower.includes('weed')) return { icon: 'cut-outline' as const, bg: '#E0E7FF', color: '#4338CA' };
+  if (lower.includes('land') || lower.includes('prep')) return { icon: 'construct-outline' as const, bg: '#F1F5F9', color: '#334155' };
+  if (lower.includes('pest') || lower.includes('disease')) return { icon: 'shield-outline' as const, bg: '#FEE2E2', color: '#B91C1C' };
+  if (lower.includes('inspect')) return { icon: 'checkmark-circle-outline' as const, bg: '#E0F2FE', color: '#0369A1' };
+  if (lower.includes('irrigat')) return { icon: 'water-outline' as const, bg: '#CCFBF1', color: '#0F766E' };
+  return { icon: 'calendar-outline' as const, bg: '#F3F4F6', color: '#4B5563' };
+};
 
 export default function ActivitiesScreen() {
   const router = useRouter();
@@ -71,6 +89,11 @@ export default function ActivitiesScreen() {
     return f ? f.name : 'Registered Parcel';
   };
 
+  const getCategoryCount = (key: string) => {
+    if (key === 'All') return activities.length;
+    return activities.filter((a) => a.activity_type.toLowerCase() === key.toLowerCase()).length;
+  };
+
   const filteredActivities = activities.filter((act) => {
     const matchesCategory =
       selectedCategory === 'All' || act.activity_type.toLowerCase() === selectedCategory.toLowerCase();
@@ -83,59 +106,66 @@ export default function ActivitiesScreen() {
 
   const totalCost = filteredActivities.reduce((acc, a) => acc + (Number(a.cost) || 0), 0);
 
-  const renderItem = ({ item }: { item: FarmActivity }) => (
-    <Card style={styles.activityCard}>
-      <View style={styles.cardHeader}>
-        <View style={styles.titleRow}>
-          <View style={styles.iconCircle}>
-            <Ionicons name="construct-outline" size={16} color={Colors.primary} />
+  const renderItem = ({ item }: { item: FarmActivity }) => {
+    const theme = getActivityTheme(item.activity_type);
+    return (
+      <Card style={styles.activityCard}>
+        <View style={styles.cardHeader}>
+          <View style={styles.titleRow}>
+            <View style={[styles.iconCircle, { backgroundColor: theme.bg }]}>
+              <Ionicons name={theme.icon} size={18} color={theme.color} />
+            </View>
+            <View style={{ flex: 1, marginRight: Spacing.xs }}>
+              <Text style={styles.activityTitle}>{item.activity_type}</Text>
+              <Text style={styles.farmLabel}>
+                {getFarmName(item.farm_id)}
+                {item.season_id ? ' • Main Season' : ''}
+              </Text>
+            </View>
           </View>
-          <View>
-            <Text style={styles.activityTitle}>{item.activity_type}</Text>
-            <Text style={styles.farmLabel}>{getFarmName(item.farm_id)}</Text>
-          </View>
-        </View>
-        <Badge
-          label={item.sync_status === 'synced' ? 'Synced' : 'Saved on Device'}
-          variant={item.sync_status === 'synced' ? 'success' : 'warning'}
-          size="sm"
-        />
-      </View>
-
-      {item.description ? (
-        <Text style={styles.description}>{item.description}</Text>
-      ) : null}
-
-      <View style={styles.detailsRow}>
-        <View style={styles.detailItem}>
-          <Ionicons name="time-outline" size={12} color={Colors.textMuted} />
-          <Text style={styles.detailText}>{item.activity_date}</Text>
+          <Badge
+            label={item.sync_status === 'synced' ? 'Synced' : 'Saved on Device'}
+            variant={item.sync_status === 'synced' ? 'success' : 'warning'}
+            size="sm"
+          />
         </View>
 
-        {item.quantity ? (
-          <View style={styles.detailItem}>
-            <Ionicons name="cube-outline" size={12} color={Colors.textMuted} />
-            <Text style={styles.detailText}>
-              {item.quantity} {item.unit || ''}
-            </Text>
-          </View>
+        {item.description ? (
+          <Text style={styles.description}>{item.description}</Text>
         ) : null}
 
-        {item.labor_count ? (
+        <View style={styles.detailsRow}>
           <View style={styles.detailItem}>
-            <Ionicons name="people-outline" size={12} color={Colors.textMuted} />
-            <Text style={styles.detailText}>{item.labor_count} workers</Text>
+            <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
+            <Text style={styles.detailText}>{item.activity_date}</Text>
           </View>
-        ) : null}
 
-        {item.cost > 0 && (
-          <View style={styles.costBadge}>
-            <Text style={styles.costText}>${item.cost} USD</Text>
-          </View>
-        )}
-      </View>
-    </Card>
-  );
+          {item.quantity ? (
+            <View style={styles.detailItem}>
+              <Ionicons name="cube-outline" size={13} color={Colors.textMuted} />
+              <Text style={styles.detailText}>
+                {item.quantity} {item.unit || ''}
+              </Text>
+            </View>
+          ) : null}
+
+          {item.labor_count ? (
+            <View style={styles.detailItem}>
+              <Ionicons name="people-outline" size={13} color={Colors.textMuted} />
+              <Text style={styles.detailText}>{item.labor_count} workers</Text>
+            </View>
+          ) : null}
+
+          {Number(item.cost) > 0 && (
+            <View style={styles.costBadge}>
+              <Ionicons name="cash-outline" size={12} color="#15803D" />
+              <Text style={styles.costText}>${item.cost} USD</Text>
+            </View>
+          )}
+        </View>
+      </Card>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -170,38 +200,84 @@ export default function ActivitiesScreen() {
             <Button
               title="+ Record"
               size="sm"
-              onPress={() => router.push('/activity/record' as any)}
+              onPress={() =>
+                router.push({
+                  pathname: '/activity/record',
+                  params: selectedCategory !== 'All' ? { initialType: selectedCategory } : {},
+                } as any)
+              }
             />
           )}
         </View>
 
-        {/* Filter Chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
-          {CATEGORIES.map((cat) => (
-            <TouchableOpacity
-              key={cat}
-              style={[styles.filterChip, selectedCategory === cat && styles.filterChipActive]}
-              onPress={() => setSelectedCategory(cat)}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  selectedCategory === cat && styles.filterChipTextActive,
-                ]}
-              >
-                {cat}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Clean Filter Chips Bar */}
+        <View style={styles.filterWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.filterScroll}
+            contentContainerStyle={styles.filterContentContainer}
+          >
+            {CATEGORIES.map((cat) => {
+              const isSelected = selectedCategory.toLowerCase() === cat.key.toLowerCase();
+              const count = getCategoryCount(cat.key);
+              return (
+                <TouchableOpacity
+                  key={cat.key}
+                  style={[styles.filterChip, isSelected && styles.filterChipActive]}
+                  onPress={() => setSelectedCategory(cat.key)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={cat.icon}
+                    size={13}
+                    color={isSelected ? '#FFFFFF' : '#475569'}
+                    style={styles.filterChipIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.filterChipText,
+                      isSelected && styles.filterChipTextActive,
+                    ]}
+                  >
+                    {cat.label}
+                  </Text>
+                  <View
+                    style={[
+                      styles.filterCountBadge,
+                      isSelected && styles.filterCountBadgeActive,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.filterCountText,
+                        isSelected && styles.filterCountTextActive,
+                      ]}
+                    >
+                      {count}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
 
         {/* Summary Counter Bar */}
         <View style={styles.summaryBar}>
-          <Text style={styles.summaryCount}>
-            {filteredActivities.length} {filteredActivities.length === 1 ? 'Record' : 'Records'}
-          </Text>
+          <View style={styles.summaryLeft}>
+            <Ionicons name="document-text-outline" size={14} color="#64748B" />
+            <Text style={styles.summaryCount}>
+              {filteredActivities.length}{' '}
+              {filteredActivities.length === 1 ? 'Operation recorded' : 'Operations recorded'}
+              {selectedCategory !== 'All' ? ` • ${selectedCategory}` : ''}
+            </Text>
+          </View>
           {totalCost > 0 && (
-            <Text style={styles.summaryTotal}>Total Cost: ${totalCost.toLocaleString()} USD</Text>
+            <View style={styles.costTotalPill}>
+              <Ionicons name="cash-outline" size={12} color="#15803D" />
+              <Text style={styles.summaryTotal}>${totalCost.toLocaleString()} USD</Text>
+            </View>
           )}
         </View>
 
@@ -215,11 +291,24 @@ export default function ActivitiesScreen() {
           }
           ListEmptyComponent={
             <EmptyState
-              icon={<Ionicons name="calendar-outline" size={32} color={Colors.primary} />}
-              title="No Activities Found"
-              description="Record your agronomic operations to track labor, costs, and crop history."
-              actionTitle="Record Farm Activity"
-              onAction={() => router.push('/activity/record' as any)}
+              icon={<Ionicons name="calendar-outline" size={36} color={Colors.primary} />}
+              title={
+                selectedCategory === 'All'
+                  ? 'No Activities Found'
+                  : `No ${selectedCategory} Records`
+              }
+              description={
+                selectedCategory === 'All'
+                  ? 'Record your agronomic operations to track labor, costs, and crop history.'
+                  : `No ${selectedCategory.toLowerCase()} activities recorded yet. Tap below to log this operation.`
+              }
+              actionTitle={`+ Record ${selectedCategory === 'All' ? 'Activity' : selectedCategory}`}
+              onAction={() =>
+                router.push({
+                  pathname: '/activity/record',
+                  params: selectedCategory !== 'All' ? { initialType: selectedCategory } : {},
+                } as any)
+              }
             />
           }
         />
@@ -244,6 +333,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    alignItems: 'center',
   },
   searchBar: {
     flex: 1,
@@ -261,50 +351,106 @@ const styles = StyleSheet.create({
     color: Colors.text,
     paddingVertical: 8,
   },
-  filterScroll: {
-    backgroundColor: Colors.surface,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
+  filterWrapper: {
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    borderBottomColor: '#E2E8F0',
+    height: 52,
+    justifyContent: 'center',
+  },
+  filterScroll: {
+    flexGrow: 0,
+    height: 52,
+  },
+  filterContentContainer: {
+    paddingHorizontal: Spacing.md,
+    alignItems: 'center',
+    flexDirection: 'row',
   },
   filterChip: {
-    backgroundColor: Colors.surfaceAlt,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    height: 34,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    marginRight: Spacing.xs,
+    borderRadius: 17,
+    marginRight: 8,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: '#E2E8F0',
   },
   filterChipActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+    backgroundColor: '#1C3822',
+    borderColor: '#1C3822',
+    shadowColor: '#1C3822',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  filterChipIcon: {
+    marginRight: 5,
   },
   filterChipText: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.text,
+    fontSize: 12,
     fontWeight: '600',
+    color: '#334155',
   },
   filterChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  filterCountBadge: {
+    marginLeft: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    backgroundColor: '#E2E8F0',
+  },
+  filterCountBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  filterCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  filterCountTextActive: {
     color: '#FFFFFF',
   },
   summaryBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    backgroundColor: Colors.surfaceAlt,
+    paddingVertical: 8,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  summaryLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   summaryCount: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: '700',
-    color: Colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  costTotalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
   },
   summaryTotal: {
-    fontSize: Typography.sizes.xs,
+    fontSize: 11,
     fontWeight: '700',
-    color: Colors.primaryDark,
+    color: '#15803D',
   },
   listContent: {
     padding: Spacing.md,
@@ -312,11 +458,14 @@ const styles = StyleSheet.create({
   },
   activityCard: {
     marginBottom: Spacing.sm,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: Spacing.xs,
   },
   titleRow: {
@@ -325,10 +474,9 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   iconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: Colors.primaryLight,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: Spacing.sm,
@@ -341,7 +489,7 @@ const styles = StyleSheet.create({
   farmLabel: {
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
-    marginTop: 1,
+    marginTop: 2,
   },
   description: {
     fontSize: Typography.sizes.xs,
@@ -355,7 +503,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: Spacing.md,
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    borderTopColor: '#F1F5F9',
     paddingTop: Spacing.xs,
     marginTop: Spacing.xs,
   },
@@ -370,14 +518,17 @@ const styles = StyleSheet.create({
   },
   costBadge: {
     marginLeft: 'auto',
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 4,
   },
   costText: {
     fontSize: 11,
     fontWeight: '700',
-    color: Colors.primaryDark,
+    color: '#15803D',
   },
 });
