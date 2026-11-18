@@ -21,7 +21,6 @@ import { StatCard } from '../../src/components/StatCard';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { EmptyState } from '../../src/components/EmptyState';
-import { RoleSwitcherModal } from '../../src/components/RoleSwitcherModal';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -42,7 +41,6 @@ export default function HomeScreen() {
   const [activities, setActivities] = useState<FarmActivity[]>([]);
   const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-  const [roleModalVisible, setRoleModalVisible] = useState(false);
 
   const loadData = useCallback(async () => {
     try {
@@ -90,19 +88,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <Header
-        showBack={false}
-        rightAction={
-          <TouchableOpacity
-            style={styles.rolePill}
-            onPress={() => setRoleModalVisible(true)}
-            accessibilityLabel="Switch active persona"
-          >
-            <Ionicons name="swap-horizontal" size={14} color="#FFFFFF" />
-            <Text style={styles.rolePillText}>{personaInfo.badge}</Text>
-          </TouchableOpacity>
-        }
-      />
+      <Header showBack={false} />
       <OfflineBanner />
 
       <ScrollView
@@ -156,19 +142,6 @@ export default function HomeScreen() {
               <Text style={styles.metaText}>{personaInfo.title}</Text>
             </View>
           </View>
-
-          {/* Quick role switcher notification pill */}
-          <TouchableOpacity
-            style={styles.roleSwitchBanner}
-            onPress={() => setRoleModalVisible(true)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="person-circle-outline" size={16} color="#A3E635" />
-            <Text style={styles.roleSwitchText}>
-              Viewing as <Text style={{ fontWeight: '800' }}>{personaInfo.badge}</Text> • Tap to switch persona
-            </Text>
-            <Ionicons name="chevron-forward" size={14} color="#A3E635" />
-          </TouchableOpacity>
         </View>
 
         {/* ========================================================= */}
@@ -757,9 +730,6 @@ export default function HomeScreen() {
 
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
-
-      {/* Persona Switcher Modal */}
-      <RoleSwitcherModal visible={roleModalVisible} onClose={() => setRoleModalVisible(false)} />
     </SafeAreaView>
   );
 }
@@ -776,21 +746,6 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: Spacing.md,
     paddingBottom: Spacing.xxl * 2,
-  },
-  rolePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: Radius.full,
-  },
-  rolePillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-    letterSpacing: 0.5,
   },
   heroCard: {
     backgroundColor: Colors.primaryDark,
@@ -850,24 +805,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#E2E8F0',
     fontWeight: '500',
-  },
-  roleSwitchBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(163, 230, 53, 0.12)',
-    borderRadius: Radius.md,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    marginTop: Spacing.md,
-    borderWidth: 1,
-    borderColor: 'rgba(163, 230, 53, 0.25)',
-  },
-  roleSwitchText: {
-    flex: 1,
-    fontSize: 11,
-    color: '#A3E635',
-    marginLeft: 6,
   },
   sectionHeader: {
     marginBottom: Spacing.sm,

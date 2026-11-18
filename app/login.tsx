@@ -65,8 +65,8 @@ export default function LoginScreen() {
   const { login } = useAppStore();
 
   const [selectedRole, setSelectedRole] = useState<UserRole>('farmer');
-  const [email, setEmail] = useState('name@example.com');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(ROLE_TABS[0].defaultEmail);
+  const [password, setPassword] = useState('••••••••');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -78,7 +78,7 @@ export default function LoginScreen() {
   };
 
   const handleRegularLogin = async () => {
-    if (!email.trim() || email === 'name@example.com') {
+    if (!email.trim()) {
       Alert.alert('Incomplete Email', 'Please enter your account email address.');
       return;
     }

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -16,14 +16,11 @@ import { Header } from '../../src/components/Header';
 import { OfflineBanner } from '../../src/components/OfflineBanner';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
-import { RoleSwitcherModal } from '../../src/components/RoleSwitcherModal';
 
 export default function ProfileScreen() {
   const router = useRouter();
   const { currentFarmer, currentUserProfile, currentRole, pendingSyncCount, isOfflineMode, toggleOfflineMode, logout } =
     useAppStore();
-
-  const [roleModalVisible, setRoleModalVisible] = useState(false);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -85,62 +82,47 @@ export default function ProfileScreen() {
           </View>
         </Card>
 
-        {/* Workspaces & Role Switcher */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="shield-outline" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Application Roles & Workspaces</Text>
-          </View>
-          <Text style={styles.fieldDesc}>
-            Demonstrate role-specific workflows for agricultural inspectors and extension agents.
-          </Text>
-
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => setRoleModalVisible(true)}
-          >
-            <View style={styles.actionLeft}>
-              <Ionicons name="swap-horizontal" size={20} color={Colors.primary} />
-              <View>
-                <Text style={styles.actionTitle}>Switch Active Persona</Text>
-                <Text style={styles.actionSub}>Current: {currentRole.replace('_', ' ').toUpperCase()}</Text>
-              </View>
+        {/* Assigned Role Workspace */}
+        {(currentRole === 'quality_inspector' || currentRole === 'extension_officer') && (
+          <Card style={styles.sectionCard}>
+            <View style={styles.sectionHeaderRow}>
+              <Ionicons name="shield-outline" size={20} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>Assigned Role Workspace</Text>
             </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
 
-          {currentRole === 'quality_inspector' && (
-            <TouchableOpacity
-              style={styles.actionRow}
-              onPress={() => router.push('/inspector' as any)}
-            >
-              <View style={styles.actionLeft}>
-                <Ionicons name="shield-checkmark" size={20} color={Colors.primary} />
-                <View>
-                  <Text style={styles.actionTitle}>Inspector Workspace</Text>
-                  <Text style={styles.actionSub}>Conduct formal grading & certificate issuance</Text>
+            {currentRole === 'quality_inspector' && (
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => router.push('/inspector' as any)}
+              >
+                <View style={styles.actionLeft}>
+                  <Ionicons name="shield-checkmark" size={20} color={Colors.primary} />
+                  <View>
+                    <Text style={styles.actionTitle}>Inspector Workspace</Text>
+                    <Text style={styles.actionSub}>Conduct formal grading & certificate issuance</Text>
+                  </View>
                 </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </TouchableOpacity>
-          )}
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </TouchableOpacity>
+            )}
 
-          {currentRole === 'extension_officer' && (
-            <TouchableOpacity
-              style={styles.actionRow}
-              onPress={() => router.push('/extension' as any)}
-            >
-              <View style={styles.actionLeft}>
-                <Ionicons name="navigate" size={20} color={Colors.primary} />
-                <View>
-                  <Text style={styles.actionTitle}>Extension Officer Workspace</Text>
-                  <Text style={styles.actionSub}>Monitor assigned parcels & issue advisories</Text>
+            {currentRole === 'extension_officer' && (
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => router.push('/extension' as any)}
+              >
+                <View style={styles.actionLeft}>
+                  <Ionicons name="navigate" size={20} color={Colors.primary} />
+                  <View>
+                    <Text style={styles.actionTitle}>Extension Officer Workspace</Text>
+                    <Text style={styles.actionSub}>Monitor assigned parcels & issue advisories</Text>
+                  </View>
                 </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-            </TouchableOpacity>
-          )}
-        </Card>
+                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </Card>
+        )}
 
         {/* System & Offline Data Tools */}
         <Card style={styles.sectionCard}>
@@ -229,20 +211,6 @@ export default function ProfileScreen() {
             <Badge label={isOfflineMode ? 'OFFLINE' : 'ONLINE'} variant={isOfflineMode ? 'warning' : 'success'} size="sm" />
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => router.push('/splash' as any)}
-          >
-            <View style={styles.actionLeft}>
-              <Ionicons name="images-outline" size={20} color={Colors.primary} />
-              <View>
-                <Text style={styles.actionTitle}>CropCapture Welcome & Walkthrough</Text>
-                <Text style={styles.actionSub}>Replay the 4-slide splash experience</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
             style={[styles.actionRow, { borderBottomWidth: 0 }]}
             onPress={() => {
               Alert.alert('Sign Out', 'Are you sure you want to log out of CropCapture?', [
@@ -262,7 +230,7 @@ export default function ProfileScreen() {
               <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
               <View>
                 <Text style={[styles.actionTitle, { color: Colors.danger }]}>Sign Out</Text>
-                <Text style={styles.actionSub}>Switch account or return to Login</Text>
+                <Text style={styles.actionSub}>Log out and return to Login</Text>
               </View>
             </View>
             <Ionicons name="chevron-forward" size={18} color={Colors.danger} />
@@ -278,8 +246,6 @@ export default function ProfileScreen() {
 
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
-
-      <RoleSwitcherModal visible={roleModalVisible} onClose={() => setRoleModalVisible(false)} />
     </SafeAreaView>
   );
 }
