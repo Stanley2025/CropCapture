@@ -16,7 +16,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Line } from 'react-native-svg';
-import { useAppStore, PERSONAS } from '../src/store/useAppStore';
+import { useAppStore } from '../src/store/useAppStore';
 import { UserRole } from '../src/types/database';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -62,7 +62,7 @@ const ROLE_TABS: RoleTab[] = [
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login, loginAsRole } = useAppStore();
+  const { login } = useAppStore();
 
   const [selectedRole, setSelectedRole] = useState<UserRole>('farmer');
   const [email, setEmail] = useState('name@example.com');
@@ -75,18 +75,6 @@ export default function LoginScreen() {
   const handleSelectRole = (tab: RoleTab) => {
     setSelectedRole(tab.key);
     setEmail(tab.defaultEmail);
-  };
-
-  const handleInstantDemoLogin = async () => {
-    setIsLoading(true);
-    try {
-      await loginAsRole(selectedRole);
-      router.replace('/(tabs)');
-    } catch (e: any) {
-      Alert.alert('Sign-In Error', e?.message || 'Could not authenticate demo user.');
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleRegularLogin = async () => {
@@ -108,7 +96,7 @@ export default function LoginScreen() {
   const handleForgotPassword = () => {
     Alert.alert(
       'Reset Password',
-      `A password reset code can be sent to ${email || 'your registered phone/email'}. For demo purposes, you can use "Try the ${activeTab.name} demo".`
+      `A password reset verification link has been dispatched to ${email || 'your registered account email'}.`
     );
   };
 
@@ -284,33 +272,6 @@ export default function LoginScreen() {
                 {isLoading ? 'Signing in...' : `Sign in as ${activeTab.name}`}
               </Text>
             </TouchableOpacity>
-
-            {/* Divider with "or" */}
-            <View style={styles.dividerRow}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>or</Text>
-              <View style={styles.dividerLine} />
-            </View>
-
-            {/* Secondary Action Button: Try the [Role] demo */}
-            <TouchableOpacity
-              style={styles.secondaryDemoBtn}
-              onPress={handleInstantDemoLogin}
-              disabled={isLoading}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.secondaryDemoText}>
-                Try the {activeTab.name} demo
-              </Text>
-            </TouchableOpacity>
-
-            {/* Footer: Secure, role-based access */}
-            <View style={styles.securityFooterRow}>
-              <Ionicons name="lock-closed-outline" size={14} color="#65776B" />
-              <Text style={styles.securityFooterText}>
-                Secure, role-based access
-              </Text>
-            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -511,55 +472,5 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1C2E20',
     letterSpacing: -0.2,
-  },
-
-  /* Divider */
-  dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: 16,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: '#DDE2D9',
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    fontSize: 13,
-    color: '#768579',
-    fontWeight: '500',
-  },
-
-  /* Secondary Demo Button */
-  secondaryDemoBtn: {
-    height: 52,
-    backgroundColor: '#F5F5ED',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: '#1E2E22',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  secondaryDemoText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1E2E22',
-    letterSpacing: -0.2,
-  },
-
-  /* Security Footer */
-  securityFooterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginTop: 22,
-    paddingBottom: 4,
-  },
-  securityFooterText: {
-    fontSize: 13,
-    color: '#65776B',
-    fontWeight: '500',
   },
 });
