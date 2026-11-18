@@ -109,7 +109,7 @@ export default function SplashScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0D221A" />
+      <StatusBar barStyle="light-content" />
 
       {/* Full-bleed Illustrated Slide Background */}
       <View style={styles.imageContainer}>
@@ -197,7 +197,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0D221A',
   },
   imageContainer: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill as any,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -280,7 +280,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   indicatorFillCompleted: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill as any,
     backgroundColor: '#A3E635',
   },
   indicatorFillCurrent: {
