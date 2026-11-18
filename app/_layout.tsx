@@ -2,14 +2,27 @@ import React, { useEffect } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import * as SplashScreen from 'expo-splash-screen';
 import { useAppStore } from '../src/store/useAppStore';
 import { Colors } from '../src/constants/theme';
 
+// Keep the native splash screen visible while loading resources
+SplashScreen.preventAutoHideAsync().catch(() => {});
+
 export default function RootLayout() {
-  const { initialize, isInitialized } = useAppStore();
+  const { initialize } = useAppStore();
 
   useEffect(() => {
-    initialize();
+    async function prepare() {
+      try {
+        await initialize();
+      } catch (e) {
+        console.warn('App initialization error:', e);
+      } finally {
+        await SplashScreen.hideAsync().catch(() => {});
+      }
+    }
+    prepare();
   }, []);
 
   return (
@@ -18,7 +31,7 @@ export default function RootLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: Colors.background },
+          contentStyle: { backgroundColor: '#0D221A' },
           animation: 'slide_from_right',
         }}
       >

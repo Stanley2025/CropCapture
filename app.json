@@ -7,7 +7,9 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "cropcapture",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0D221A",
+    "primaryColor": "#15803D",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash.png",
@@ -17,6 +19,12 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.cropcapture.app",
+      "userInterfaceStyle": "dark",
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#0D221A"
+      },
       "infoPlist": {
         "NSCameraUsageDescription": "CropCapture requires camera access for farm photography and QR code traceability scanning.",
         "NSLocationWhenInUseUsageDescription": "CropCapture requires location permissions to record precise GPS coordinates for farm boundaries and field visits.",
@@ -25,7 +33,13 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#15803D"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0D221A"
+      },
+      "splash": {
+        "image": "./assets/splash.png",
+        "resizeMode": "cover",
+        "backgroundColor": "#0D221A"
       },
       "package": "com.cropcapture.app",
       "permissions": [
@@ -41,6 +55,19 @@
       "output": "single"
     },
     "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0D221A",
+          "image": "./assets/splash.png",
+          "dark": {
+            "image": "./assets/splash.png",
+            "backgroundColor": "#0D221A"
+          },
+          "imageWidth": 240,
+          "resizeMode": "contain"
+        }
+      ],
       "expo-router",
       "expo-secure-store",
       "expo-sqlite",
