@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "AgriTrack Liberia",
+    "slug": "agritrack-liberia",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "agritrack",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "backgroundColor": "#15803D",
+      "resizeMode": "contain"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.agritrack.liberia",
+      "infoPlist": {
+        "NSCameraUsageDescription": "AgriTrack Liberia requires camera access for farm photography and QR code traceability scanning.",
+        "NSLocationWhenInUseUsageDescription": "AgriTrack Liberia requires location permissions to record precise GPS coordinates for farm boundaries and field visits.",
+        "NSPhotoLibraryUsageDescription": "AgriTrack Liberia needs photo library access to upload farm, crop, and inspection evidence photos."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#15803D"
+      },
+      "package": "com.agritrack.liberia",
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-sqlite",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow AgriTrack Liberia to use camera for farm and quality inspection photography."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow AgriTrack Liberia to capture farm GPS coordinates."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
