@@ -70,13 +70,13 @@ export default function HarvestDetailsScreen() {
     );
   }
 
-  const publicVerificationUrl = `https://agritrack.lr/verify/${harvest.qr_token}`;
+  const publicVerificationUrl = `https://cropcapture.app/verify/${harvest.qr_token}`;
 
   const handleShare = async () => {
     try {
       await Share.share({
-        title: `AgriTrack Batch ${harvest.batch_reference}`,
-        message: `AgriTrack Liberia Verified Batch Passport\nBatch: ${harvest.batch_reference}\nCrop: ${harvest.crop?.name || 'Produce'} (${harvest.crop_variety_id})\nQuantity: ${harvest.quantity} ${harvest.unit}\nStatus: ${harvest.status.toUpperCase()}\n\nVerify public record: ${publicVerificationUrl}`,
+        title: `CropCapture Batch ${harvest.batch_reference}`,
+        message: `CropCapture Verified Batch Passport\nBatch: ${harvest.batch_reference}\nCrop: ${harvest.crop?.name || 'Produce'} (${harvest.crop_variety_id})\nQuantity: ${harvest.quantity} ${harvest.unit}\nStatus: ${harvest.status.toUpperCase()}\n\nVerify public record: ${publicVerificationUrl}`,
       });
     } catch (e: any) {
       console.warn('Share error:', e);

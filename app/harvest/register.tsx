@@ -18,6 +18,7 @@ import { Farm, FarmSeason, HarvestBatch } from '../../src/types/database';
 import { Header } from '../../src/components/Header';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { DatePickerField } from '../../src/components/DatePickerField';
 
 const UNITS = ['kg', 'tonnes', '50kg bags', 'bunches'];
 
@@ -63,7 +64,7 @@ export default function RegisterHarvestScreen() {
     try {
       const cropCode = selectedSeason?.crop?.code || 'CROP';
       const batchReference = generateBatchReference(cropCode);
-      const randomToken = `agritrack_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const randomToken = `cropcapture_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 
       const newHarvest: HarvestBatch = {
         id: generateUUID(),
@@ -184,13 +185,12 @@ export default function RegisterHarvestScreen() {
             </View>
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Harvest Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={styles.input}
+          <View style={{ marginTop: Spacing.sm }}>
+            <DatePickerField
+              label="Harvest Date"
               value={harvestDate}
-              onChangeText={setHarvestDate}
-              placeholder="2026-11-18"
+              onChange={setHarvestDate}
+              helperText="Date this batch was reaped from the field"
             />
           </View>
         </Card>

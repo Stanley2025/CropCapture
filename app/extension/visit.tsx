@@ -18,6 +18,7 @@ import { Farm } from '../../src/types/database';
 import { Header } from '../../src/components/Header';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { DatePickerField } from '../../src/components/DatePickerField';
 
 const PEST_DISEASE_OPTIONS = [
   'None / Healthy Crop',
@@ -183,15 +184,12 @@ export default function RecordVisitScreen() {
             />
           </View>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Scheduled Follow-up Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={styles.input}
-              value={followUpDate}
-              onChangeText={setFollowUpDate}
-              placeholder="2026-12-10"
-            />
-          </View>
+          <DatePickerField
+            label="Scheduled Follow-up Date"
+            value={followUpDate}
+            onChange={setFollowUpDate}
+            helperText="Planned date for follow-up extension advisory visit"
+          />
         </Card>
 
         <Button

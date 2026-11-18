@@ -48,13 +48,13 @@ export function generateUUID(): string {
   });
 }
 
-// Generate batch reference in Liberia format: AGR-2026-CROP-000001
+// Generate batch reference in CropCapture format: CRP-2026-CROP-000001
 export function generateBatchReference(cropCode: string, sequenceNum?: number): string {
   const year = new Date().getFullYear();
   const cleanCode = (cropCode || 'GEN').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
   const seq = sequenceNum ?? Math.floor(100000 + Math.random() * 900000);
   const formattedSeq = String(seq).padStart(6, '0');
-  return `AGR-${year}-${cleanCode}-${formattedSeq}`;
+  return `CRP-${year}-${cleanCode}-${formattedSeq}`;
 }
 
 export class LocalDatabase {

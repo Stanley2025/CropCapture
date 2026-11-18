@@ -18,6 +18,7 @@ import { Farm, FarmSeason } from '../../src/types/database';
 import { Header } from '../../src/components/Header';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { DatePickerField } from '../../src/components/DatePickerField';
 
 const CROPS = [
   { id: '11111111-1111-1111-1111-111111111101', name: 'Rice', code: 'RICE', varieties: ['Suakoko 8', 'LAC 23', 'Nerica L-19'] },
@@ -187,26 +188,19 @@ export default function CreateSeasonScreen() {
         <Card style={styles.formCard}>
           <Text style={styles.sectionTitle}>3. Planting Schedule & Cultivation</Text>
 
-          <View style={styles.inputRow}>
-            <View style={[styles.inputGroup, { flex: 1, marginRight: Spacing.xs }]}>
-              <Text style={styles.label}>Planting Date (YYYY-MM-DD)</Text>
-              <TextInput
-                style={styles.input}
-                value={plantingDate}
-                onChangeText={setPlantingDate}
-                placeholder="2026-06-15"
-              />
-            </View>
-            <View style={[styles.inputGroup, { flex: 1, marginLeft: Spacing.xs }]}>
-              <Text style={styles.label}>Expected Harvest</Text>
-              <TextInput
-                style={styles.input}
-                value={harvestDate}
-                onChangeText={setHarvestDate}
-                placeholder="2026-10-30"
-              />
-            </View>
-          </View>
+          <DatePickerField
+            label="Planting Date"
+            value={plantingDate}
+            onChange={setPlantingDate}
+            helperText="Date seeds or stems were sown"
+          />
+
+          <DatePickerField
+            label="Expected Harvest Date"
+            value={harvestDate}
+            onChange={setHarvestDate}
+            helperText="Estimated maturity window"
+          />
 
           <View style={styles.inputRow}>
             <View style={[styles.inputGroup, { flex: 1, marginRight: Spacing.xs }]}>

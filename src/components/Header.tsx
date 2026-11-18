@@ -50,7 +50,7 @@ export const Header: React.FC<HeaderProps> = ({
             </TouchableOpacity>
           )}
           <View>
-            <Text style={styles.appTitle}>AGRITRACK LIBERIA</Text>
+            <Text style={styles.appTitle}>CROPCAPTURE</Text>
             {title && <Text style={styles.screenTitle}>{title}</Text>}
             {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
           </View>

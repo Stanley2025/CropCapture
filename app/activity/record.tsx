@@ -18,6 +18,7 @@ import { Farm, FarmSeason, FarmActivity } from '../../src/types/database';
 import { Header } from '../../src/components/Header';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { DatePickerField } from '../../src/components/DatePickerField';
 
 const ACTIVITY_TYPES = [
   'Land preparation',
@@ -179,13 +180,12 @@ export default function RecordActivityScreen() {
             ))}
           </ScrollView>
 
-          <View style={[styles.inputGroup, { marginTop: Spacing.sm }]}>
-            <Text style={styles.label}>Activity Date (YYYY-MM-DD)</Text>
-            <TextInput
-              style={styles.input}
+          <View style={{ marginTop: Spacing.sm }}>
+            <DatePickerField
+              label="Activity Date"
               value={activityDate}
-              onChangeText={setActivityDate}
-              placeholder="2026-11-18"
+              onChange={setActivityDate}
+              helperText="Tap to choose date from calendar"
             />
           </View>
 

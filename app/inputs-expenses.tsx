@@ -21,6 +21,7 @@ import { OfflineBanner } from '../src/components/OfflineBanner';
 import { Card } from '../src/components/Card';
 import { Button } from '../src/components/Button';
 import { Badge } from '../src/components/Badge';
+import { DatePickerField } from '../src/components/DatePickerField';
 
 const INPUT_CATEGORIES = [
   'Seeds',
@@ -62,11 +63,13 @@ export default function InputsExpensesScreen() {
   const [inputUnit, setInputUnit] = useState('kg');
   const [inputCost, setInputCost] = useState('');
   const [inputSupplier, setInputSupplier] = useState('');
+  const [inputPurchaseDate, setInputPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
   const [selectedFarmId, setSelectedFarmId] = useState('');
 
   // New Expense Form State
   const [expenseCat, setExpenseCat] = useState('Labour');
   const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().split('T')[0]);
   const [expenseDesc, setExpenseDesc] = useState('');
   const [currency, setCurrency] = useState<'USD' | 'LRD'>('USD');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -111,7 +114,7 @@ export default function InputsExpensesScreen() {
         category: inputCat,
         quantity: parseFloat(inputQty),
         unit: inputUnit,
-        purchase_date: new Date().toISOString().split('T')[0],
+        purchase_date: inputPurchaseDate,
         supplier: inputSupplier.trim() || 'Local Agrodealer',
         cost: parseFloat(inputCost),
         currency,
@@ -146,7 +149,7 @@ export default function InputsExpensesScreen() {
         category: expenseCat,
         amount: parseFloat(expenseAmount),
         currency,
-        expense_date: new Date().toISOString().split('T')[0],
+        expense_date: expenseDate,
         description: expenseDesc.trim() || `${expenseCat} operation`,
         created_at: new Date().toISOString(),
       };
@@ -302,6 +305,13 @@ export default function InputsExpensesScreen() {
                 </View>
               </View>
 
+              <DatePickerField
+                label="Purchase Date"
+                value={inputPurchaseDate}
+                onChange={setInputPurchaseDate}
+                helperText="Date input was procured"
+              />
+
               <Button
                 title="Save Input Record"
                 onPress={handleAddInput}
@@ -415,6 +425,13 @@ export default function InputsExpensesScreen() {
                   onChangeText={setExpenseDesc}
                 />
               </View>
+
+              <DatePickerField
+                label="Expense Date"
+                value={expenseDate}
+                onChange={setExpenseDate}
+                helperText="Date this operational expenditure occurred"
+              />
 
               <Button
                 title="Log Expense"

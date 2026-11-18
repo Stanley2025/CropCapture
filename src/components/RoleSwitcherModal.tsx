@@ -74,7 +74,7 @@ export const RoleSwitcherModal: React.FC<RoleSwitcherModalProps> = ({
             <View style={styles.content}>
               <View style={styles.header}>
                 <View>
-                  <Text style={styles.title}>Switch AgriTrack Persona</Text>
+                  <Text style={styles.title}>Switch CropCapture Persona</Text>
                   <Text style={styles.subtitle}>
                     Demonstrate role-based access control and specific workflows
                   </Text>

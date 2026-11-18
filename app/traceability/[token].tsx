@@ -58,7 +58,7 @@ export default function PublicTraceabilityScreen() {
           <Ionicons name="warning-outline" size={48} color={Colors.danger} />
           <Text style={styles.errorTitle}>Traceability Record Not Found</Text>
           <Text style={styles.errorSub}>
-            The scanned QR code or verification token does not match an active AgriTrack Liberia passport.
+            The scanned QR code or verification token does not match an active CropCapture passport.
           </Text>
           <Button title="Return to Scanner" onPress={() => router.back()} size="sm" style={{ marginTop: Spacing.md }} />
         </View>
@@ -71,7 +71,7 @@ export default function PublicTraceabilityScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header
-        title="AgriTrack Certificate"
+        title="CropCapture Certificate"
         subtitle="Public Agricultural Verification Record"
         showBack
       />
@@ -175,7 +175,7 @@ export default function PublicTraceabilityScreen() {
         <View style={styles.disclaimerBox}>
           <Ionicons name="information-circle-outline" size={18} color={Colors.textMuted} />
           <Text style={styles.disclaimerText}>
-            Notice: This record represents agricultural traceability and quality parameters gathered through the AgriTrack Liberia platform. It confirms crop provenance, harvest season, and post-harvest measurements. Personal farmer contact and financial records are protected by privacy regulations.
+            Notice: This record represents agricultural traceability and quality parameters gathered through the CropCapture platform. It confirms crop provenance, harvest season, and post-harvest measurements. Personal farmer contact and financial records are protected by privacy regulations.
           </Text>
         </View>
 

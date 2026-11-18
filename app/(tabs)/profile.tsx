@@ -213,11 +213,24 @@ export default function ProfileScreen() {
             </View>
             <Badge label={isOfflineMode ? 'OFFLINE' : 'ONLINE'} variant={isOfflineMode ? 'warning' : 'success'} size="sm" />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.actionRow}
+            onPress={() => router.push('/splash' as any)}
+          >
+            <View style={styles.actionLeft}>
+              <Ionicons name="images-outline" size={20} color={Colors.primary} />
+              <View>
+                <Text style={styles.actionTitle}>CropCapture Welcome & Walkthrough</Text>
+                <Text style={styles.actionSub}>Replay the 4-slide splash experience</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
         </Card>
 
         {/* Application About & Build Info */}
         <View style={styles.aboutBox}>
-          <Text style={styles.aboutTitle}>AgriTrack Liberia Mobile App</Text>
+          <Text style={styles.aboutTitle}>CropCapture Mobile App</Text>
           <Text style={styles.aboutTagline}>Every Farm Recorded. Every Harvest Measured. Every Quality Verified.</Text>
           <Text style={styles.aboutVersion}>Version 1.0.0 • React Native Expo • Offline-First Engine</Text>
         </View>

@@ -69,7 +69,7 @@ export default function ReportsScreen() {
       ].join('\n');
 
       await Share.share({
-        title: 'AgriTrack Liberia Harvest Report CSV',
+        title: 'CropCapture Harvest Report CSV',
         message: csvContent,
       });
     } catch (e: any) {

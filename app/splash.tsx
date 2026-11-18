@@ -82,7 +82,7 @@ export default function SplashScreen() {
 
   const handleFinish = async () => {
     try {
-      await AsyncStorage.setItem('@agritrack_has_seen_splash', 'true');
+      await AsyncStorage.setItem('@cropcapture_has_seen_splash', 'true');
     } catch (e) {
       // ignore
     }

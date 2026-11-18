@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "AgriTrack Liberia",
-    "slug": "agritrack-liberia",
+    "name": "CropCapture",
+    "slug": "cropcapture",
     "version": "1.0.0",
     "sdkVersion": "58.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "agritrack",
+    "scheme": "cropcapture",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
@@ -16,18 +16,18 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.agritrack.liberia",
+      "bundleIdentifier": "com.cropcapture.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "AgriTrack Liberia requires camera access for farm photography and QR code traceability scanning.",
-        "NSLocationWhenInUseUsageDescription": "AgriTrack Liberia requires location permissions to record precise GPS coordinates for farm boundaries and field visits.",
-        "NSPhotoLibraryUsageDescription": "AgriTrack Liberia needs photo library access to upload farm, crop, and inspection evidence photos."
+        "NSCameraUsageDescription": "CropCapture requires camera access for farm photography and QR code traceability scanning.",
+        "NSLocationWhenInUseUsageDescription": "CropCapture requires location permissions to record precise GPS coordinates for farm boundaries and field visits.",
+        "NSPhotoLibraryUsageDescription": "CropCapture needs photo library access to upload farm, crop, and inspection evidence photos."
       }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#15803D"
       },
-      "package": "com.agritrack.liberia",
+      "package": "com.cropcapture.app",
       "permissions": [
         "CAMERA",
         "ACCESS_FINE_LOCATION",
@@ -47,13 +47,13 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Allow AgriTrack Liberia to use camera for farm and quality inspection photography."
+          "cameraPermission": "Allow CropCapture to use camera for farm and quality inspection photography."
         }
       ],
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow AgriTrack Liberia to capture farm GPS coordinates."
+          "locationAlwaysAndWhenInUsePermission": "Allow CropCapture to capture farm GPS coordinates."
         }
       ]
     ],
