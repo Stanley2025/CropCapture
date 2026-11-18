@@ -16,12 +16,14 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <StatusBar style="light" backgroundColor={Colors.primaryDark} />
       <Stack
+        initialRouteName="splash"
         screenOptions={{
           headerShown: false,
           contentStyle: { backgroundColor: Colors.background },
           animation: 'slide_from_right',
         }}
       >
+        <Stack.Screen name="splash" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="farm/register" options={{ presentation: 'card' }} />
         <Stack.Screen name="farm/[id]" options={{ presentation: 'card' }} />

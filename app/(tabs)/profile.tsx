@@ -136,6 +136,20 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             style={styles.actionRow}
+            onPress={() => router.push('/splash' as any)}
+          >
+            <View style={styles.actionLeft}>
+              <Ionicons name="images-outline" size={20} color={Colors.primary} />
+              <View>
+                <Text style={styles.actionTitle}>App Story & Visual Tour</Text>
+                <Text style={styles.actionSub}>View the 4-part illustrated harvest walkthrough</Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.actionRow}
             onPress={() => router.push('/sync-center' as any)}
           >
             <View style={styles.actionLeft}>
