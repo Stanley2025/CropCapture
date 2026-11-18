@@ -129,6 +129,7 @@ interface AppState {
   triggerManualSync: () => Promise<void>;
   refreshPendingSyncCount: () => Promise<void>;
   markNotificationRead: (id: string) => void;
+  updateProfilePhoto: (photoUri: string | null) => Promise<void>;
 }
 
 const DEMO_NOTIFICATIONS: AppNotification[] = [
@@ -205,6 +206,15 @@ export const useAppStore = create<AppState>((set, get) => ({
         }
       }
 
+      // Check for saved custom profile photo
+      const savedPhoto = await AsyncStorage.getItem(`@cropcapture_user_photo_${activeRole}`);
+      if (savedPhoto) {
+        activeProfile = { ...activeProfile, avatar_url: savedPhoto };
+        if (activeFarmer) {
+          activeFarmer = { ...activeFarmer, photo_url: savedPhoto };
+        }
+      }
+
       // Subscribe to sync engine status
       syncEngine.subscribeStatus((status) => {
         set({ syncStatus: status });
@@ -248,14 +258,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       })
     );
 
+    const savedPhoto = await AsyncStorage.getItem(`@cropcapture_user_photo_${persona.profile.role}`);
+
     set({
       isAuthenticated: true,
       currentRole: persona.profile.role,
       currentUserProfile: {
         ...persona.profile,
         email: email ? email.trim() : persona.profile.email,
+        avatar_url: savedPhoto || persona.profile.avatar_url,
       },
-      currentFarmer: persona.farmer || get().currentFarmer,
+      currentFarmer: {
+        ...(persona.farmer || get().currentFarmer),
+        photo_url: savedPhoto || (persona.farmer ? persona.farmer.photo_url : null),
+      },
     });
 
     return true;
@@ -350,5 +366,28 @@ export const useAppStore = create<AppState>((set, get) => ({
         n.id === id ? { ...n, is_read: true } : n
       ),
     }));
+  },
+
+  updateProfilePhoto: async (photoUri: string | null) => {
+    try {
+      const role = get().currentRole;
+      if (photoUri) {
+        await AsyncStorage.setItem(`@cropcapture_user_photo_${role}`, photoUri);
+      } else {
+        await AsyncStorage.removeItem(`@cropcapture_user_photo_${role}`);
+      }
+      set((state) => ({
+        currentUserProfile: {
+          ...state.currentUserProfile,
+          avatar_url: photoUri,
+        },
+        currentFarmer: {
+          ...state.currentFarmer,
+          photo_url: photoUri,
+        },
+      }));
+    } catch (e) {
+      console.error('Failed to update profile photo:', e);
+    }
   },
 }));

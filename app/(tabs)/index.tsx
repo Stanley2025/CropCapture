@@ -8,6 +8,7 @@ import {
   RefreshControl,
   SafeAreaView,
   Dimensions,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -85,6 +86,7 @@ export default function HomeScreen() {
 
   // Role display metadata
   const personaInfo = PERSONAS[currentRole] || PERSONAS.farmer;
+  const photoUri = currentUserProfile.avatar_url || currentFarmer.photo_url;
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -101,6 +103,9 @@ export default function HomeScreen() {
         {/* ========================================================= */}
         <View style={styles.heroCard}>
           <View style={styles.heroTopRow}>
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.heroAvatar} />
+            ) : null}
             <View style={{ flex: 1, paddingRight: Spacing.sm }}>
               <Text style={styles.greetingText}>
                 {currentRole === 'farmer'
@@ -761,8 +766,16 @@ const styles = StyleSheet.create({
   heroTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: Spacing.md,
+  },
+  heroAvatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    marginRight: Spacing.sm,
   },
   greetingText: {
     fontSize: 13,

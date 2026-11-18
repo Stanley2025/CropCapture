@@ -40,8 +40,9 @@ export interface Profile {
   community?: string | null;
   avatar_url?: string | null;
   cooperative_id?: string | null;
+  photo_url?: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface Farmer {
@@ -57,8 +58,9 @@ export interface Farmer {
   district: string;
   community: string;
   cooperative_id?: string | null;
+  photo_url?: string | null;
   created_at: string;
-  updated_at: string;
+  updated_at?: string;
 }
 
 export interface Farm {
