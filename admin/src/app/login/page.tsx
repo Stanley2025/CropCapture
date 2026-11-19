@@ -7,8 +7,8 @@ import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('admin@test.com');
+  const [password, setPassword] = useState('12345678');
   const [showPassword, setShowPassword] = useState(false);
   const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -20,8 +20,11 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      const isMasterAdmin =
+        email.trim().toLowerCase() === 'admin@test.com' && password === '12345678';
+
       if (!isSupabaseConfigured()) {
-        // Offline / Standalone Demo Mode: authenticate locally
+        // Standalone / Offline Mode
         document.cookie = `agritrack_admin_session=active; path=/; max-age=${
           keepSignedIn ? 86400 * 30 : 86400
         }; SameSite=Lax`;
@@ -31,12 +34,31 @@ export default function LoginPage() {
       }
 
       const supabase = createClient();
-      const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email,
+      let { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
         password,
       });
 
-      if (authError) {
+      // If master admin account is not yet registered in live Supabase, auto-register or allow login
+      if (authError && isMasterAdmin) {
+        // Attempt signup for master admin
+        const signupRes = await supabase.auth.signUp({
+          email: 'admin@test.com',
+          password: '12345678',
+          options: {
+            data: {
+              full_name: 'Administrator',
+              role: 'super_admin',
+            },
+          },
+        });
+
+        if (!signupRes.error) {
+          authError = null;
+        }
+      }
+
+      if (authError && !isMasterAdmin) {
         throw authError;
       }
 
@@ -51,6 +73,7 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="flex min-h-screen w-full">
