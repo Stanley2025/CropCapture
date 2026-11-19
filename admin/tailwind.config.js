@@ -73,6 +73,9 @@ module.exports = {
           950: '#052E16',
         },
       },
+      fontFamily: {
+        sans: ['var(--font-inter)', 'Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'sans-serif'],
+      },
       borderRadius: {
         lg: '0.625rem',
         md: '0.5rem',
