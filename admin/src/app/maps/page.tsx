@@ -1,9 +1,18 @@
 'use client';
 
 import React from 'react';
+import dynamic from 'next/dynamic';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import FarmMap from '@/components/maps/FarmMap';
-import { Map, Layers, Navigation, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
+
+const FarmMap = dynamic(() => import('@/components/maps/FarmMap'), {
+  ssr: false,
+  loading: () => (
+    <div className="h-[550px] rounded-2xl bg-slate-900 border border-slate-800 animate-pulse flex items-center justify-center text-slate-500 text-xs font-mono">
+      Initializing cartographic coordinate mapping...
+    </div>
+  ),
+});
 
 export default function MapsPage() {
   return (
@@ -37,7 +46,7 @@ export default function MapsPage() {
           </div>
         </div>
 
-        {/* Map Component */}
+        {/* Map Component loaded dynamically */}
         <FarmMap />
       </div>
     </AdminLayout>

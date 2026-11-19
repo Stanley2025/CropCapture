@@ -18,7 +18,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { getFarms, getHarvestBatches, getFarmActivities } from '@/lib/api';
+import { getFarmById, getHarvestBatchesByFarmId, getFarmActivitiesByFarmId } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Farm, HarvestBatch, FarmActivity } from '@/types/database';
 
@@ -36,16 +36,15 @@ export default function FarmDetailPage() {
       if (!id) return;
       setLoading(true);
       try {
-        const [allFarms, allHarvests, allActivities] = await Promise.all([
-          getFarms(),
-          getHarvestBatches(),
-          getFarmActivities(),
+        const [farmData, farmHarvests, farmActivities] = await Promise.all([
+          getFarmById(id),
+          getHarvestBatchesByFarmId(id),
+          getFarmActivitiesByFarmId(id),
         ]);
 
-        const currentFarm = allFarms.find((f) => f.id === id) || allFarms[0];
-        setFarm(currentFarm);
-        setHarvests(allHarvests.filter((h) => h.farm_id === id));
-        setActivities(allActivities.filter((a) => a.farm_id === id));
+        setFarm(farmData);
+        setHarvests(farmHarvests);
+        setActivities(farmActivities);
       } finally {
         setLoading(false);
       }

@@ -21,7 +21,13 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { getFarmerById, getFarms, getHarvestBatches, getFarmActivities, getInputs, getQualityInspections } from '@/lib/api';
+import {
+  getFarmerById,
+  getFarmsByFarmerId,
+  getHarvestBatchesByFarmerId,
+  getFarmActivitiesByFarmerId,
+  getQualityInspections,
+} from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { Farmer, Farm, HarvestBatch, FarmActivity, InputRecord, QualityInspection } from '@/types/database';
 
@@ -44,20 +50,18 @@ export default function FarmerDetailPage() {
       if (!id) return;
       setLoading(true);
       try {
-        const [farmerData, allFarms, allHarvests, allActivities, allInputs, allInspections] = await Promise.all([
+        const [farmerData, farmsData, harvestsData, activitiesData, allInspections] = await Promise.all([
           getFarmerById(id),
-          getFarms(),
-          getHarvestBatches(),
-          getFarmActivities(),
-          getInputs(),
+          getFarmsByFarmerId(id),
+          getHarvestBatchesByFarmerId(id),
+          getFarmActivitiesByFarmerId(id),
           getQualityInspections(),
         ]);
 
         setFarmer(farmerData);
-        setFarms(allFarms.filter((f) => f.farmer_id === id));
-        setHarvests(allHarvests.filter((h) => h.farmer_id === id));
-        setActivities(allActivities.filter((a) => a.farmer_id === id));
-        setInputs(allInputs);
+        setFarms(farmsData);
+        setHarvests(harvestsData);
+        setActivities(activitiesData);
         setInspections(allInspections.filter((q) => q.batch?.farmer_id === id));
       } finally {
         setLoading(false);

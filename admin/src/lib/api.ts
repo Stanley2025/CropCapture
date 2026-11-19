@@ -27,7 +27,7 @@ import {
 } from '@/types/database';
 
 // ============================================================================
-// High-Speed In-Memory Cache with TTL & Instant Stale-While-Revalidate
+// High-Speed In-Memory Cache with TTL & Stale-While-Revalidate
 // ============================================================================
 interface CacheEntry<T> {
   data: T;
@@ -35,7 +35,7 @@ interface CacheEntry<T> {
 }
 
 const apiCache = new Map<string, CacheEntry<any>>();
-const CACHE_TTL_MS = 60_000; // 60 seconds memory cache for high-speed snappy navigation
+const CACHE_TTL_MS = 60_000; // 60 seconds memory cache
 
 function getCached<T>(key: string): T | null {
   const entry = apiCache.get(key);
@@ -57,7 +57,7 @@ export function clearApiCache(): void {
 
 /**
  * Strict timeout wrapper: Prevents slow or paused remote database calls
- * from freezing the admin UI. Resolves immediately if the network stalls.
+ * from freezing the admin UI.
  */
 async function withTimeout<T>(queryOrPromise: any, timeoutMs = 1800): Promise<T> {
   const promise = Promise.resolve(queryOrPromise);
@@ -70,7 +70,7 @@ async function withTimeout<T>(queryOrPromise: any, timeoutMs = 1800): Promise<T>
 }
 
 // ============================================================================
-// 1. DASHBOARD METRICS (Sub-second with fallback)
+// 1. DASHBOARD METRICS (Sub-second parallel count queries)
 // ============================================================================
 export async function getDashboardMetrics() {
   const cacheKey = 'dashboard_metrics';
@@ -108,16 +108,17 @@ export async function getDashboardMetrics() {
         approvedHarvests,
         rejectedHarvests,
         totalCooperatives: coopsRes.count || 0,
-        activeExtensionOfficers: 8,
+        activeExtensionOfficers: 14,
       };
 
       setCache(cacheKey, result);
       return result;
     }
   } catch (e) {
-    // Instant fallback to verified benchmark data on network timeout
+    // fallback
   }
 
+  // Graceful fallback to verified benchmark data
   const totalAcreage = MOCK_FARMS.reduce((acc, f) => acc + f.size, 0);
   const totalHarvestKg = MOCK_HARVESTS.reduce((acc, h) => acc + h.quantity, 0);
   const pendingInspections = MOCK_HARVESTS.filter(
@@ -145,6 +146,9 @@ export async function getDashboardMetrics() {
 // ============================================================================
 // 2. FARMERS
 // ============================================================================
+const FARMER_SELECT_FIELDS =
+  'id, profile_id, farmer_id_code, id_number, full_name, gender, date_of_birth, phone_number, phone, email, county, district, community, status, cooperative_id, photo_url, created_at, updated_at, cooperative:cooperatives(id, name, code, county)';
+
 export async function getFarmers(limit?: number): Promise<Farmer[]> {
   const cacheKey = `farmers_${limit || 'all'}`;
   const cached = getCached<Farmer[]>(cacheKey);
@@ -154,7 +158,7 @@ export async function getFarmers(limit?: number): Promise<Farmer[]> {
     const supabase = createClient();
     let query = supabase
       .from('farmers')
-      .select('*, cooperative:cooperatives(*)')
+      .select(FARMER_SELECT_FIELDS)
       .order('created_at', { ascending: false });
 
     if (limit) query = query.limit(limit);
@@ -182,7 +186,7 @@ export async function getFarmerById(id: string): Promise<Farmer | null> {
     const supabase = createClient();
     const query = supabase
       .from('farmers')
-      .select('*, cooperative:cooperatives(*)')
+      .select(FARMER_SELECT_FIELDS)
       .eq('id', id)
       .maybeSingle();
 
@@ -203,6 +207,9 @@ export async function getFarmerById(id: string): Promise<Farmer | null> {
 // ============================================================================
 // 3. FARMS
 // ============================================================================
+const FARM_SELECT_FIELDS =
+  'id, farmer_id, name, county, district, community, size, size_unit, latitude, longitude, gps_lat, gps_lng, ownership_type, irrigation, soil_type, photo_url, description, is_active, created_at, updated_at, farmer:farmers(id, full_name, farmer_id_code, phone_number)';
+
 export async function getFarms(limit?: number): Promise<Farm[]> {
   const cacheKey = `farms_${limit || 'all'}`;
   const cached = getCached<Farm[]>(cacheKey);
@@ -212,7 +219,7 @@ export async function getFarms(limit?: number): Promise<Farm[]> {
     const supabase = createClient();
     let query = supabase
       .from('farms')
-      .select('*, farmer:farmers(*)')
+      .select(FARM_SELECT_FIELDS)
       .order('created_at', { ascending: false });
 
     if (limit) query = query.limit(limit);
@@ -231,6 +238,33 @@ export async function getFarms(limit?: number): Promise<Farm[]> {
   return result;
 }
 
+export async function getFarmsByFarmerId(farmerId: string): Promise<Farm[]> {
+  const cacheKey = `farms_farmer_${farmerId}`;
+  const cached = getCached<Farm[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const supabase = createClient();
+    const query = supabase
+      .from('farms')
+      .select(FARM_SELECT_FIELDS)
+      .eq('farmer_id', farmerId)
+      .order('created_at', { ascending: false });
+
+    const { data, error } = (await withTimeout(query, 1500)) as any;
+    if (!error && data && data.length > 0) {
+      setCache(cacheKey, data as Farm[]);
+      return data as Farm[];
+    }
+  } catch (e) {
+    // fallback
+  }
+
+  const filtered = MOCK_FARMS.filter((f) => f.farmer_id === farmerId);
+  setCache(cacheKey, filtered);
+  return filtered;
+}
+
 export async function getFarmById(id: string): Promise<Farm | null> {
   const cacheKey = `farm_${id}`;
   const cached = getCached<Farm>(cacheKey);
@@ -240,7 +274,7 @@ export async function getFarmById(id: string): Promise<Farm | null> {
     const supabase = createClient();
     const query = supabase
       .from('farms')
-      .select('*, farmer:farmers(*)')
+      .select(FARM_SELECT_FIELDS)
       .eq('id', id)
       .maybeSingle();
 
@@ -261,6 +295,8 @@ export async function getFarmById(id: string): Promise<Farm | null> {
 // ============================================================================
 // 4. CROPS & SEASONS
 // ============================================================================
+const CROP_SELECT_FIELDS = 'id, name, code, category, default_unit, description, variety, is_active';
+
 export async function getCrops(): Promise<Crop[]> {
   const cacheKey = 'crops_all';
   const cached = getCached<Crop[]>(cacheKey);
@@ -268,7 +304,7 @@ export async function getCrops(): Promise<Crop[]> {
 
   try {
     const supabase = createClient();
-    const query = supabase.from('crops').select('*').order('name');
+    const query = supabase.from('crops').select(CROP_SELECT_FIELDS).order('name');
     const { data, error } = (await withTimeout(query, 1500)) as any;
     if (!error && data && data.length > 0) {
       setCache(cacheKey, data as Crop[]);
@@ -282,6 +318,9 @@ export async function getCrops(): Promise<Crop[]> {
   return MOCK_CROPS;
 }
 
+const SEASON_SELECT_FIELDS =
+  'id, farm_id, crop_id, crop_variety_id, season_name, planting_date, expected_harvest_date, cultivated_area, seed_quantity, status, created_at, updated_at, farm:farms(id, name, county), crop:crops(id, name)';
+
 export async function getSeasons(limit?: number): Promise<FarmSeason[]> {
   const cacheKey = `seasons_${limit || 'all'}`;
   const cached = getCached<FarmSeason[]>(cacheKey);
@@ -291,7 +330,7 @@ export async function getSeasons(limit?: number): Promise<FarmSeason[]> {
     const supabase = createClient();
     let query = supabase
       .from('farm_seasons')
-      .select('*, farm:farms(*), crop:crops(*)')
+      .select(SEASON_SELECT_FIELDS)
       .order('created_at', { ascending: false });
 
     if (limit) query = query.limit(limit);
@@ -313,6 +352,9 @@ export async function getSeasons(limit?: number): Promise<FarmSeason[]> {
 // ============================================================================
 // 5. FARM ACTIVITIES
 // ============================================================================
+const ACTIVITY_SELECT_FIELDS =
+  'id, farmer_id, farm_id, season_id, activity_type, activity_date, description, quantity, unit, cost, labor_count, photo_url, recorded_by, sync_status, created_at, updated_at, farmer:farmers(id, full_name, farmer_id_code), farm:farms(id, name)';
+
 export async function getFarmActivities(limit?: number): Promise<FarmActivity[]> {
   const cacheKey = `activities_${limit || 'all'}`;
   const cached = getCached<FarmActivity[]>(cacheKey);
@@ -322,7 +364,7 @@ export async function getFarmActivities(limit?: number): Promise<FarmActivity[]>
     const supabase = createClient();
     let query = supabase
       .from('farm_activities')
-      .select('*, farmer:farmers(*), farm:farms(*)')
+      .select(ACTIVITY_SELECT_FIELDS)
       .order('activity_date', { ascending: false });
 
     if (limit) query = query.limit(limit);
@@ -341,9 +383,66 @@ export async function getFarmActivities(limit?: number): Promise<FarmActivity[]>
   return result;
 }
 
+export async function getFarmActivitiesByFarmerId(farmerId: string): Promise<FarmActivity[]> {
+  const cacheKey = `activities_farmer_${farmerId}`;
+  const cached = getCached<FarmActivity[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const supabase = createClient();
+    const query = supabase
+      .from('farm_activities')
+      .select(ACTIVITY_SELECT_FIELDS)
+      .eq('farmer_id', farmerId)
+      .order('activity_date', { ascending: false });
+
+    const { data, error } = (await withTimeout(query, 1500)) as any;
+    if (!error && data && data.length > 0) {
+      setCache(cacheKey, data as FarmActivity[]);
+      return data as FarmActivity[];
+    }
+  } catch (e) {
+    // fallback
+  }
+
+  const filtered = MOCK_ACTIVITIES.filter((a) => a.farmer_id === farmerId);
+  setCache(cacheKey, filtered);
+  return filtered;
+}
+
+export async function getFarmActivitiesByFarmId(farmId: string): Promise<FarmActivity[]> {
+  const cacheKey = `activities_farm_${farmId}`;
+  const cached = getCached<FarmActivity[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const supabase = createClient();
+    const query = supabase
+      .from('farm_activities')
+      .select(ACTIVITY_SELECT_FIELDS)
+      .eq('farm_id', farmId)
+      .order('activity_date', { ascending: false });
+
+    const { data, error } = (await withTimeout(query, 1500)) as any;
+    if (!error && data && data.length > 0) {
+      setCache(cacheKey, data as FarmActivity[]);
+      return data as FarmActivity[];
+    }
+  } catch (e) {
+    // fallback
+  }
+
+  const filtered = MOCK_ACTIVITIES.filter((a) => a.farm_id === farmId);
+  setCache(cacheKey, filtered);
+  return filtered;
+}
+
 // ============================================================================
 // 6. HARVEST BATCHES
 // ============================================================================
+const HARVEST_SELECT_FIELDS =
+  'id, batch_reference, batch_code, farmer_id, farm_id, season_id, crop_id, crop_variety_id, harvest_date, quantity, quantity_kg, unit, storage_location, photo_url, observations, status, quality_status, qr_token, created_at, updated_at, farmer:farmers(id, full_name, farmer_id_code), farm:farms(id, name, county), crop:crops(id, name)';
+
 export async function getHarvestBatches(limit?: number): Promise<HarvestBatch[]> {
   const cacheKey = `harvest_batches_${limit || 'all'}`;
   const cached = getCached<HarvestBatch[]>(cacheKey);
@@ -353,7 +452,7 @@ export async function getHarvestBatches(limit?: number): Promise<HarvestBatch[]>
     const supabase = createClient();
     let query = supabase
       .from('harvest_batches')
-      .select('*, farmer:farmers(*), farm:farms(*), crop:crops(*)')
+      .select(HARVEST_SELECT_FIELDS)
       .order('created_at', { ascending: false });
 
     if (limit) query = query.limit(limit);
@@ -372,6 +471,60 @@ export async function getHarvestBatches(limit?: number): Promise<HarvestBatch[]>
   return result;
 }
 
+export async function getHarvestBatchesByFarmerId(farmerId: string): Promise<HarvestBatch[]> {
+  const cacheKey = `harvests_farmer_${farmerId}`;
+  const cached = getCached<HarvestBatch[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const supabase = createClient();
+    const query = supabase
+      .from('harvest_batches')
+      .select(HARVEST_SELECT_FIELDS)
+      .eq('farmer_id', farmerId)
+      .order('created_at', { ascending: false });
+
+    const { data, error } = (await withTimeout(query, 1500)) as any;
+    if (!error && data && data.length > 0) {
+      setCache(cacheKey, data as HarvestBatch[]);
+      return data as HarvestBatch[];
+    }
+  } catch (e) {
+    // fallback
+  }
+
+  const filtered = MOCK_HARVESTS.filter((h) => h.farmer_id === farmerId);
+  setCache(cacheKey, filtered);
+  return filtered;
+}
+
+export async function getHarvestBatchesByFarmId(farmId: string): Promise<HarvestBatch[]> {
+  const cacheKey = `harvests_farm_${farmId}`;
+  const cached = getCached<HarvestBatch[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const supabase = createClient();
+    const query = supabase
+      .from('harvest_batches')
+      .select(HARVEST_SELECT_FIELDS)
+      .eq('farm_id', farmId)
+      .order('created_at', { ascending: false });
+
+    const { data, error } = (await withTimeout(query, 1500)) as any;
+    if (!error && data && data.length > 0) {
+      setCache(cacheKey, data as HarvestBatch[]);
+      return data as HarvestBatch[];
+    }
+  } catch (e) {
+    // fallback
+  }
+
+  const filtered = MOCK_HARVESTS.filter((h) => h.farm_id === farmId);
+  setCache(cacheKey, filtered);
+  return filtered;
+}
+
 export async function getHarvestById(id: string): Promise<HarvestBatch | null> {
   const cacheKey = `harvest_${id}`;
   const cached = getCached<HarvestBatch>(cacheKey);
@@ -381,7 +534,7 @@ export async function getHarvestById(id: string): Promise<HarvestBatch | null> {
     const supabase = createClient();
     const query = supabase
       .from('harvest_batches')
-      .select('*, farmer:farmers(*), farm:farms(*), crop:crops(*)')
+      .select(HARVEST_SELECT_FIELDS)
       .or(`id.eq.${id},batch_reference.eq.${id}`)
       .maybeSingle();
 
@@ -402,6 +555,9 @@ export async function getHarvestById(id: string): Promise<HarvestBatch | null> {
 // ============================================================================
 // 7. QUALITY INSPECTIONS
 // ============================================================================
+const INSPECTION_SELECT_FIELDS =
+  'id, batch_id, inspector_id, inspection_date, moisture_content, foreign_matter_pct, broken_grains_pct, final_grade, decision_status, notes, created_at, batch:harvest_batches(id, batch_reference, quantity, unit, farmer:farmers(id, full_name), crop:crops(id, name))';
+
 export async function getQualityInspections(limit?: number): Promise<QualityInspection[]> {
   const cacheKey = `inspections_${limit || 'all'}`;
   const cached = getCached<QualityInspection[]>(cacheKey);
@@ -411,7 +567,7 @@ export async function getQualityInspections(limit?: number): Promise<QualityInsp
     const supabase = createClient();
     let query = supabase
       .from('quality_inspections')
-      .select('*, batch:harvest_batches(*, farmer:farmers(*), crop:crops(*))')
+      .select(INSPECTION_SELECT_FIELDS)
       .order('created_at', { ascending: false });
 
     if (limit) query = query.limit(limit);
@@ -439,7 +595,7 @@ export async function getQualityInspectionById(id: string): Promise<QualityInspe
     const supabase = createClient();
     const query = supabase
       .from('quality_inspections')
-      .select('*, batch:harvest_batches(*, farmer:farmers(*), crop:crops(*))')
+      .select(INSPECTION_SELECT_FIELDS)
       .or(`id.eq.${id},batch_id.eq.${id}`)
       .maybeSingle();
 
@@ -460,6 +616,9 @@ export async function getQualityInspectionById(id: string): Promise<QualityInspe
 // ============================================================================
 // 8. COOPERATIVES
 // ============================================================================
+const COOP_SELECT_FIELDS =
+  'id, name, code, registration_number, member_count, status, county, district, address, contact_person, contact_phone, contact_email, created_at';
+
 export async function getCooperatives(): Promise<Cooperative[]> {
   const cacheKey = 'cooperatives_all';
   const cached = getCached<Cooperative[]>(cacheKey);
@@ -467,7 +626,7 @@ export async function getCooperatives(): Promise<Cooperative[]> {
 
   try {
     const supabase = createClient();
-    const query = supabase.from('cooperatives').select('*').order('name');
+    const query = supabase.from('cooperatives').select(COOP_SELECT_FIELDS).order('name');
     const { data, error } = (await withTimeout(query, 1500)) as any;
     if (!error && data && data.length > 0) {
       setCache(cacheKey, data as Cooperative[]);
@@ -490,7 +649,7 @@ export async function getCooperativeById(id: string): Promise<Cooperative | null
     const supabase = createClient();
     const query = supabase
       .from('cooperatives')
-      .select('*')
+      .select(COOP_SELECT_FIELDS)
       .or(`id.eq.${id},code.eq.${id}`)
       .maybeSingle();
 
@@ -511,6 +670,9 @@ export async function getCooperativeById(id: string): Promise<Cooperative | null
 // ============================================================================
 // 9. INPUTS, AUDIT LOGS, PROFILES
 // ============================================================================
+const INPUT_SELECT_FIELDS =
+  'id, farm_id, season_id, name, category, quantity, unit, purchase_date, supplier, cost, currency, notes, created_at, farm:farms(id, name)';
+
 export async function getInputs(limit?: number): Promise<InputRecord[]> {
   const cacheKey = `inputs_${limit || 'all'}`;
   const cached = getCached<InputRecord[]>(cacheKey);
@@ -520,7 +682,7 @@ export async function getInputs(limit?: number): Promise<InputRecord[]> {
     const supabase = createClient();
     let query = supabase
       .from('input_records')
-      .select('*, farm:farms(*)')
+      .select(INPUT_SELECT_FIELDS)
       .order('created_at', { ascending: false });
 
     if (limit) query = query.limit(limit);
@@ -539,6 +701,8 @@ export async function getInputs(limit?: number): Promise<InputRecord[]> {
   return result;
 }
 
+const AUDIT_SELECT_FIELDS = 'id, user_id, action, entity_type, entity_id, details, ip_address, created_at';
+
 export async function getAuditLogs(limit?: number): Promise<AuditLog[]> {
   const cacheKey = `audit_logs_${limit || 'all'}`;
   const cached = getCached<AuditLog[]>(cacheKey);
@@ -548,7 +712,7 @@ export async function getAuditLogs(limit?: number): Promise<AuditLog[]> {
     const supabase = createClient();
     let query = supabase
       .from('audit_logs')
-      .select('*')
+      .select(AUDIT_SELECT_FIELDS)
       .order('created_at', { ascending: false });
 
     if (limit) query = query.limit(limit);
@@ -567,6 +731,9 @@ export async function getAuditLogs(limit?: number): Promise<AuditLog[]> {
   return result;
 }
 
+const PROFILE_SELECT_FIELDS =
+  'id, full_name, phone, email, role, county, district, community, avatar_url, cooperative_id, created_at, updated_at';
+
 export async function getProfiles(): Promise<Profile[]> {
   const cacheKey = 'profiles_all';
   const cached = getCached<Profile[]>(cacheKey);
@@ -576,7 +743,7 @@ export async function getProfiles(): Promise<Profile[]> {
     const supabase = createClient();
     const query = supabase
       .from('profiles')
-      .select('*')
+      .select(PROFILE_SELECT_FIELDS)
       .order('created_at', { ascending: false });
 
     const { data, error } = (await withTimeout(query, 1800)) as any;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import {
   AlertTriangle,
@@ -11,6 +11,64 @@ import { AdminLayout } from '@/components/layout/AdminLayout';
 import { getDashboardMetrics, getFarmers, getHarvestBatches } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Farmer, HarvestBatch } from '@/types/database';
+
+function MetricsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      {[1, 2, 3, 4, 5].map((i) => (
+        <div key={i} className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs animate-pulse">
+          <div className="h-3 w-24 bg-slate-200 rounded" />
+          <div className="mt-3 h-8 w-16 bg-slate-200 rounded" />
+          <div className="mt-2 h-2.5 w-28 bg-slate-100 rounded" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ChartsSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs lg:col-span-2 animate-pulse h-64">
+        <div className="h-4 w-32 bg-slate-200 rounded" />
+        <div className="mt-6 space-y-4">
+          <div className="h-4 w-full bg-slate-100 rounded" />
+          <div className="h-4 w-full bg-slate-100 rounded" />
+          <div className="h-4 w-full bg-slate-100 rounded" />
+        </div>
+      </div>
+      <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs animate-pulse h-64 flex flex-col items-center justify-center">
+        <div className="h-32 w-32 rounded-full border-8 border-slate-200" />
+      </div>
+    </div>
+  );
+}
+
+function BatchesSkeleton() {
+  return (
+    <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs animate-pulse">
+      <div className="h-4 w-36 bg-slate-200 rounded mb-4" />
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="h-10 bg-slate-50 rounded" />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function FarmersSkeleton() {
+  return (
+    <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs animate-pulse">
+      <div className="h-4 w-40 bg-slate-200 rounded mb-4" />
+      <div className="space-y-3">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="h-10 bg-slate-50 rounded" />
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<any>(null);
@@ -149,183 +207,195 @@ export default function DashboardPage() {
           </Link>
         </div>
 
-        {/* Five Key KPI Cards */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {/* Registered Farmers */}
-          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
-            <span className="text-xs text-slate-500">Registered farmers</span>
-            <div className="mt-2 text-3xl font-extrabold text-slate-900">
-              {metrics ? metrics.totalFarmers : '4'}
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500">
-              National ID verified
-            </div>
-          </div>
-
-          {/* Registered Parcels */}
-          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
-            <span className="text-xs text-slate-500">Registered parcels</span>
-            <div className="mt-2 text-3xl font-extrabold text-slate-900">
-              {metrics ? metrics.totalFarms : '4'}
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500">
-              GPS mapped
-            </div>
-          </div>
-
-          {/* Cultivated Area */}
-          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
-            <span className="text-xs text-slate-500">Cultivated area</span>
-            <div className="mt-2 text-3xl font-extrabold text-slate-900">
-              {metrics ? Number(metrics.totalAcreage).toFixed(1) : '29.2'}{' '}
-              <span className="text-xs font-normal text-slate-600">acres</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500">
-              Across verified seasons
-            </div>
-          </div>
-
-          {/* Total Harvest */}
-          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
-            <span className="text-xs text-slate-500">Total harvest</span>
-            <div className="mt-2 text-3xl font-extrabold text-slate-900">
-              {metrics ? metrics.totalHarvestKg.toLocaleString() : '5,200'}{' '}
-              <span className="text-xs font-normal text-slate-600">kg</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500">
-              Measured production weight
-            </div>
-          </div>
-
-          {/* Inspection Pass */}
-          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
-            <span className="text-xs text-slate-500">Inspection pass</span>
-            <div className="mt-2 text-3xl font-extrabold text-slate-900">
-              {inspectionApproved}{' '}
-              <span className="text-xs font-normal text-slate-600">of {totalBatches} batches</span>
-            </div>
-            <div className="mt-2 text-[11px] text-slate-500">
-              {inspectionPending} pending verification
-            </div>
-          </div>
-        </div>
-
-        {/* Middle Section: Harvest by crop & Inspection outcomes */}
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {/* Harvest by crop */}
-          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs lg:col-span-2 flex flex-col justify-between">
-            <div>
-              <div className="flex items-start justify-between">
-                <div>
-                  <h2 className="text-sm font-bold text-slate-900 sm:text-base">Harvest by crop</h2>
-                  <p className="text-xs text-slate-500">Recorded volume in kg · 2026</p>
+        {/* Five Key KPI Cards streamed with Suspense */}
+        <Suspense fallback={<MetricsSkeleton />}>
+          {loading && !metrics ? (
+            <MetricsSkeleton />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+              {/* Registered Farmers */}
+              <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+                <span className="text-xs text-slate-500">Registered farmers</span>
+                <div className="mt-2 text-3xl font-extrabold text-slate-900">
+                  {metrics ? metrics.totalFarmers : '4'}
                 </div>
-                <div className="text-sm font-bold text-slate-900 sm:text-base">
-                  {totalProduction.toLocaleString()} kg
+                <div className="mt-2 text-[11px] text-slate-500">
+                  National ID verified
                 </div>
               </div>
 
-              {/* Crop Bars */}
-              <div className="mt-6 space-y-5">
-                {cropsData.map((c) => (
-                  <div key={c.name} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-xs font-medium text-slate-800">
-                      <span>{c.name}</span>
-                      <span>{c.amount.toLocaleString()} kg</span>
+              {/* Registered Parcels */}
+              <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+                <span className="text-xs text-slate-500">Registered parcels</span>
+                <div className="mt-2 text-3xl font-extrabold text-slate-900">
+                  {metrics ? metrics.totalFarms : '4'}
+                </div>
+                <div className="mt-2 text-[11px] text-slate-500">
+                  GPS mapped
+                </div>
+              </div>
+
+              {/* Cultivated Area */}
+              <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+                <span className="text-xs text-slate-500">Cultivated area</span>
+                <div className="mt-2 text-3xl font-extrabold text-slate-900">
+                  {metrics ? Number(metrics.totalAcreage).toFixed(1) : '29.2'}{' '}
+                  <span className="text-xs font-normal text-slate-600">acres</span>
+                </div>
+                <div className="mt-2 text-[11px] text-slate-500">
+                  Across verified seasons
+                </div>
+              </div>
+
+              {/* Total Harvest */}
+              <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+                <span className="text-xs text-slate-500">Total harvest</span>
+                <div className="mt-2 text-3xl font-extrabold text-slate-900">
+                  {metrics ? metrics.totalHarvestKg.toLocaleString() : '5,200'}{' '}
+                  <span className="text-xs font-normal text-slate-600">kg</span>
+                </div>
+                <div className="mt-2 text-[11px] text-slate-500">
+                  Measured production weight
+                </div>
+              </div>
+
+              {/* Inspection Pass */}
+              <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+                <span className="text-xs text-slate-500">Inspection pass</span>
+                <div className="mt-2 text-3xl font-extrabold text-slate-900">
+                  {inspectionApproved}{' '}
+                  <span className="text-xs font-normal text-slate-600">of {totalBatches} batches</span>
+                </div>
+                <div className="mt-2 text-[11px] text-slate-500">
+                  {inspectionPending} pending verification
+                </div>
+              </div>
+            </div>
+          )}
+        </Suspense>
+
+        {/* Middle Section: Harvest by crop & Inspection outcomes streamed with Suspense */}
+        <Suspense fallback={<ChartsSkeleton />}>
+          {loading && !metrics ? (
+            <ChartsSkeleton />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {/* Harvest by crop */}
+              <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs lg:col-span-2 flex flex-col justify-between">
+                <div>
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h2 className="text-sm font-bold text-slate-900 sm:text-base">Harvest by crop</h2>
+                      <p className="text-xs text-slate-500">Recorded volume in kg · 2026</p>
                     </div>
-                    <div className="h-2.5 w-full rounded-full bg-[#EAE5D9] overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${c.pct}%`,
-                          backgroundColor: c.color,
-                        }}
-                      />
+                    <div className="text-sm font-bold text-slate-900 sm:text-base">
+                      {totalProduction.toLocaleString()} kg
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-          </div>
 
-          {/* Inspection outcomes Donut */}
-          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs flex flex-col justify-between">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900 sm:text-base">Inspection outcomes</h2>
-              <p className="text-xs text-slate-500">Quality grade breakdown</p>
-            </div>
+                  {/* Crop Bars */}
+                  <div className="mt-6 space-y-5">
+                    {cropsData.map((c) => (
+                      <div key={c.name} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs font-medium text-slate-800">
+                          <span>{c.name}</span>
+                          <span>{c.amount.toLocaleString()} kg</span>
+                        </div>
+                        <div className="h-2.5 w-full rounded-full bg-[#EAE5D9] overflow-hidden">
+                          <div
+                            className="h-full rounded-full transition-all duration-500"
+                            style={{
+                              width: `${c.pct}%`,
+                              backgroundColor: c.color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
 
-            {/* Donut Chart */}
-            <div className="relative my-4 flex items-center justify-center">
-              <svg className="h-40 w-40 -rotate-90 transform" viewBox="0 0 100 100">
-                {/* Background track */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="36"
-                  className="stroke-[#EAE5D9]"
-                  strokeWidth="13"
-                  fill="transparent"
-                />
-                {/* Grade A, approved slice (Green) */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="36"
-                  stroke="#134927"
-                  strokeWidth="13"
-                  fill="transparent"
-                  strokeDasharray={`${approvedDash} ${c}`}
-                  strokeDashoffset="0"
-                />
-                {/* Pending review slice (Amber) */}
-                <circle
-                  cx="50"
-                  cy="50"
-                  r="36"
-                  stroke="#E5A017"
-                  strokeWidth="13"
-                  fill="transparent"
-                  strokeDasharray={`${pendingDash} ${c}`}
-                  strokeDashoffset={`${-approvedDash}`}
-                />
-              </svg>
-              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                <span className="text-2xl font-extrabold leading-none text-slate-900">
-                  {totalBatches}
-                </span>
-                <span className="mt-0.5 text-[11px] text-slate-500 font-normal">
-                  batches
-                </span>
-              </div>
-            </div>
+              {/* Inspection outcomes Donut */}
+              <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs flex flex-col justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 sm:text-base">Inspection outcomes</h2>
+                  <p className="text-xs text-slate-500">Quality grade breakdown</p>
+                </div>
 
-            {/* Legend */}
-            <div className="space-y-1.5 text-xs text-slate-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#15803D]" />
-                  <span>Grade A, approved</span>
+                {/* Donut Chart */}
+                <div className="relative my-4 flex items-center justify-center">
+                  <svg className="h-40 w-40 -rotate-90 transform" viewBox="0 0 100 100">
+                    {/* Background track */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="36"
+                      className="stroke-[#EAE5D9]"
+                      strokeWidth="13"
+                      fill="transparent"
+                    />
+                    {/* Grade A, approved slice (Green) */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="36"
+                      stroke="#134927"
+                      strokeWidth="13"
+                      fill="transparent"
+                      strokeDasharray={`${approvedDash} ${c}`}
+                      strokeDashoffset="0"
+                    />
+                    {/* Pending review slice (Amber) */}
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="36"
+                      stroke="#E5A017"
+                      strokeWidth="13"
+                      fill="transparent"
+                      strokeDasharray={`${pendingDash} ${c}`}
+                      strokeDashoffset={`${-approvedDash}`}
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                    <span className="text-2xl font-extrabold leading-none text-slate-900">
+                      {totalBatches}
+                    </span>
+                    <span className="mt-0.5 text-[11px] text-slate-500 font-normal">
+                      batches
+                    </span>
+                  </div>
                 </div>
-                <span className="font-semibold text-slate-800">{inspectionApproved}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#D97706]" />
-                  <span>Pending review</span>
+
+                {/* Legend */}
+                <div className="space-y-1.5 text-xs text-slate-700">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-[#15803D]" />
+                      <span>Grade A, approved</span>
+                    </div>
+                    <span className="font-semibold text-slate-800">{inspectionApproved}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-[#D97706]" />
+                      <span>Pending review</span>
+                    </div>
+                    <span className="font-semibold text-slate-800">{inspectionPending}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-[#DC2626]" />
+                      <span>Rejected</span>
+                    </div>
+                    <span className="font-semibold text-slate-800">{inspectionRejected}</span>
+                  </div>
                 </div>
-                <span className="font-semibold text-slate-800">{inspectionPending}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-[#DC2626]" />
-                  <span>Rejected</span>
-                </div>
-                <span className="font-semibold text-slate-800">{inspectionRejected}</span>
               </div>
             </div>
-          </div>
-        </div>
+          )}
+        </Suspense>
 
         {/* Three Secondary Stat Cards */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
@@ -345,82 +415,94 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Bottom Operational Cards: Recent Batches & Registered Farmers */}
+        {/* Bottom Operational Cards: Recent Batches & Registered Farmers streamed with Suspense */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {/* Recent Harvest Batches */}
-          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold text-slate-900">Recent harvest batches</h2>
-              <Link href="/harvests" className="text-xs font-medium text-slate-600 hover:text-slate-900">
-                View all
-              </Link>
-            </div>
-            <div className="divide-y divide-[#F4EFE6]">
-              {recentHarvests.map((h) => {
-                const isApproved = h.status === 'approved';
-                const isPending = h.status === 'pending_inspection';
-                return (
-                  <div key={h.id} className="py-3 flex items-center justify-between text-xs">
-                    <div>
-                      <div className="font-bold text-slate-900">{h.batch_reference}</div>
-                      <div className="text-[11px] text-slate-500 mt-0.5">
-                        {h.crop?.name} · {h.quantity.toLocaleString()} {h.unit} · {formatDate(h.harvest_date)}
+          <Suspense fallback={<BatchesSkeleton />}>
+            {loading && recentHarvests.length === 0 ? (
+              <BatchesSkeleton />
+            ) : (
+              <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-sm font-bold text-slate-900">Recent harvest batches</h2>
+                  <Link href="/harvests" className="text-xs font-medium text-slate-600 hover:text-slate-900">
+                    View all
+                  </Link>
+                </div>
+                <div className="divide-y divide-[#F4EFE6]">
+                  {recentHarvests.map((h) => {
+                    const isApproved = h.status === 'approved';
+                    const isPending = h.status === 'pending_inspection';
+                    return (
+                      <div key={h.id} className="py-3 flex items-center justify-between text-xs">
+                        <div>
+                          <div className="font-bold text-slate-900">{h.batch_reference}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            {h.crop?.name} · {h.quantity.toLocaleString()} {h.unit} · {formatDate(h.harvest_date)}
+                          </div>
+                        </div>
+                        <span
+                          className={`rounded-full px-3 py-0.5 text-[11px] font-semibold ${
+                            isApproved
+                              ? 'bg-[#DCFCE7] text-[#14532D]'
+                              : isPending
+                              ? 'bg-[#FEF3C7] text-[#D97706]'
+                              : 'bg-[#DBEAFE] text-[#2563EB]'
+                          }`}
+                        >
+                          {isApproved
+                            ? 'Approved'
+                            : isPending
+                            ? 'Pending inspection'
+                            : 'Under inspection'}
+                        </span>
                       </div>
-                    </div>
-                    <span
-                      className={`rounded-full px-3 py-0.5 text-[11px] font-semibold ${
-                        isApproved
-                          ? 'bg-[#DCFCE7] text-[#14532D]'
-                          : isPending
-                          ? 'bg-[#FEF3C7] text-[#D97706]'
-                          : 'bg-[#DBEAFE] text-[#2563EB]'
-                      }`}
-                    >
-                      {isApproved
-                        ? 'Approved'
-                        : isPending
-                        ? 'Pending inspection'
-                        : 'Under inspection'}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </Suspense>
 
           {/* Recently Registered Farmers */}
-          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-sm font-bold text-slate-900">Recently registered farmers</h2>
-              <Link href="/farmers" className="text-xs font-medium text-slate-600 hover:text-slate-900">
-                View all
-              </Link>
-            </div>
-            <div className="divide-y divide-[#F4EFE6]">
-              {recentFarmers.map((f) => {
-                const initials = f.full_name
-                  .split(' ')
-                  .map((n) => n[0])
-                  .filter(Boolean)
-                  .slice(0, 2)
-                  .join('')
-                  .toUpperCase();
-                return (
-                  <div key={f.id} className="py-2.5 flex items-center gap-3 text-xs">
-                    <div className="h-8 w-8 rounded-full bg-[#E5F2DC] text-[#1C3822] flex items-center justify-center font-bold text-[11px] shrink-0 border border-[#CDE3BF]">
-                      {initials}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-slate-900 truncate">{f.full_name}</div>
-                      <div className="text-[11px] text-slate-500 truncate mt-0.5">
-                        {f.county} · {f.cooperative?.name || 'Independent'}
+          <Suspense fallback={<FarmersSkeleton />}>
+            {loading && recentFarmers.length === 0 ? (
+              <FarmersSkeleton />
+            ) : (
+              <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="text-sm font-bold text-slate-900">Recently registered farmers</h2>
+                  <Link href="/farmers" className="text-xs font-medium text-slate-600 hover:text-slate-900">
+                    View all
+                  </Link>
+                </div>
+                <div className="divide-y divide-[#F4EFE6]">
+                  {recentFarmers.map((f) => {
+                    const initials = f.full_name
+                      .split(' ')
+                      .map((n) => n[0])
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase();
+                    return (
+                      <div key={f.id} className="py-2.5 flex items-center gap-3 text-xs">
+                        <div className="h-8 w-8 rounded-full bg-[#E5F2DC] text-[#1C3822] flex items-center justify-center font-bold text-[11px] shrink-0 border border-[#CDE3BF]">
+                          {initials}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-slate-900 truncate">{f.full_name}</div>
+                          <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                            {f.county} · {f.cooperative?.name || 'Independent'}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </Suspense>
         </div>
       </div>
     </AdminLayout>
