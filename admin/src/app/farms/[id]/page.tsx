@@ -195,8 +195,9 @@ export default function FarmDetailPage() {
                   );
                 })()}
                 <p className="mt-1 text-xs text-slate-400">
-                  Cadastral survey recorded via AgriTrack Mobile Field App
+                  Cadastral survey recorded via CropCapture Mobile Field App
                 </p>
+
               </div>
 
               <div className="flex items-center justify-between border-t border-slate-800 pt-3 text-xs text-slate-400">

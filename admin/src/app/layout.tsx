@@ -3,14 +3,14 @@ import './globals.css';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 
 export const metadata: Metadata = {
-  title: 'AgriTrack Liberia — Administration Portal',
+  title: 'CropCapture — National Agricultural Platform',
   description: 'Digital Farm Records, Agricultural Production & Quality Verification Management Portal',
   icons: {
     icon: '/icon.svg',
     shortcut: '/favicon.ico',
   },
-
 };
+
 
 export default function RootLayout({
   children,

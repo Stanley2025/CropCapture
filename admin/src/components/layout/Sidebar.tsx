@@ -31,6 +31,8 @@ import {
   Leaf,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { CropCaptureLogo } from '@/components/brand/Logo';
+
 
 interface NavItem {
   title: string;
@@ -118,19 +120,10 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
       >
         {/* Brand Header */}
         <div className="flex h-16 items-center justify-between border-b border-[#E2E8F0] px-6">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#15803D] text-white shadow-sm shadow-[#15803D]/20">
-              <Leaf className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-base font-extrabold tracking-tight text-[#14532D]">
-                AgriTrack <span className="text-[#15803D]">Liberia</span>
-              </div>
-              <div className="text-[10px] font-semibold tracking-wider text-slate-400">
-                ADMINISTRATION PORTAL
-              </div>
-            </div>
+          <Link href="/dashboard" className="flex items-center gap-2">
+            <CropCaptureLogo iconClassName="h-8 w-8 text-[#15803D]" />
           </Link>
+
           {onCloseMobile && (
             <button
               onClick={onCloseMobile}

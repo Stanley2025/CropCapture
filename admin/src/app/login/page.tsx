@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
+import { CropCaptureLogo } from '@/components/brand/Logo';
+
 
 export default function LoginPage() {
   const router = useRouter();
@@ -105,46 +107,10 @@ export default function LoginPage() {
         </div>
 
         {/* Top Brand Header */}
-        <div className="relative z-10 flex items-center gap-3.5">
-          {/* Custom CropCapture viewfinder + seedling icon */}
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-transparent">
-            <svg
-              className="h-9 w-9 text-[#A3E635]"
-              viewBox="0 0 36 36"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              {/* Four Viewfinder corners */}
-              <path d="M6 13V8a2 2 0 0 1 2-2h5" />
-              <path d="M30 13V8a2 2 0 0 0-2-2h-5" />
-              <path d="M6 23v5a2 2 0 0 0 2 2h5" />
-              <path d="M30 23v5a2 2 0 0 1-2 2h-5" />
-              {/* Sprout Plant in Center */}
-              <path d="M18 26V15" strokeWidth="2.5" />
-              <path
-                d="M18 16c-3.2-3.2-6.5-1.5-6.5 2.5 3 1.5 6 0 6.5-2.5z"
-                fill="#A3E635"
-                stroke="#A3E635"
-                strokeWidth="1.5"
-              />
-              <path
-                d="M18 19c3.2-3.2 6.5-1.5 6.5 2.5-3 1.5-6 0-6.5-2.5z"
-                fill="#A3E635"
-                stroke="#A3E635"
-                strokeWidth="1.5"
-              />
-            </svg>
-          </div>
-          <div>
-            <h1 className="text-xl font-bold tracking-tight text-white">CropCapture</h1>
-            <p className="text-xs font-medium tracking-wide text-[#86EFAC]/80">
-              National Agricultural Platform
-            </p>
-          </div>
+        <div className="relative z-10 flex items-center">
+          <CropCaptureLogo light iconClassName="h-9 w-9 text-[#A3E635]" />
         </div>
+
 
         {/* Hero Tagline Section */}
         <div className="relative z-10 my-auto max-w-xl py-12">
@@ -169,29 +135,10 @@ export default function LoginPage() {
       <div className="flex w-full flex-1 items-center justify-center bg-[#F7F6F0] px-6 py-12 lg:w-[45%] lg:px-12 xl:px-16">
         <div className="w-full max-w-[420px]">
           {/* Mobile-only Top Brand Header */}
-          <div className="mb-8 flex items-center gap-3 lg:hidden">
-            <svg
-              className="h-8 w-8 text-[#15803D]"
-              viewBox="0 0 36 36"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M6 13V8a2 2 0 0 1 2-2h5" />
-              <path d="M30 13V8a2 2 0 0 0-2-2h-5" />
-              <path d="M6 23v5a2 2 0 0 0 2 2h5" />
-              <path d="M30 23v5a2 2 0 0 1-2 2h-5" />
-              <path d="M18 26V15" strokeWidth="2.5" />
-              <path d="M18 16c-3.2-3.2-6.5-1.5-6.5 2.5 3 1.5 6 0 6.5-2.5z" fill="#15803D" />
-              <path d="M18 19c3.2-3.2 6.5-1.5 6.5 2.5-3 1.5-6 0-6.5-2.5z" fill="#15803D" />
-            </svg>
-            <div>
-              <span className="text-lg font-bold text-[#0E2417]">CropCapture</span>
-              <p className="text-[11px] text-slate-500">National Agricultural Platform</p>
-            </div>
+          <div className="mb-8 flex items-center lg:hidden">
+            <CropCaptureLogo iconClassName="h-8 w-8 text-[#15803D]" />
           </div>
+
 
           {/* Pill Badge */}
           <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-[#E8F1D8] px-3 py-1 text-xs font-medium text-[#2E481B]">

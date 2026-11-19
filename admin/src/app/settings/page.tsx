@@ -18,7 +18,8 @@ import { AdminLayout } from '@/components/layout/AdminLayout';
 export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
   const [settings, setSettings] = useState({
-    platformName: 'AgriTrack Liberia',
+    platformName: 'CropCapture',
+
     tagline: 'Every Farm Recorded. Every Harvest Measured. Every Quality Verified.',
     maxRiceMoisture: 13.0,
     maxCocoaMoisture: 7.5,
