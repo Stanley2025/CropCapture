@@ -8,19 +8,32 @@ export async function middleware(request: NextRequest) {
     },
   });
 
+  const isLoginPage = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/';
+  const adminSession = request.cookies.get('agritrack_admin_session')?.value;
+
+  // ========================================================================
+  // ULTRA-FAST PATH: If admin session cookie is already active, authenticate
+  // in 0ms without waiting for a blocking remote Supabase auth network call.
+  // ========================================================================
+  if (adminSession) {
+    if (isLoginPage) {
+      const url = request.nextUrl.clone();
+      url.pathname = '/dashboard';
+      return NextResponse.redirect(url);
+    }
+    return response;
+  }
+
   const isConfigured = Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL &&
     process.env.NEXT_PUBLIC_SUPABASE_URL !== 'https://agritrack-liberia-demo.supabase.co' &&
     !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')
   );
 
-  const isLoginPage = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/';
-  const adminSession = request.cookies.get('agritrack_admin_session')?.value;
-
   let hasSupabaseUser = false;
 
-  // If live Supabase is configured, check for active Supabase session
-  if (isConfigured) {
+  // Only check remote Supabase session if no local adminSession and not already on login
+  if (isConfigured && !isLoginPage) {
     try {
       const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -45,15 +58,19 @@ export async function middleware(request: NextRequest) {
         }
       );
 
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      // Strict 1.5s timeout prevents navigation hangs on slow/unreachable networks
+      const userPromise = supabase.auth.getUser();
+      const timeoutPromise = new Promise<{ data: { user: null }; error: Error }>((_, reject) =>
+        setTimeout(() => reject(new Error('Auth timeout')), 1500)
+      );
+
+      const { data: { user } } = await Promise.race([userPromise, timeoutPromise]) as any;
 
       if (user) {
         hasSupabaseUser = true;
       }
     } catch {
-      // In case of network errors, rely on adminSession
+      // On network timeout or error, continue to login check
     }
   }
 

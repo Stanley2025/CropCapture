@@ -27,6 +27,13 @@ module.exports = {
           light: '#DCFCE7',
           foreground: '#FFFFFF',
         },
+        brand: {
+          lime: '#B4E544',
+          forest: '#0A1C14',
+          surface: '#E5F2DC',
+          dark: '#14532D',
+          DEFAULT: '#15803D',
+        },
         secondary: {
           DEFAULT: '#F1F5F9',
           foreground: '#1E293B',

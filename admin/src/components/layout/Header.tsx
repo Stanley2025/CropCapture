@@ -10,9 +10,6 @@ import {
   LogOut,
   User,
   Shield,
-  HelpCircle,
-  ExternalLink,
-  CheckCircle2,
 } from 'lucide-react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
@@ -36,36 +33,34 @@ export function Header({ onOpenMobile }: { onOpenMobile?: () => void }) {
     }
   };
 
-
   return (
-    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#E2E8F0] bg-white px-4 md:px-8">
+    <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between bg-[#F7F5EE] px-4 md:px-8">
       {/* Left: Mobile trigger & Global Search */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         {onOpenMobile && (
           <button
             onClick={onOpenMobile}
-            className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden"
+            className="rounded-lg p-2 text-slate-600 hover:bg-[#EDE8DC] lg:hidden"
             aria-label="Open navigation"
           >
             <Menu className="h-5 w-5" />
           </button>
         )}
 
-        <div className="relative hidden w-72 md:block">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+        <div className="relative hidden w-72 sm:block md:w-96">
+          <Search className="absolute left-3.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
           <input
             type="text"
-            placeholder="Search farmers, farms, batches..."
-            className="w-full rounded-lg border border-[#E2E8F0] bg-slate-50 py-2 pl-9 pr-4 text-sm text-slate-800 placeholder-slate-400 focus:border-[#15803D] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#15803D]"
+            placeholder="Search farmers, farms, batches"
+            className="w-full rounded-full bg-[#EAE6DB] border-0 py-2 pl-9 pr-4 text-xs text-slate-800 placeholder-slate-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#15803D]"
           />
         </div>
       </div>
 
-      {/* Right: Actions, Notifications & User menu */}
-      <div className="flex items-center gap-3">
+      {/* Right: Registry pill, Notifications & User profile */}
+      <div className="flex items-center gap-4">
         {/* Environment Badge */}
-        <div className="hidden items-center gap-1.5 rounded-full bg-[#DCFCE7] px-3 py-1 text-xs font-bold text-[#14532D] sm:flex">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#15803D]" />
+        <div className="hidden items-center rounded-full bg-[#E5F2DC] border border-[#CDE3BF] px-3.5 py-1.5 text-xs font-semibold text-[#1C3822] sm:flex">
           Liberia National Registry
         </div>
 
@@ -73,31 +68,31 @@ export function Header({ onOpenMobile }: { onOpenMobile?: () => void }) {
         <div className="relative">
           <button
             onClick={() => setNotificationsOpen(!notificationsOpen)}
-            className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100"
+            className="relative rounded-full p-2 text-slate-700 hover:bg-[#EDE8DC]"
             aria-label="View notifications"
           >
-            <Bell className="h-5 w-5" />
-            <span className="absolute right-1.5 top-1.5 flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-[#15803D]" />
-            </span>
+            <Bell className="h-4 w-4" />
           </button>
 
           {/* Notifications Dropdown */}
           {notificationsOpen && (
-            <div className="absolute right-0 mt-2 w-80 rounded-xl border border-[#E2E8F0] bg-white p-3 shadow-lg shadow-slate-200/50">
+            <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-[#EDE8DC] bg-white p-3.5 shadow-lg shadow-black/5 z-50">
               <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                 <span className="text-xs font-bold text-slate-800">System Notifications</span>
-                <span className="text-[10px] text-emerald-700 font-semibold">All Read</span>
+                <span className="text-[10px] text-[#15803D] font-semibold">All Read</span>
               </div>
               <div className="py-2 space-y-2 text-xs">
-                <div className="rounded-lg p-2 bg-slate-50">
+                <div className="rounded-xl p-2.5 bg-slate-50">
                   <div className="font-semibold text-slate-800">Batch Inspection Approved</div>
-                  <div className="text-slate-500 text-[11px]">Batch CRP-2026-RICE-000001 verified Grade A by Inspector J. Kollie</div>
+                  <div className="text-slate-500 text-[11px] mt-0.5">
+                    Batch CRP-2026-RICE-000001 verified Grade A by Inspector J. Kollie
+                  </div>
                 </div>
-                <div className="rounded-lg p-2 bg-slate-50">
+                <div className="rounded-xl p-2.5 bg-slate-50">
                   <div className="font-semibold text-slate-800">Mobile Sync Received</div>
-                  <div className="text-slate-500 text-[11px]">Farmer S. Cooper logged new field weeding activity from Nimba County</div>
+                  <div className="text-slate-500 text-[11px] mt-0.5">
+                    Farmer S. Cooper logged new field weeding activity from Nimba County
+                  </div>
                 </div>
               </div>
               <Link
@@ -115,23 +110,23 @@ export function Header({ onOpenMobile }: { onOpenMobile?: () => void }) {
         <div className="relative">
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="flex items-center gap-2.5 rounded-lg border border-[#E2E8F0] p-1.5 hover:bg-slate-50"
+            className="flex items-center gap-2.5 text-left p-1 rounded-xl hover:bg-[#EDE8DC] transition-colors"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#15803D] font-bold text-white text-xs">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0A1C14] font-bold text-white text-xs border border-[#163A26]">
               AD
             </div>
-            <div className="hidden text-left sm:block">
-              <div className="text-xs font-bold text-slate-800">Administrator</div>
-              <div className="text-[10px] text-slate-500">Super Admin</div>
+            <div className="hidden sm:block">
+              <div className="text-xs font-bold leading-tight text-slate-900">Administrator</div>
+              <div className="text-[10px] leading-tight text-slate-500">Super Admin</div>
             </div>
           </button>
 
           {dropdownOpen && (
-            <div className="absolute right-0 mt-2 w-56 rounded-xl border border-[#E2E8F0] bg-white py-1.5 shadow-lg shadow-slate-200/50">
+            <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-[#EDE8DC] bg-white py-2 shadow-lg shadow-black/5 z-50">
               <div className="border-b border-slate-100 px-4 py-2">
                 <p className="text-xs font-bold text-slate-900">Administrator</p>
                 <p className="text-[11px] text-slate-500">admin@cropcapture.app</p>
-                <div className="mt-1 inline-flex rounded bg-[#DCFCE7] px-1.5 py-0.5 text-[9px] font-bold text-[#14532D]">
+                <div className="mt-1 inline-flex rounded bg-[#E5F2DC] px-1.5 py-0.5 text-[9px] font-bold text-[#1C3822]">
                   SUPER ADMIN
                 </div>
               </div>

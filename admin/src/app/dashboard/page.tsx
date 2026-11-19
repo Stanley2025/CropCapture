@@ -3,64 +3,34 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  Users,
-  MapPin,
-  Layers,
-  Calendar,
-  Package,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  Building2,
-  Compass,
-  ArrowUpRight,
-  TrendingUp,
-  Download,
-  Filter,
-  RefreshCw,
   AlertTriangle,
+  ChevronDown,
+  RefreshCw,
 } from 'lucide-react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-} from 'recharts';
 import { AdminLayout } from '@/components/layout/AdminLayout';
-import { getDashboardMetrics, getFarmers, getFarms, getHarvestBatches, getQualityInspections } from '@/lib/api';
-import { formatCurrency, formatDate } from '@/lib/utils';
-import { Farmer, Farm, HarvestBatch, QualityInspection } from '@/types/database';
+import { getDashboardMetrics, getFarmers, getHarvestBatches } from '@/lib/api';
+import { formatDate } from '@/lib/utils';
+import { Farmer, HarvestBatch } from '@/types/database';
 
 export default function DashboardPage() {
   const [metrics, setMetrics] = useState<any>(null);
   const [recentFarmers, setRecentFarmers] = useState<Farmer[]>([]);
   const [recentHarvests, setRecentHarvests] = useState<HarvestBatch[]>([]);
-  const [recentInspections, setRecentInspections] = useState<QualityInspection[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCounty, setSelectedCounty] = useState('All');
-  const [selectedCrop, setSelectedCrop] = useState('All');
+  const [selectedCounty, setSelectedCounty] = useState('All counties (15)');
+  const [selectedCrop, setSelectedCrop] = useState('All crops');
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [m, f, h, q] = await Promise.all([
+      const [m, f, h] = await Promise.all([
         getDashboardMetrics(),
-        getFarmers(),
-        getHarvestBatches(),
-        getQualityInspections(),
+        getFarmers(4),
+        getHarvestBatches(3),
       ]);
       setMetrics(m);
-      setRecentFarmers(f.slice(0, 5));
-      setRecentHarvests(h.slice(0, 5));
-      setRecentInspections(q.slice(0, 5));
+      setRecentFarmers(f);
+      setRecentHarvests(h);
     } catch (e) {
       console.error('Error loading dashboard data:', e);
     } finally {
@@ -72,48 +42,36 @@ export default function DashboardPage() {
     loadData();
   }, []);
 
-  // Visual Analytics Datasets
-  const CROP_PRODUCTION_DATA = [
-    { crop: 'Rice', production: 2450, acreage: 4.5, fill: '#15803D' },
-    { crop: 'Cassava', production: 1800, acreage: 3.2, fill: '#16A34A' },
-    { crop: 'Cocoa', production: 950, acreage: 12.5, fill: '#854D0E' },
-    { crop: 'Maize', production: 620, acreage: 2.0, fill: '#EAB308' },
-    { crop: 'Pepper', production: 310, acreage: 1.0, fill: '#DC2626' },
+  // Total production and crop breakdown data matching Mobile Theme Colors
+  const totalProduction = metrics?.totalHarvestKg || 5200;
+  const cropsData = [
+    { name: 'Rice', amount: 2450, color: '#15803D', pct: (2450 / totalProduction) * 100 },
+    { name: 'Cassava', amount: 1800, color: '#16A34A', pct: (1800 / totalProduction) * 100 },
+    { name: 'Cocoa', amount: 950, color: '#CA8A04', pct: (950 / totalProduction) * 100 },
   ];
 
-  const COUNTY_PRODUCTION_DATA = [
-    { county: 'Nimba', farmers: 420, production: 4250 },
-    { county: 'Bong', farmers: 310, production: 2900 },
-    { county: 'Lofa', farmers: 280, production: 3400 },
-    { county: 'Margibi', farmers: 190, production: 1650 },
-    { county: 'Grand Bassa', farmers: 140, production: 1200 },
-  ];
+  // Quality inspection breakdown
+  const inspectionApproved = metrics?.approvedHarvests ?? 1;
+  const inspectionPending = metrics?.pendingInspections ?? 2;
+  const inspectionRejected = metrics?.rejectedHarvests ?? 0;
+  const totalBatches = inspectionApproved + inspectionPending + inspectionRejected || 3;
 
-  const QUALITY_PIE_DATA = [
-    { name: 'Grade A (Approved)', value: metrics?.approvedHarvests || 1, color: '#15803D' },
-    { name: 'Pending Review', value: metrics?.pendingInspections || 1, color: '#EAB308' },
-    { name: 'Rejected', value: metrics?.rejectedHarvests || 0, color: '#DC2626' },
-  ];
-
-  const HARVEST_TIMELINE_DATA = [
-    { month: 'Jun', quantity: 450 },
-    { month: 'Jul', quantity: 980 },
-    { month: 'Aug', quantity: 1450 },
-    { month: 'Sep', quantity: 2800 },
-    { month: 'Oct', quantity: 5200 },
-  ];
+  // Donut circumference (radius = 36, C = 2 * PI * 36 ≈ 226.19)
+  const c = 226.19;
+  const approvedDash = (inspectionApproved / totalBatches) * c;
+  const pendingDash = (inspectionPending / totalBatches) * c;
 
   return (
     <AdminLayout>
-      <div className="space-y-6">
-        {/* Page Title & Filter Header */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="space-y-4 font-sans text-slate-800">
+        {/* Top Header: Title, Subtitle, Action Buttons */}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">
-              National Agricultural Overview
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+              National agricultural overview
             </h1>
-            <p className="text-sm text-slate-500">
-              Live statistics from registered farmers, field operations, and verified harvest batches across Liberia.
+            <p className="mt-1 text-xs text-slate-500 sm:text-sm">
+              Live figures from registered farmers, field operations and verified harvest batches.
             </p>
           </div>
 
@@ -121,352 +79,346 @@ export default function DashboardPage() {
             <button
               onClick={loadData}
               disabled={loading}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-[#D5CFBF] bg-white px-4 py-2 text-xs font-semibold text-slate-800 shadow-2xs hover:bg-slate-50 transition-colors"
             >
-              <RefreshCw className={`h-3.5 w-3.5 text-slate-500 ${loading ? 'animate-spin' : ''}`} />
-              Refresh Data
+              <RefreshCw className={`h-3 w-3 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
             </button>
             <button
               onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-[#15803D] px-3.5 py-2 text-xs font-bold text-white shadow-sm hover:bg-[#14532D]"
+              className="rounded-xl bg-[#0A1C14] px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-[#163A26] transition-colors"
             >
-              <Download className="h-3.5 w-3.5" />
-              Export Report
+              Export report
             </button>
           </div>
         </div>
 
-        {/* Global Filter Bar */}
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white p-3.5 shadow-sm">
-          <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
-            <Filter className="h-4 w-4 text-[#15803D]" />
-            Filters:
+        {/* Filter Pills Row */}
+        <div className="flex flex-wrap items-center gap-2.5 pt-1">
+          {/* Counties Dropdown */}
+          <div className="relative">
+            <select
+              value={selectedCounty}
+              onChange={(e) => setSelectedCounty(e.target.value)}
+              className="appearance-none rounded-full border border-[#DDD7C8] bg-white py-1.5 pl-4 pr-8 text-xs font-medium text-slate-800 shadow-2xs focus:outline-none focus:ring-1 focus:ring-[#15803D] cursor-pointer"
+            >
+              <option value="All counties (15)">All counties (15)</option>
+              <option value="Nimba">Nimba</option>
+              <option value="Bong">Bong</option>
+              <option value="Lofa">Lofa</option>
+              <option value="Margibi">Margibi</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
           </div>
 
-          <select
-            value={selectedCounty}
-            onChange={(e) => setSelectedCounty(e.target.value)}
-            className="rounded-lg border border-[#E2E8F0] bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 focus:border-[#15803D] focus:outline-none"
-          >
-            <option value="All">All Counties (15)</option>
-            <option value="Nimba">Nimba County</option>
-            <option value="Bong">Bong County</option>
-            <option value="Lofa">Lofa County</option>
-            <option value="Margibi">Margibi County</option>
-            <option value="Grand Bassa">Grand Bassa County</option>
-          </select>
+          {/* Crops Dropdown */}
+          <div className="relative">
+            <select
+              value={selectedCrop}
+              onChange={(e) => setSelectedCrop(e.target.value)}
+              className="appearance-none rounded-full border border-[#DDD7C8] bg-white py-1.5 pl-4 pr-8 text-xs font-medium text-slate-800 shadow-2xs focus:outline-none focus:ring-1 focus:ring-[#15803D] cursor-pointer"
+            >
+              <option value="All crops">All crops</option>
+              <option value="Rice">Rice</option>
+              <option value="Cassava">Cassava</option>
+              <option value="Cocoa">Cocoa</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
+          </div>
 
-          <select
-            value={selectedCrop}
-            onChange={(e) => setSelectedCrop(e.target.value)}
-            className="rounded-lg border border-[#E2E8F0] bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 focus:border-[#15803D] focus:outline-none"
-          >
-            <option value="All">All Crops</option>
-            <option value="Rice">Rice (Suakoko 8 / LAC 23)</option>
-            <option value="Cassava">Cassava (CARICASS 1)</option>
-            <option value="Cocoa">Cocoa (Forastero Hybrid)</option>
-            <option value="Maize">Maize (DMR-ESR-Y)</option>
-            <option value="Pepper">Hot Pepper</option>
-          </select>
-
-          <span className="text-xs text-slate-400">|</span>
-          <span className="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
-            2026 Main Season Active
-          </span>
+          {/* Season Tag */}
+          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#E5F2DC] border border-[#CDE3BF] px-3.5 py-1.5 text-xs font-medium text-[#1C3822]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#15803D]" />
+            2026 main season · active
+          </div>
         </div>
 
-        {/* Primary Metric KPI Cards */}
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between text-slate-500">
-              <span className="text-xs font-bold uppercase tracking-wider">Registered Farmers</span>
-              <div className="rounded-lg bg-[#DCFCE7] p-2 text-[#15803D]">
-                <Users className="h-4 w-4" />
-              </div>
+        {/* Warning / Quality Alert Banner */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-[#ECD3B0] bg-[#F6E5CC] p-4 shadow-2xs">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="h-4 w-4 text-amber-900 shrink-0" />
+            <span className="text-xs font-medium text-amber-950 sm:text-sm">
+              2 harvest batches are waiting for quality review.
+            </span>
+          </div>
+          <Link
+            href="/quality"
+            className="rounded-xl bg-[#0A1C14] px-4 py-2 text-xs font-semibold text-white shadow-2xs hover:bg-[#163A26] text-center shrink-0 transition-colors"
+          >
+            Review batches
+          </Link>
+        </div>
+
+        {/* Five Key KPI Cards */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {/* Registered Farmers */}
+          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+            <span className="text-xs text-slate-500">Registered farmers</span>
+            <div className="mt-2 text-3xl font-extrabold text-slate-900">
+              {metrics ? metrics.totalFarmers : '4'}
             </div>
-            <div className="mt-3 text-2xl font-extrabold text-slate-900">
-              {metrics ? metrics.totalFarmers.toLocaleString() : '—'}
-            </div>
-            <div className="mt-1 flex items-center gap-1 text-[11px] text-emerald-700">
-              <TrendingUp className="h-3 w-3" />
-              <span>National ID verified</span>
+            <div className="mt-2 text-[11px] text-slate-500">
+              National ID verified
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between text-slate-500">
-              <span className="text-xs font-bold uppercase tracking-wider">Registered Parcels</span>
-              <div className="rounded-lg bg-blue-50 p-2 text-blue-600">
-                <MapPin className="h-4 w-4" />
-              </div>
+          {/* Registered Parcels */}
+          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+            <span className="text-xs text-slate-500">Registered parcels</span>
+            <div className="mt-2 text-3xl font-extrabold text-slate-900">
+              {metrics ? metrics.totalFarms : '4'}
             </div>
-            <div className="mt-3 text-2xl font-extrabold text-slate-900">
-              {metrics ? metrics.totalFarms.toLocaleString() : '—'}
-            </div>
-            <div className="mt-1 text-[11px] text-slate-500">
-              GPS mapped parcels
+            <div className="mt-2 text-[11px] text-slate-500">
+              GPS mapped
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between text-slate-500">
-              <span className="text-xs font-bold uppercase tracking-wider">Cultivated Area</span>
-              <div className="rounded-lg bg-emerald-50 p-2 text-emerald-700">
-                <Layers className="h-4 w-4" />
-              </div>
+          {/* Cultivated Area */}
+          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+            <span className="text-xs text-slate-500">Cultivated area</span>
+            <div className="mt-2 text-3xl font-extrabold text-slate-900">
+              {metrics ? Number(metrics.totalAcreage).toFixed(1) : '29.2'}{' '}
+              <span className="text-xs font-normal text-slate-600">acres</span>
             </div>
-            <div className="mt-3 text-2xl font-extrabold text-slate-900">
-              {metrics ? `${Number(metrics.totalAcreage).toFixed(1)}` : '—'}{' '}
-              <span className="text-xs font-normal text-slate-500">Acres</span>
-            </div>
-            <div className="mt-1 text-[11px] text-slate-500">
+            <div className="mt-2 text-[11px] text-slate-500">
               Across verified seasons
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between text-slate-500">
-              <span className="text-xs font-bold uppercase tracking-wider">Total Harvest</span>
-              <div className="rounded-lg bg-amber-50 p-2 text-amber-700">
-                <Package className="h-4 w-4" />
-              </div>
+          {/* Total Harvest */}
+          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+            <span className="text-xs text-slate-500">Total harvest</span>
+            <div className="mt-2 text-3xl font-extrabold text-slate-900">
+              {metrics ? metrics.totalHarvestKg.toLocaleString() : '5,200'}{' '}
+              <span className="text-xs font-normal text-slate-600">kg</span>
             </div>
-            <div className="mt-3 text-2xl font-extrabold text-slate-900">
-              {metrics ? `${metrics.totalHarvestKg.toLocaleString()}` : '—'}{' '}
-              <span className="text-xs font-normal text-slate-500">kg</span>
-            </div>
-            <div className="mt-1 text-[11px] text-amber-700 font-medium">
+            <div className="mt-2 text-[11px] text-slate-500">
               Measured production weight
             </div>
           </div>
 
-          <div className="rounded-xl border border-[#E2E8F0] bg-white p-4 shadow-sm">
-            <div className="flex items-center justify-between text-slate-500">
-              <span className="text-xs font-bold uppercase tracking-wider">Inspection Pass</span>
-              <div className="rounded-lg bg-teal-50 p-2 text-teal-700">
-                <CheckCircle2 className="h-4 w-4" />
-              </div>
+          {/* Inspection Pass */}
+          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-4 shadow-2xs flex flex-col justify-between">
+            <span className="text-xs text-slate-500">Inspection pass</span>
+            <div className="mt-2 text-3xl font-extrabold text-slate-900">
+              {inspectionApproved}{' '}
+              <span className="text-xs font-normal text-slate-600">of {totalBatches} batches</span>
             </div>
-            <div className="mt-3 text-2xl font-extrabold text-[#15803D]">
-              {metrics && metrics.approvedHarvests > 0 ? `${metrics.approvedHarvests}` : '0'}{' '}
-              <span className="text-xs font-normal text-slate-500">Batches</span>
-            </div>
-            <div className="mt-1 text-[11px] text-slate-500">
-              {metrics ? `${metrics.pendingInspections} pending verification` : '—'}
+            <div className="mt-2 text-[11px] text-slate-500">
+              {inspectionPending} pending verification
             </div>
           </div>
         </div>
 
-        {/* Secondary Workflow Cards */}
-        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <div className="flex items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white p-3.5 shadow-sm">
-            <div className="rounded-lg bg-amber-100 p-2.5 text-amber-800">
-              <Clock className="h-5 w-5" />
-            </div>
+        {/* Middle Section: Harvest by crop & Inspection outcomes */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {/* Harvest by crop */}
+          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs lg:col-span-2 flex flex-col justify-between">
             <div>
-              <div className="text-lg font-bold text-slate-900">{metrics?.pendingInspections || 0}</div>
-              <div className="text-xs text-slate-500">Pending Quality Review</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white p-3.5 shadow-sm">
-            <div className="rounded-lg bg-emerald-100 p-2.5 text-emerald-800">
-              <CheckCircle2 className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-lg font-bold text-slate-900">{metrics?.approvedHarvests || 0}</div>
-              <div className="text-xs text-slate-500">Grade A Certified</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white p-3.5 shadow-sm">
-            <div className="rounded-lg bg-purple-100 p-2.5 text-purple-800">
-              <Building2 className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-lg font-bold text-slate-900">{metrics?.totalCooperatives || 0}</div>
-              <div className="text-xs text-slate-500">Registered Cooperatives</div>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white p-3.5 shadow-sm">
-            <div className="rounded-lg bg-sky-100 p-2.5 text-sky-800">
-              <Compass className="h-5 w-5" />
-            </div>
-            <div>
-              <div className="text-lg font-bold text-slate-900">{metrics?.activeExtensionOfficers || 0}</div>
-              <div className="text-xs text-slate-500">Extension Field Agents</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Analytics Charts Grid */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          {/* Crop Production Breakdown */}
-          <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm lg:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">Crop Production Output</h2>
-                <p className="text-xs text-slate-500">Harvest volume recorded per commodity (kg)</p>
-              </div>
-              <span className="text-xs font-semibold text-[#15803D] bg-emerald-50 px-2.5 py-1 rounded-full">
-                Liberia 2026
-              </span>
-            </div>
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={CROP_PRODUCTION_DATA}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                  <XAxis dataKey="crop" stroke="#64748B" fontSize={12} tickLine={false} />
-                  <YAxis stroke="#64748B" fontSize={12} tickLine={false} unit=" kg" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1E293B', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                    cursor={{ fill: 'rgba(21, 128, 61, 0.05)' }}
-                  />
-                  <Bar dataKey="production" name="Production (kg)" radius={[6, 6, 0, 0]} fill="#15803D" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Quality Grade Distribution */}
-          <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
-            <div className="mb-4">
-              <h2 className="text-base font-bold text-slate-900">Inspection Outcomes</h2>
-              <p className="text-xs text-slate-500">Certified quality grade breakdown</p>
-            </div>
-            <div className="h-56 w-full flex items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={QUALITY_PIE_DATA}
-                    innerRadius={50}
-                    outerRadius={80}
-                    paddingAngle={4}
-                    dataKey="value"
-                  >
-                    {QUALITY_PIE_DATA.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1E293B', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="space-y-1.5 pt-2 border-t border-slate-100 text-xs">
-              {QUALITY_PIE_DATA.map((item) => (
-                <div key={item.name} className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: item.color }} />
-                    <span className="text-slate-600">{item.name}</span>
-                  </div>
-                  <span className="font-bold text-slate-800">{item.value}</span>
+              <div className="flex items-start justify-between">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900 sm:text-base">Harvest by crop</h2>
+                  <p className="text-xs text-slate-500">Recorded volume in kg · 2026</p>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
+                <div className="text-sm font-bold text-slate-900 sm:text-base">
+                  {totalProduction.toLocaleString()} kg
+                </div>
+              </div>
 
-        {/* Secondary Charts: County Production & Timeline */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* County Regional Output */}
-          <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900 mb-1">Production by County</h2>
-            <p className="text-xs text-slate-500 mb-4">Total recorded harvest output across administrative counties</p>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={COUNTY_PRODUCTION_DATA} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
-                  <XAxis type="number" stroke="#64748B" fontSize={11} unit=" kg" />
-                  <YAxis dataKey="county" type="category" stroke="#64748B" fontSize={12} tickLine={false} width={80} />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1E293B', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                  />
-                  <Bar dataKey="production" fill="#14532D" radius={[0, 6, 6, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-
-          {/* Harvest Timeline */}
-          <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
-            <h2 className="text-base font-bold text-slate-900 mb-1">Harvest Quantities Over Time</h2>
-            <p className="text-xs text-slate-500 mb-4">Seasonal aggregation curve (kg per month)</p>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={HARVEST_TIMELINE_DATA}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#F1F5F9" />
-                  <XAxis dataKey="month" stroke="#64748B" fontSize={12} />
-                  <YAxis stroke="#64748B" fontSize={12} unit=" kg" />
-                  <Tooltip
-                    contentStyle={{ backgroundColor: '#1E293B', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
-                  />
-                  <Line type="monotone" dataKey="quantity" stroke="#15803D" strokeWidth={3} dot={{ r: 4, fill: '#15803D' }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-
-        {/* Live Operational Tables */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          {/* Recent Harvest Submissions */}
-          <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-slate-900">Recent Harvest Batches</h2>
-              <Link href="/harvests" className="text-xs font-semibold text-[#15803D] hover:underline">
-                View all batches →
-              </Link>
-            </div>
-            <div className="divide-y divide-slate-100">
-              {recentHarvests.map((h) => (
-                <div key={h.id} className="py-3 flex items-center justify-between text-xs">
-                  <div>
-                    <div className="font-bold text-slate-900">{h.batch_reference}</div>
-                    <div className="text-slate-500">
-                      {h.crop?.name} • {h.quantity.toLocaleString()} {h.unit} • {formatDate(h.harvest_date)}
+              {/* Crop Bars */}
+              <div className="mt-6 space-y-5">
+                {cropsData.map((c) => (
+                  <div key={c.name} className="space-y-1.5">
+                    <div className="flex items-center justify-between text-xs font-medium text-slate-800">
+                      <span>{c.name}</span>
+                      <span>{c.amount.toLocaleString()} kg</span>
+                    </div>
+                    <div className="h-2.5 w-full rounded-full bg-[#EAE5D9] overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${c.pct}%`,
+                          backgroundColor: c.color,
+                        }}
+                      />
                     </div>
                   </div>
-                  <span
-                    className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                      h.status === 'approved'
-                        ? 'bg-emerald-100 text-emerald-800'
-                        : h.status === 'rejected'
-                        ? 'bg-rose-100 text-rose-800'
-                        : 'bg-amber-100 text-amber-800'
-                    }`}
-                  >
-                    {h.status.replace('_', ' ')}
-                  </span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
-          {/* Recent Farmer Registrations */}
-          <div className="rounded-2xl border border-[#E2E8F0] bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-bold text-slate-900">Recently Registered Farmers</h2>
-              <Link href="/farmers" className="text-xs font-semibold text-[#15803D] hover:underline">
-                View all farmers →
+          {/* Inspection outcomes Donut */}
+          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs flex flex-col justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900 sm:text-base">Inspection outcomes</h2>
+              <p className="text-xs text-slate-500">Quality grade breakdown</p>
+            </div>
+
+            {/* Donut Chart */}
+            <div className="relative my-4 flex items-center justify-center">
+              <svg className="h-40 w-40 -rotate-90 transform" viewBox="0 0 100 100">
+                {/* Background track */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="36"
+                  className="stroke-[#EAE5D9]"
+                  strokeWidth="13"
+                  fill="transparent"
+                />
+                {/* Grade A, approved slice (Green) */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="36"
+                  stroke="#134927"
+                  strokeWidth="13"
+                  fill="transparent"
+                  strokeDasharray={`${approvedDash} ${c}`}
+                  strokeDashoffset="0"
+                />
+                {/* Pending review slice (Amber) */}
+                <circle
+                  cx="50"
+                  cy="50"
+                  r="36"
+                  stroke="#E5A017"
+                  strokeWidth="13"
+                  fill="transparent"
+                  strokeDasharray={`${pendingDash} ${c}`}
+                  strokeDashoffset={`${-approvedDash}`}
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
+                <span className="text-2xl font-extrabold leading-none text-slate-900">
+                  {totalBatches}
+                </span>
+                <span className="mt-0.5 text-[11px] text-slate-500 font-normal">
+                  batches
+                </span>
+              </div>
+            </div>
+
+            {/* Legend */}
+            <div className="space-y-1.5 text-xs text-slate-700">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#15803D]" />
+                  <span>Grade A, approved</span>
+                </div>
+                <span className="font-semibold text-slate-800">{inspectionApproved}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#D97706]" />
+                  <span>Pending review</span>
+                </div>
+                <span className="font-semibold text-slate-800">{inspectionPending}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#DC2626]" />
+                  <span>Rejected</span>
+                </div>
+                <span className="font-semibold text-slate-800">{inspectionRejected}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Three Secondary Stat Cards */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="flex items-center gap-2.5 rounded-2xl bg-[#E5F2DC] border border-[#CDE3BF] p-4">
+            <span className="text-xl font-bold text-slate-900">1</span>
+            <span className="text-xs font-semibold text-[#1C3822]">Grade A certified</span>
+          </div>
+
+          <div className="flex items-center gap-2.5 rounded-2xl bg-[#ECE2F8] border border-[#DDD0F0] p-4">
+            <span className="text-xl font-bold text-slate-900">3</span>
+            <span className="text-xs font-semibold text-slate-800">Cooperatives</span>
+          </div>
+
+          <div className="flex items-center gap-2.5 rounded-2xl bg-[#DFECF9] border border-[#CDE1F4] p-4">
+            <span className="text-xl font-bold text-slate-900">8</span>
+            <span className="text-xs font-semibold text-slate-800">Extension field agents</span>
+          </div>
+        </div>
+
+        {/* Bottom Operational Cards: Recent Batches & Registered Farmers */}
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          {/* Recent Harvest Batches */}
+          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-bold text-slate-900">Recent harvest batches</h2>
+              <Link href="/harvests" className="text-xs font-medium text-slate-600 hover:text-slate-900">
+                View all
               </Link>
             </div>
-            <div className="divide-y divide-slate-100">
-              {recentFarmers.map((f) => (
-                <div key={f.id} className="py-3 flex items-center justify-between text-xs">
-                  <div>
-                    <div className="font-bold text-slate-900">{f.full_name}</div>
-                    <div className="text-slate-500">
-                      ID: {f.farmer_id_code} • {f.community}, {f.county}
+            <div className="divide-y divide-[#F4EFE6]">
+              {recentHarvests.map((h) => {
+                const isApproved = h.status === 'approved';
+                const isPending = h.status === 'pending_inspection';
+                return (
+                  <div key={h.id} className="py-3 flex items-center justify-between text-xs">
+                    <div>
+                      <div className="font-bold text-slate-900">{h.batch_reference}</div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        {h.crop?.name} · {h.quantity.toLocaleString()} {h.unit} · {formatDate(h.harvest_date)}
+                      </div>
+                    </div>
+                    <span
+                      className={`rounded-full px-3 py-0.5 text-[11px] font-semibold ${
+                        isApproved
+                          ? 'bg-[#DCFCE7] text-[#14532D]'
+                          : isPending
+                          ? 'bg-[#FEF3C7] text-[#D97706]'
+                          : 'bg-[#DBEAFE] text-[#2563EB]'
+                      }`}
+                    >
+                      {isApproved
+                        ? 'Approved'
+                        : isPending
+                        ? 'Pending inspection'
+                        : 'Under inspection'}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Recently Registered Farmers */}
+          <div className="rounded-2xl border border-[#EDE8DC] bg-white p-5 shadow-2xs">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-sm font-bold text-slate-900">Recently registered farmers</h2>
+              <Link href="/farmers" className="text-xs font-medium text-slate-600 hover:text-slate-900">
+                View all
+              </Link>
+            </div>
+            <div className="divide-y divide-[#F4EFE6]">
+              {recentFarmers.map((f) => {
+                const initials = f.full_name
+                  .split(' ')
+                  .map((n) => n[0])
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .join('')
+                  .toUpperCase();
+                return (
+                  <div key={f.id} className="py-2.5 flex items-center gap-3 text-xs">
+                    <div className="h-8 w-8 rounded-full bg-[#E5F2DC] text-[#1C3822] flex items-center justify-center font-bold text-[11px] shrink-0 border border-[#CDE3BF]">
+                      {initials}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="font-bold text-slate-900 truncate">{f.full_name}</div>
+                      <div className="text-[11px] text-slate-500 truncate mt-0.5">
+                        {f.county} · {f.cooperative?.name || 'Independent'}
+                      </div>
                     </div>
                   </div>
-                  <span className="rounded bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
-                    {f.cooperative?.name || 'Independent'}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

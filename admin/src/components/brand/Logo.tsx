@@ -5,13 +5,15 @@ interface LogoProps {
   iconClassName?: string;
   showText?: boolean;
   light?: boolean;
+  subtitle?: string;
 }
 
 export function CropCaptureLogo({
-  className = 'flex items-center gap-3',
-  iconClassName = 'h-9 w-9 text-[#15803D]',
+  className = 'flex items-center gap-2.5',
+  iconClassName = 'h-8 w-8 text-[#B4E544]',
   showText = true,
-  light = false,
+  light = true,
+  subtitle = 'Admin console',
 }: LogoProps) {
   return (
     <div className={className}>
@@ -49,19 +51,16 @@ export function CropCaptureLogo({
 
       {showText && (
         <div className="flex flex-col">
+          <div className="flex items-center text-base font-extrabold tracking-tight leading-tight">
+            <span className={light ? 'text-white' : 'text-[#0A1C14]'}>Crop</span>
+            <span className="text-[#B4E544]">Capture</span>
+          </div>
           <span
-            className={`text-lg font-extrabold tracking-tight ${
-              light ? 'text-white' : 'text-[#0E2417]'
+            className={`text-[11px] font-medium leading-tight ${
+              light ? 'text-[#8EA898]' : 'text-[#15803D]'
             }`}
           >
-            CropCapture
-          </span>
-          <span
-            className={`text-[10px] font-semibold tracking-wider ${
-              light ? 'text-[#86EFAC]/80' : 'text-[#15803D]'
-            }`}
-          >
-            NATIONAL AGRICULTURAL PLATFORM
+            {subtitle}
           </span>
         </div>
       )}
