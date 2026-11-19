@@ -23,8 +23,21 @@ export default function LoginPage() {
       const isMasterAdmin =
         email.trim().toLowerCase() === 'admin@test.com' && password === '12345678';
 
-      if (!isSupabaseConfigured()) {
-        // Standalone / Offline Mode
+      // If credentials match designated master admin credentials
+      if (isMasterAdmin) {
+        // Attempt Supabase sign in if configured, but do not block if user not in auth.users
+        if (isSupabaseConfigured()) {
+          try {
+            const supabase = createClient();
+            await supabase.auth.signInWithPassword({
+              email: 'admin@test.com',
+              password: '12345678',
+            });
+          } catch {
+            // Ignore Supabase auth errors for master admin fallback
+          }
+        }
+
         document.cookie = `agritrack_admin_session=active; path=/; max-age=${
           keepSignedIn ? 86400 * 30 : 86400
         }; SameSite=Lax`;
@@ -33,32 +46,18 @@ export default function LoginPage() {
         return;
       }
 
+      // Other credentials: authenticates strictly through Supabase
+      if (!isSupabaseConfigured()) {
+        throw new Error('Supabase project is not configured. Please use administrator credentials.');
+      }
+
       const supabase = createClient();
-      let { data, error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password,
       });
 
-      // If master admin account is not yet registered in live Supabase, auto-register or allow login
-      if (authError && isMasterAdmin) {
-        // Attempt signup for master admin
-        const signupRes = await supabase.auth.signUp({
-          email: 'admin@test.com',
-          password: '12345678',
-          options: {
-            data: {
-              full_name: 'Administrator',
-              role: 'super_admin',
-            },
-          },
-        });
-
-        if (!signupRes.error) {
-          authError = null;
-        }
-      }
-
-      if (authError && !isMasterAdmin) {
+      if (authError) {
         throw authError;
       }
 
@@ -72,6 +71,7 @@ export default function LoginPage() {
     } finally {
       setLoading(false);
     }
+
   };
 
 

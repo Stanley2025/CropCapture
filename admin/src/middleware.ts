@@ -15,8 +15,11 @@ export async function middleware(request: NextRequest) {
   );
 
   const isLoginPage = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/';
+  const adminSession = request.cookies.get('agritrack_admin_session')?.value;
 
-  // If live Supabase is configured, use official Supabase session authentication
+  let hasSupabaseUser = false;
+
+  // If live Supabase is configured, check for active Supabase session
   if (isConfigured) {
     try {
       const supabase = createServerClient(
@@ -46,35 +49,28 @@ export async function middleware(request: NextRequest) {
         data: { user },
       } = await supabase.auth.getUser();
 
-      if (!user && !isLoginPage && !request.nextUrl.pathname.startsWith('/_next') && !request.nextUrl.pathname.startsWith('/api')) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/login';
-        return NextResponse.redirect(url);
-      }
-
-      if (user && isLoginPage) {
-        const url = request.nextUrl.clone();
-        url.pathname = '/dashboard';
-        return NextResponse.redirect(url);
+      if (user) {
+        hasSupabaseUser = true;
       }
     } catch {
-      // In case of network errors, let local session pass
+      // In case of network errors, rely on adminSession
     }
-  } else {
-    // Standalone / Offline / Demo mode
-    const adminSession = request.cookies.get('agritrack_admin_session')?.value;
+  }
 
-    if (!adminSession && !isLoginPage && !request.nextUrl.pathname.startsWith('/_next') && !request.nextUrl.pathname.startsWith('/api')) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/login';
-      return NextResponse.redirect(url);
-    }
+  const isAuthenticated = Boolean(hasSupabaseUser || adminSession);
 
-    if (adminSession && isLoginPage) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/dashboard';
-      return NextResponse.redirect(url);
-    }
+  // If not authenticated and trying to access a protected route
+  if (!isAuthenticated && !isLoginPage && !request.nextUrl.pathname.startsWith('/_next') && !request.nextUrl.pathname.startsWith('/api')) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/login';
+    return NextResponse.redirect(url);
+  }
+
+  // If already authenticated and visiting login page, redirect to dashboard
+  if (isAuthenticated && isLoginPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
   }
 
   return response;
