@@ -2,13 +2,15 @@
 
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Leaf, Lock, Mail, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState('admin@cropcapture.app');
-  const [password, setPassword] = useState('••••••••');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [keepSignedIn, setKeepSignedIn] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -19,8 +21,10 @@ export default function LoginPage() {
 
     try {
       if (!isSupabaseConfigured()) {
-        // Offline / Standalone Demo Mode: authenticate locally without network failure
-        document.cookie = 'agritrack_admin_session=active; path=/; max-age=86400; SameSite=Lax';
+        // Offline / Standalone Demo Mode: authenticate locally
+        document.cookie = `agritrack_admin_session=active; path=/; max-age=${
+          keepSignedIn ? 86400 * 30 : 86400
+        }; SameSite=Lax`;
         router.push('/dashboard');
         router.refresh();
         return;
@@ -36,6 +40,9 @@ export default function LoginPage() {
         throw authError;
       }
 
+      document.cookie = `agritrack_admin_session=active; path=/; max-age=${
+        keepSignedIn ? 86400 * 30 : 86400
+      }; SameSite=Lax`;
       router.push('/dashboard');
       router.refresh();
     } catch (err: any) {
@@ -45,139 +52,237 @@ export default function LoginPage() {
     }
   };
 
-
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC]">
-      {/* Left Column: Visual Brand & Context */}
-      <div className="relative hidden w-1/2 flex-col justify-between bg-[#14532D] p-12 text-white lg:flex overflow-hidden">
-        {/* Subtle geometric pattern overlay */}
-        <div className="absolute inset-0 bg-[radial-gradient(#15803D_1px,transparent_1px)] [background-size:24px_24px] opacity-25" />
+    <div className="flex min-h-screen w-full">
+      {/* Left Column: Visual Brand Panel (Dark Forest Green) */}
+      <div className="relative hidden w-[55%] flex-col justify-between bg-[#0E2417] p-12 text-white lg:flex xl:p-16 overflow-hidden select-none">
+        {/* Background perspective ray lines matching design */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden">
+          <svg
+            className="absolute -right-20 top-1/2 h-[120%] w-[120%] -translate-y-1/2 opacity-20"
+            viewBox="0 0 800 800"
+            fill="none"
+          >
+            {/* Center origin of rays */}
+            <circle cx="650" cy="400" r="2" fill="#84CC16" />
+            <line x1="650" y1="400" x2="-200" y2="-100" stroke="#84CC16" strokeWidth="1" />
+            <line x1="650" y1="400" x2="-200" y2="80" stroke="#84CC16" strokeWidth="1" />
+            <line x1="650" y1="400" x2="-200" y2="240" stroke="#84CC16" strokeWidth="1.2" />
+            <line x1="650" y1="400" x2="-200" y2="380" stroke="#84CC16" strokeWidth="1" />
+            <line x1="650" y1="400" x2="-200" y2="520" stroke="#84CC16" strokeWidth="1.2" />
+            <line x1="650" y1="400" x2="-200" y2="680" stroke="#84CC16" strokeWidth="1" />
+            <line x1="650" y1="400" x2="-200" y2="850" stroke="#84CC16" strokeWidth="1.2" />
+            <line x1="650" y1="400" x2="100" y2="950" stroke="#84CC16" strokeWidth="1" />
+            <line x1="650" y1="400" x2="350" y2="950" stroke="#84CC16" strokeWidth="1" />
+            <line x1="650" y1="400" x2="550" y2="950" stroke="#84CC16" strokeWidth="1" />
+            <line x1="650" y1="400" x2="100" y2="-200" stroke="#84CC16" strokeWidth="1" />
+            <line x1="650" y1="400" x2="350" y2="-200" stroke="#84CC16" strokeWidth="1" />
+            <line x1="650" y1="400" x2="550" y2="-200" stroke="#84CC16" strokeWidth="1" />
+          </svg>
+        </div>
 
-        <div className="relative z-10 flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-[#15803D] shadow-lg shadow-black/20">
-            <Leaf className="h-6 w-6 text-white" />
+        {/* Top Brand Header */}
+        <div className="relative z-10 flex items-center gap-3.5">
+          {/* Custom CropCapture viewfinder + seedling icon */}
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-transparent">
+            <svg
+              className="h-9 w-9 text-[#A3E635]"
+              viewBox="0 0 36 36"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              {/* Four Viewfinder corners */}
+              <path d="M6 13V8a2 2 0 0 1 2-2h5" />
+              <path d="M30 13V8a2 2 0 0 0-2-2h-5" />
+              <path d="M6 23v5a2 2 0 0 0 2 2h5" />
+              <path d="M30 23v5a2 2 0 0 1-2 2h-5" />
+              {/* Sprout Plant in Center */}
+              <path d="M18 26V15" strokeWidth="2.5" />
+              <path
+                d="M18 16c-3.2-3.2-6.5-1.5-6.5 2.5 3 1.5 6 0 6.5-2.5z"
+                fill="#A3E635"
+                stroke="#A3E635"
+                strokeWidth="1.5"
+              />
+              <path
+                d="M18 19c3.2-3.2 6.5-1.5 6.5 2.5-3 1.5-6 0-6.5-2.5z"
+                fill="#A3E635"
+                stroke="#A3E635"
+                strokeWidth="1.5"
+              />
+            </svg>
           </div>
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight">AgriTrack Liberia</h1>
-            <p className="text-xs font-semibold tracking-wider text-emerald-300">
-              NATIONAL AGRICULTURAL PLATFORM
+            <h1 className="text-xl font-bold tracking-tight text-white">CropCapture</h1>
+            <p className="text-xs font-medium tracking-wide text-[#86EFAC]/80">
+              National Agricultural Platform
             </p>
           </div>
         </div>
 
-        <div className="relative z-10 max-w-lg space-y-6">
-          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-900/60 border border-emerald-500/30 px-3.5 py-1 text-xs font-bold text-emerald-300">
-            <ShieldCheck className="h-4 w-4" />
-            Authorized Personnel Portal
-          </div>
-          <h2 className="text-4xl font-extrabold leading-tight tracking-tight text-white">
-            Every Farm Recorded.<br />
-            Every Harvest Measured.<br />
-            Every Quality Verified.
+        {/* Hero Tagline Section */}
+        <div className="relative z-10 my-auto max-w-xl py-12">
+          <h2 className="text-4xl font-extrabold tracking-tight sm:text-5xl xl:text-[54px] xl:leading-[1.12]">
+            <span className="block text-white">Every farm recorded.</span>
+            <span className="block text-white">Every harvest measured.</span>
+            <span className="block text-[#A3E635]">Every quality verified.</span>
           </h2>
-          <p className="text-sm leading-relaxed text-emerald-100/80">
-            Centralized administration console for Liberian agricultural administrators, cooperative unions, extension coordinators, and national quality certification inspectors.
+          <p className="mt-8 max-w-lg text-base font-normal leading-relaxed text-[#CBD5E1]">
+            One console for Liberian agricultural administrators, cooperative unions, extension coordinators and quality inspectors.
           </p>
         </div>
 
-        <div className="relative z-10 flex items-center justify-between border-t border-emerald-800/60 pt-6 text-xs text-emerald-200/70">
-          <span>Republic of Liberia • Ministry of Agriculture</span>
-          <span>Version 1.0.0 Production</span>
+        {/* Footer */}
+        <div className="relative z-10 flex items-center justify-between text-xs text-[#94A3B8]/90">
+          <span>Republic of Liberia · Ministry of Agriculture</span>
+          <span>Version 1.0.0</span>
         </div>
       </div>
 
-      {/* Right Column: Sign In Form */}
-      <div className="flex w-full items-center justify-center p-6 lg:w-1/2">
-        <div className="w-full max-w-md space-y-8 rounded-2xl border border-[#E2E8F0] bg-white p-8 shadow-xl shadow-slate-200/50">
-          <div>
-            <div className="flex items-center gap-2 lg:hidden mb-4">
-              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#15803D] text-white">
-                <Leaf className="h-5 w-5" />
-              </div>
-              <span className="font-extrabold text-[#14532D]">AgriTrack Liberia</span>
+      {/* Right Column: Sign In Form (Warm Off-white / Cream) */}
+      <div className="flex w-full flex-1 items-center justify-center bg-[#F7F6F0] px-6 py-12 lg:w-[45%] lg:px-12 xl:px-16">
+        <div className="w-full max-w-[420px]">
+          {/* Mobile-only Top Brand Header */}
+          <div className="mb-8 flex items-center gap-3 lg:hidden">
+            <svg
+              className="h-8 w-8 text-[#15803D]"
+              viewBox="0 0 36 36"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M6 13V8a2 2 0 0 1 2-2h5" />
+              <path d="M30 13V8a2 2 0 0 0-2-2h-5" />
+              <path d="M6 23v5a2 2 0 0 0 2 2h5" />
+              <path d="M30 23v5a2 2 0 0 1-2 2h-5" />
+              <path d="M18 26V15" strokeWidth="2.5" />
+              <path d="M18 16c-3.2-3.2-6.5-1.5-6.5 2.5 3 1.5 6 0 6.5-2.5z" fill="#15803D" />
+              <path d="M18 19c3.2-3.2 6.5-1.5 6.5 2.5-3 1.5-6 0-6.5-2.5z" fill="#15803D" />
+            </svg>
+            <div>
+              <span className="text-lg font-bold text-[#0E2417]">CropCapture</span>
+              <p className="text-[11px] text-slate-500">National Agricultural Platform</p>
             </div>
-            <h2 className="text-2xl font-bold tracking-tight text-slate-900">Administrator Sign In</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Enter your authorized credentials to access system management.
-            </p>
           </div>
 
+          {/* Pill Badge */}
+          <div className="mb-4 inline-flex items-center gap-1.5 rounded-full bg-[#E8F1D8] px-3 py-1 text-xs font-medium text-[#2E481B]">
+            <ShieldCheck className="h-3.5 w-3.5" />
+            <span>Authorized personnel only</span>
+          </div>
+
+          {/* Heading */}
+          <h2 className="text-3xl font-extrabold tracking-tight text-[#0E2417]">Admin sign in</h2>
+          <p className="mt-2 text-sm text-[#52525B]">
+            Use your authorized account to open the admin console.
+          </p>
+
+          {/* Error Message */}
           {error && (
-            <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-700">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <div>
-                <span className="font-semibold">Access Error:</span> {error}
-              </div>
+            <div className="mt-5 flex items-start gap-2.5 rounded-xl border border-rose-200 bg-rose-50 p-3.5 text-xs text-rose-800">
+              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5 text-rose-600" />
+              <p>{error}</p>
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          {/* Form */}
+          <form onSubmit={handleLogin} className="mt-7 space-y-4">
+            {/* Work Email */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Email Address
+              <label className="block text-xs font-semibold text-[#18181B] mb-1.5">
+                Work email
               </label>
               <div className="relative">
-                <Mail className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                <Mail className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
                 <input
                   type="email"
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@cropcapture.app"
-                  className="w-full rounded-lg border border-[#E2E8F0] bg-slate-50 py-2.5 pl-9 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-[#15803D] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#15803D]"
+                  placeholder="name@agency.gov.lr"
+                  className="w-full rounded-xl border border-[#D4D4D8] bg-white py-3 pl-10 pr-4 text-sm text-[#18181B] placeholder-[#A1A1AA] transition-colors focus:border-[#0E2417] focus:outline-none focus:ring-1 focus:ring-[#0E2417]"
                 />
               </div>
             </div>
 
+            {/* Password */}
             <div>
               <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                  Password
-                </label>
+                <label className="block text-xs font-semibold text-[#18181B]">Password</label>
                 <button
                   type="button"
-                  onClick={() => alert('Password reset verification link has been dispatched to your email address.')}
-                  className="text-xs font-medium text-[#15803D] hover:underline"
+                  onClick={() => alert('Password reset verification link has been sent to your email address.')}
+                  className="text-xs font-semibold text-[#166534] hover:underline"
                 >
                   Forgot password?
                 </button>
               </div>
               <div className="relative">
-                <Lock className="absolute left-3 top-3 h-4 w-4 text-slate-400" />
+                <Lock className="absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#71717A]" />
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Your secure password"
-                  className="w-full rounded-lg border border-[#E2E8F0] bg-slate-50 py-2.5 pl-9 pr-4 text-sm text-slate-900 placeholder-slate-400 focus:border-[#15803D] focus:bg-white focus:outline-none focus:ring-1 focus:ring-[#15803D]"
+                  placeholder="Enter your password"
+                  className="w-full rounded-xl border border-[#D4D4D8] bg-white py-3 pl-10 pr-11 text-sm text-[#18181B] placeholder-[#A1A1AA] transition-colors focus:border-[#0E2417] focus:outline-none focus:ring-1 focus:ring-[#0E2417]"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#71717A] hover:text-[#18181B] transition-colors"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
               </div>
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#15803D] py-3 text-sm font-bold text-white shadow-md shadow-[#15803D]/25 transition hover:bg-[#14532D] focus:outline-none focus:ring-2 focus:ring-[#15803D] focus:ring-offset-2 disabled:opacity-60"
-            >
-              {loading ? (
-                'Verifying credentials...'
-              ) : (
-                <>
-                  <span>Sign In to Admin Console</span>
-                  <ArrowRight className="h-4 w-4" />
-                </>
-              )}
-            </button>
+            {/* Keep me signed in */}
+            <div className="flex items-center pt-0.5">
+              <label className="flex cursor-pointer items-center gap-2 select-none">
+                <input
+                  type="checkbox"
+                  checked={keepSignedIn}
+                  onChange={(e) => setKeepSignedIn(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 text-[#0E2417] focus:ring-[#0E2417] accent-[#0E2417]"
+                />
+                <span className="text-xs text-[#52525B]">Keep me signed in on this device</span>
+              </label>
+            </div>
+
+            {/* Submit Button */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#0E2417] py-3.5 text-sm font-semibold text-white transition-all hover:bg-[#07170E] focus:outline-none focus:ring-2 focus:ring-[#0E2417] focus:ring-offset-2 disabled:opacity-70 shadow-sm"
+              >
+                {loading ? (
+                  <span>Signing in...</span>
+                ) : (
+                  <>
+                    <span>Sign in to console</span>
+                    <ArrowRight className="h-4 w-4" />
+                  </>
+                )}
+              </button>
+            </div>
           </form>
 
-          <div className="rounded-xl border border-slate-100 bg-slate-50 p-4 text-center">
-            <p className="text-xs font-medium text-slate-600">
-              Role-Based Security Policy Enforced
-            </p>
-            <p className="mt-1 text-[11px] text-slate-400">
-              Only Super Admins, Agricultural Administrators, and Quality Managers possess access rights to this portal.
-            </p>
+          {/* Security Disclaimer Note */}
+          <div className="mt-8 border-t border-[#E4E4E7] pt-6">
+            <div className="flex items-start gap-2.5 text-xs text-[#71717A] leading-relaxed">
+              <Lock className="h-4 w-4 shrink-0 mt-0.5 text-[#A1A1AA]" />
+              <p>
+                Access is limited to Super Admins, Agricultural Administrators and Quality Managers. All sign-ins are logged.
+              </p>
+            </div>
           </div>
         </div>
       </div>
