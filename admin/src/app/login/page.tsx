@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Leaf, Lock, Mail, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,6 +18,14 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      if (!isSupabaseConfigured()) {
+        // Offline / Standalone Demo Mode: authenticate locally without network failure
+        document.cookie = 'agritrack_admin_session=active; path=/; max-age=86400; SameSite=Lax';
+        router.push('/dashboard');
+        router.refresh();
+        return;
+      }
+
       const supabase = createClient();
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email,
@@ -25,26 +33,18 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        // In local demo or offline mode, allow demo super admin entry
-        if (email.toLowerCase().includes('admin')) {
-          router.push('/dashboard');
-          return;
-        }
         throw authError;
       }
 
       router.push('/dashboard');
+      router.refresh();
     } catch (err: any) {
-      // If offline demo fallback
-      if (email.toLowerCase().includes('admin')) {
-        router.push('/dashboard');
-        return;
-      }
       setError(err?.message || 'Authentication failed. Please verify credentials.');
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="flex min-h-screen bg-[#F8FAFC]">

@@ -1,5 +1,10 @@
 import { createBrowserClient } from '@supabase/ssr';
 
+export const isSupabaseConfigured = (): boolean => {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  return Boolean(url && url !== 'https://agritrack-liberia-demo.supabase.co' && !url.includes('placeholder'));
+};
+
 export function createClient() {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://agritrack-liberia-demo.supabase.co',

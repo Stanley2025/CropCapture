@@ -6,8 +6,10 @@ export const metadata: Metadata = {
   title: 'AgriTrack Liberia — Administration Portal',
   description: 'Digital Farm Records, Agricultural Production & Quality Verification Management Portal',
   icons: {
-    icon: '/favicon.ico',
+    icon: '/icon.svg',
+    shortcut: '/favicon.ico',
   },
+
 };
 
 export default function RootLayout({

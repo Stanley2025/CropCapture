@@ -14,7 +14,7 @@ import {
   ExternalLink,
   CheckCircle2,
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
+import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
 
 export function Header({ onOpenMobile }: { onOpenMobile?: () => void }) {
   const router = useRouter();
@@ -23,14 +23,19 @@ export function Header({ onOpenMobile }: { onOpenMobile?: () => void }) {
 
   const handleSignOut = async () => {
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+      if (isSupabaseConfigured()) {
+        const supabase = createClient();
+        await supabase.auth.signOut();
+      }
     } catch (e) {
       console.error('Sign out error:', e);
     } finally {
+      document.cookie = 'agritrack_admin_session=; path=/; max-age=0;';
       router.push('/login');
+      router.refresh();
     }
   };
+
 
   return (
     <header className="sticky top-0 z-30 flex h-16 w-full items-center justify-between border-b border-[#E2E8F0] bg-white px-4 md:px-8">
