@@ -16,6 +16,9 @@ import {
   ClipboardList,
   Coins,
   ShieldCheck,
+  ShieldAlert,
+  AlertCircle,
+  X,
   Compass,
   Edit,
   ExternalLink,
@@ -27,6 +30,7 @@ import {
   getHarvestBatchesByFarmerId,
   getFarmActivitiesByFarmerId,
   getQualityInspections,
+  updateFarmerStatus,
 } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { Farmer, Farm, HarvestBatch, FarmActivity, InputRecord, QualityInspection } from '@/types/database';
@@ -44,6 +48,38 @@ export default function FarmerDetailPage() {
   const [inspections, setInspections] = useState<QualityInspection[]>([]);
   const [activeTab, setActiveTab] = useState<'farms' | 'activities' | 'harvests' | 'inputs' | 'inspections'>('farms');
   const [loading, setLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  const handleToggleStatus = async (newStatus: 'active' | 'disabled') => {
+    if (!farmer) return;
+    setIsUpdating(true);
+    try {
+      const ok = await updateFarmerStatus(farmer.id, newStatus);
+      if (ok) {
+        setFarmer((prev) => (prev ? { ...prev, status: newStatus } : prev));
+        setFeedback({
+          type: 'success',
+          message: `Farmer account successfully ${newStatus === 'disabled' ? 'disabled' : 'enabled'}.`,
+        });
+      } else {
+        setFeedback({
+          type: 'error',
+          message: 'Failed to update farmer status. Please try again.',
+        });
+      }
+    } catch (e: any) {
+      setFeedback({
+        type: 'error',
+        message: e?.message || 'An error occurred while updating farmer status.',
+      });
+    } finally {
+      setIsUpdating(false);
+      setShowConfirmModal(false);
+      setTimeout(() => setFeedback(null), 5000);
+    }
+  };
 
   useEffect(() => {
     async function load() {
@@ -103,11 +139,50 @@ export default function FarmerDetailPage() {
           Back to Farmer Directory
         </Link>
 
+        {/* Feedback Alert */}
+        {feedback && (
+          <div
+            className={`flex items-center justify-between rounded-xl border p-4 text-xs font-semibold ${
+              feedback.type === 'success'
+                ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                : 'border-rose-200 bg-rose-50 text-rose-800'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {feedback.type === 'success' ? (
+                <ShieldCheck className="h-4 w-4 text-emerald-700" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-rose-700" />
+              )}
+              <span>{feedback.message}</span>
+            </div>
+            <button onClick={() => setFeedback(null)} className="text-slate-400 hover:text-slate-600">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        )}
+
+        {/* Account Disabled Banner */}
+        {farmer.status === 'disabled' && (
+          <div className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-xs font-medium text-rose-900">
+            <ShieldAlert className="h-5 w-5 text-rose-600 shrink-0" />
+            <div className="flex-1">
+              <span className="font-bold">Account Disabled:</span> This farmer account is currently deactivated. Mobile app synchronization, record creation, and harvest submissions for this farmer are blocked.
+            </div>
+          </div>
+        )}
+
         {/* Farmer Header Identity Banner */}
         <div className="rounded-2xl border border-[#E2E8F0] bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-4">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[#DCFCE7] text-2xl font-black text-[#15803D] shadow-inner">
+              <div
+                className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black shadow-inner ${
+                  farmer.status === 'disabled'
+                    ? 'bg-rose-100 text-rose-700'
+                    : 'bg-[#DCFCE7] text-[#15803D]'
+                }`}
+              >
                 {farmer.full_name.slice(0, 2).toUpperCase()}
               </div>
               <div>
@@ -136,10 +211,38 @@ export default function FarmerDetailPage() {
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 border border-emerald-100">
-                Verified Smallholder
-              </span>
+            <div className="flex flex-wrap items-center gap-2.5">
+              {farmer.status === 'disabled' ? (
+                <span className="rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-bold text-rose-800 border border-rose-200 flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-rose-600" />
+                  Account Disabled
+                </span>
+              ) : (
+                <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 border border-emerald-100 flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full bg-emerald-600" />
+                  Active Smallholder
+                </span>
+              )}
+
+              {farmer.status === 'disabled' ? (
+                <button
+                  onClick={() => handleToggleStatus('active')}
+                  disabled={isUpdating}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#15803D] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#14532D] shadow-sm transition disabled:opacity-50"
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  {isUpdating ? 'Enabling...' : 'Enable Account'}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setShowConfirmModal(true)}
+                  disabled={isUpdating}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3.5 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 hover:border-rose-400 shadow-2xs transition disabled:opacity-50"
+                >
+                  <ShieldAlert className="h-4 w-4 text-rose-600" />
+                  Disable Account
+                </button>
+              )}
             </div>
           </div>
 
@@ -323,6 +426,46 @@ export default function FarmerDetailPage() {
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Confirmation Modal for Disabling Account */}
+        {showConfirmModal && farmer && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4">
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-xl animate-in fade-in zoom-in-95">
+              <div className="flex items-start gap-3">
+                <div className="rounded-full bg-rose-100 p-2 text-rose-600 shrink-0">
+                  <ShieldAlert className="h-6 w-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900">Disable Farmer Account</h3>
+                  <p className="mt-1 text-xs text-slate-600 leading-relaxed">
+                    Are you sure you want to disable the account for{' '}
+                    <strong className="text-slate-900">{farmer.full_name}</strong> ({farmer.farmer_id_code})?
+                  </p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    This will revoke their access to submit new harvest batches, log farm operations, and synchronize offline records. You can re-enable this account at any time.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-100 pt-4">
+                <button
+                  onClick={() => setShowConfirmModal(false)}
+                  disabled={isUpdating}
+                  className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => handleToggleStatus('disabled')}
+                  disabled={isUpdating}
+                  className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 shadow-sm transition disabled:opacity-50"
+                >
+                  {isUpdating ? 'Disabling...' : 'Confirm Disable'}
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

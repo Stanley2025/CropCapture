@@ -204,6 +204,37 @@ export async function getFarmerById(id: string): Promise<Farmer | null> {
   return found;
 }
 
+export async function updateFarmerStatus(id: string, status: 'active' | 'disabled'): Promise<boolean> {
+  clearApiCache();
+  try {
+    const supabase = createClient();
+    const { error } = (await withTimeout(
+      supabase
+        .from('farmers')
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq('id', id),
+      2500
+    )) as any;
+
+    if (!error) {
+      const found = MOCK_FARMERS.find((f) => f.id === id || f.farmer_id_code === id);
+      if (found) {
+        found.status = status;
+      }
+      return true;
+    }
+  } catch (e) {
+    // fallback to in-memory mock
+  }
+
+  const found = MOCK_FARMERS.find((f) => f.id === id || f.farmer_id_code === id);
+  if (found) {
+    found.status = status;
+    return true;
+  }
+  return false;
+}
+
 // ============================================================================
 // 3. FARMS
 // ============================================================================
