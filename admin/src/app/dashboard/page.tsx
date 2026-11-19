@@ -397,23 +397,6 @@ export default function DashboardPage() {
           )}
         </Suspense>
 
-        {/* Three Secondary Stat Cards */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="flex items-center gap-2.5 rounded-2xl bg-[#E5F2DC] border border-[#CDE3BF] p-4">
-            <span className="text-xl font-bold text-slate-900">1</span>
-            <span className="text-xs font-semibold text-[#1C3822]">Grade A certified</span>
-          </div>
-
-          <div className="flex items-center gap-2.5 rounded-2xl bg-[#ECE2F8] border border-[#DDD0F0] p-4">
-            <span className="text-xl font-bold text-slate-900">3</span>
-            <span className="text-xs font-semibold text-slate-800">Cooperatives</span>
-          </div>
-
-          <div className="flex items-center gap-2.5 rounded-2xl bg-[#DFECF9] border border-[#CDE1F4] p-4">
-            <span className="text-xl font-bold text-slate-900">8</span>
-            <span className="text-xs font-semibold text-slate-800">Extension field agents</span>
-          </div>
-        </div>
 
         {/* Bottom Operational Cards: Recent Batches & Registered Farmers streamed with Suspense */}
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
