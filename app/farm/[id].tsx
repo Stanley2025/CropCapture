@@ -262,23 +262,23 @@ export default function FarmDetailsScreen() {
           {/* Revenue, Cost & Net Profit Highlight */}
           <View style={styles.pnlHighlightContainer}>
             <View style={styles.pnlColumn}>
-              <Text style={styles.pnlLabel}>TOTAL REVENUE</Text>
-              <Text style={styles.pnlRevenue}>
-                ${financialSummary.harvestRevenue.toLocaleString()} USD
-              </Text>
-              <Text style={styles.pnlSub}>from {harvests.length} harvest(s)</Text>
-            </View>
-            <View style={styles.pnlDivider} />
-            <View style={styles.pnlColumn}>
-              <Text style={styles.pnlLabel}>TOTAL EXPENSES</Text>
+              <Text style={styles.pnlLabel}>AMOUNT SPENT</Text>
               <Text style={styles.pnlExpense}>
-                -${financialSummary.totalExpenses.toLocaleString()} USD
+                ${financialSummary.totalExpenses.toLocaleString()} USD
               </Text>
               <Text style={styles.pnlSub}>inputs, labor & ops</Text>
             </View>
             <View style={styles.pnlDivider} />
             <View style={styles.pnlColumn}>
-              <Text style={styles.pnlLabel}>NET PROFIT</Text>
+              <Text style={styles.pnlLabel}>GOT FROM HARVEST</Text>
+              <Text style={styles.pnlRevenue}>
+                ${financialSummary.harvestRevenue.toLocaleString()} USD
+              </Text>
+              <Text style={styles.pnlSub}>from {harvests.length} harvest batch(es)</Text>
+            </View>
+            <View style={styles.pnlDivider} />
+            <View style={styles.pnlColumn}>
+              <Text style={styles.pnlLabel}>FARM NET PROFIT</Text>
               <Text
                 style={[
                   styles.pnlProfit,
@@ -289,9 +289,17 @@ export default function FarmDetailsScreen() {
                 ${financialSummary.netProfit.toLocaleString()} USD
               </Text>
               <Text style={styles.pnlSub}>
-                {financialSummary.isProfitable ? 'Net Gain' : 'Net Deficit'}
+                {financialSummary.isProfitable ? 'Profitable return' : 'Operating deficit'}
               </Text>
             </View>
+          </View>
+
+          {/* Formula calculation explanation */}
+          <View style={styles.pnlFormulaBox}>
+            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.pnlFormulaText}>
+              Calculation: Got from Harvest (${financialSummary.harvestRevenue.toLocaleString()}) - Amount Spent (${financialSummary.totalExpenses.toLocaleString()}) = Net Profit ({financialSummary.netProfit >= 0 ? '+' : ''}${financialSummary.netProfit.toLocaleString()} USD)
+            </Text>
           </View>
 
           {/* Expense Breakdown */}
@@ -799,5 +807,21 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: Colors.text,
+  },
+  pnlFormulaBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: Radius.sm,
+    marginTop: Spacing.xs,
+  },
+  pnlFormulaText: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    flex: 1,
+    lineHeight: 14,
   },
 });

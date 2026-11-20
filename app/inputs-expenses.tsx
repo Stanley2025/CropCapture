@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing, Typography } from '../src/constants/theme';
 import { localDb, generateUUID } from '../src/services/storage/localDatabase';
 import { useAppStore } from '../src/store/useAppStore';
-import { InputRecord, ExpenseRecord, Farm } from '../src/types/database';
+import { InputRecord, ExpenseRecord, Farm, HarvestBatch } from '../src/types/database';
 import { Header } from '../src/components/Header';
 import { OfflineBanner } from '../src/components/OfflineBanner';
 import { Card } from '../src/components/Card';
@@ -154,6 +154,7 @@ export default function InputsExpensesScreen() {
   const [activeTab, setActiveTab] = useState<'inputs' | 'expenses'>('inputs');
   const [inputs, setInputs] = useState<InputRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -187,10 +188,11 @@ export default function InputsExpensesScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      let [inp, exp, f] = await Promise.all([
+      let [inp, exp, f, h] = await Promise.all([
         localDb.getInputs(),
         localDb.getExpenses(),
         localDb.getFarms(),
+        localDb.getHarvests(),
       ]);
 
       if (currentRole === 'farmer' && currentFarmer?.id) {
@@ -198,11 +200,13 @@ export default function InputsExpensesScreen() {
         const myFarmIds = new Set(f.map((farm) => farm.id));
         inp = inp.filter((item) => myFarmIds.has(item.farm_id));
         exp = exp.filter((item) => myFarmIds.has(item.farm_id));
+        h = h.filter((item) => myFarmIds.has(item.farm_id) || item.farmer_id === currentFarmer.id);
       }
 
       setInputs(inp);
       setExpenses(exp);
       setFarms(f);
+      setHarvests(h);
 
       // Default the quick-add farm picker to the first farm if available
       if (f.length > 0) {
@@ -419,6 +423,56 @@ export default function InputsExpensesScreen() {
   const totalExpensesLRD = filteredExpenses
     .filter((e) => e.currency === 'LRD')
     .reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+
+  // Real Farm Profit & Loss Calculation: Amount Spent vs Harvest Got vs Net Profit
+  const farmProfitSummary = useMemo(() => {
+    // 1. Amount spent on the selected farm and production year (inputs + expenses in USD)
+    const spentUSD = totalInputsUSD + totalExpensesUSD;
+
+    // 2. Amount got from harvest for this farm and production year
+    const filteredHarvests = harvests.filter((item) => {
+      if (selectedFarmFilter !== 'all' && item.farm_id !== selectedFarmFilter) {
+        return false;
+      }
+      if (selectedYearFilter !== 'all') {
+        const itemYear = (item.harvest_date || item.created_at || '').substring(0, 4);
+        if (itemYear !== selectedYearFilter) {
+          return false;
+        }
+      }
+      return true;
+    });
+
+    const totalHarvestRevenue = filteredHarvests.reduce((sum, h) => {
+      if (h.total_value && !isNaN(Number(h.total_value))) {
+        return sum + Number(h.total_value);
+      }
+      const isLivestock =
+        (h as any).animal_type ||
+        (h.unit || '').toLowerCase().includes('head') ||
+        (h.unit || '').toLowerCase().includes('animal');
+      const rate = isLivestock ? 50 : 0.45;
+      return sum + (Number(h.quantity) || 0) * rate;
+    }, 0);
+
+    const netProfit = totalHarvestRevenue - spentUSD;
+    const isProfitable = netProfit >= 0;
+
+    return {
+      totalSpent: spentUSD,
+      totalHarvestRevenue,
+      netProfit,
+      isProfitable,
+      harvestCount: filteredHarvests.length,
+      hasData: spentUSD > 0 || totalHarvestRevenue > 0,
+    };
+  }, [
+    totalInputsUSD,
+    totalExpensesUSD,
+    harvests,
+    selectedFarmFilter,
+    selectedYearFilter,
+  ]);
 
   // Submit Handler: Add Input / Inventory
   const handleAddInput = async () => {
@@ -800,6 +854,110 @@ export default function InputsExpensesScreen() {
           />
         }
       >
+        {/* Real Farm Profit & Loss Highlight (Spent vs Harvested vs Net Profit) */}
+        <Card
+          style={[
+            styles.farmProfitCard,
+            farmProfitSummary.hasData
+              ? farmProfitSummary.isProfitable
+                ? styles.farmProfitCardProfitable
+                : styles.farmProfitCardLoss
+              : styles.farmProfitCardEmpty,
+          ]}
+        >
+          <View style={styles.farmProfitHeader}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons
+                name={
+                  !farmProfitSummary.hasData
+                    ? 'calculator-outline'
+                    : farmProfitSummary.isProfitable
+                    ? 'trending-up'
+                    : 'trending-down'
+                }
+                size={18}
+                color={
+                  !farmProfitSummary.hasData
+                    ? Colors.textMuted
+                    : farmProfitSummary.isProfitable
+                    ? '#15803D'
+                    : '#DC2626'
+                }
+              />
+              <Text style={styles.farmProfitTitle}>
+                {selectedFarmFilter === 'all'
+                  ? 'Consolidated Farm Profit & Loss'
+                  : `${farmMap.get(selectedFarmFilter)?.name || 'Farm'} Profit & Loss`}
+              </Text>
+            </View>
+            <Badge
+              label={
+                !farmProfitSummary.hasData
+                  ? 'No Financials'
+                  : farmProfitSummary.isProfitable
+                  ? `+$${farmProfitSummary.netProfit.toLocaleString()} Net Profit`
+                  : `-$${Math.abs(farmProfitSummary.netProfit).toLocaleString()} Net Deficit`
+              }
+              variant={
+                !farmProfitSummary.hasData
+                  ? 'default'
+                  : farmProfitSummary.isProfitable
+                  ? 'success'
+                  : 'danger'
+              }
+            />
+          </View>
+
+          <View style={styles.farmProfitGrid}>
+            <View style={styles.farmProfitColumn}>
+              <Text style={styles.farmProfitColLabel}>AMOUNT SPENT</Text>
+              <Text style={styles.farmProfitColSpent}>
+                ${farmProfitSummary.totalSpent.toLocaleString()} USD
+              </Text>
+              <Text style={styles.farmProfitColSub}>inputs & operations</Text>
+            </View>
+
+            <View style={styles.farmProfitColDivider} />
+
+            <View style={styles.farmProfitColumn}>
+              <Text style={styles.farmProfitColLabel}>GOT FROM HARVEST</Text>
+              <Text style={styles.farmProfitColHarvest}>
+                ${farmProfitSummary.totalHarvestRevenue.toLocaleString()} USD
+              </Text>
+              <Text style={styles.farmProfitColSub}>
+                {farmProfitSummary.harvestCount} harvest batch(es)
+              </Text>
+            </View>
+
+            <View style={styles.farmProfitColDivider} />
+
+            <View style={styles.farmProfitColumn}>
+              <Text style={styles.farmProfitColLabel}>NET PROFIT</Text>
+              <Text
+                style={[
+                  styles.farmProfitColProfit,
+                  farmProfitSummary.isProfitable
+                    ? styles.farmProfitColProfitPos
+                    : styles.farmProfitColProfitNeg,
+                ]}
+              >
+                {farmProfitSummary.netProfit >= 0 ? '+' : ''}$
+                {farmProfitSummary.netProfit.toLocaleString()} USD
+              </Text>
+              <Text style={styles.farmProfitColSub}>
+                {farmProfitSummary.isProfitable ? 'Profitable return' : 'Operating deficit'}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.farmProfitFormulaBox}>
+            <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
+            <Text style={styles.farmProfitFormulaText}>
+              Calculation: Harvest Got (${farmProfitSummary.totalHarvestRevenue.toLocaleString()}) - Amount Spent (${farmProfitSummary.totalSpent.toLocaleString()}) = Net Profit ({farmProfitSummary.netProfit >= 0 ? '+' : ''}${farmProfitSummary.netProfit.toLocaleString()} USD)
+            </Text>
+          </View>
+        </Card>
+
         {activeTab === 'inputs' ? (
           <>
             {/* Input & Inventory Financial Summary */}
@@ -2232,5 +2390,103 @@ const styles = StyleSheet.create({
     marginTop: 4,
     maxWidth: 260,
     lineHeight: 16,
+  },
+  // Real Farm Profit & Loss Highlight Styles
+  farmProfitCard: {
+    padding: Spacing.md,
+    borderRadius: Radius.md,
+    marginBottom: Spacing.md,
+    borderWidth: 1.5,
+  },
+  farmProfitCardProfitable: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  farmProfitCardLoss: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  farmProfitCardEmpty: {
+    backgroundColor: Colors.surface,
+    borderColor: Colors.border,
+  },
+  farmProfitHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  farmProfitTitle: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  farmProfitGrid: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: Radius.sm,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  farmProfitColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  farmProfitColDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: Colors.border,
+  },
+  farmProfitColLabel: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    marginBottom: 2,
+    letterSpacing: 0.5,
+  },
+  farmProfitColSpent: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  farmProfitColHarvest: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: '#0284C7',
+  },
+  farmProfitColProfit: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '800',
+  },
+  farmProfitColProfitPos: {
+    color: '#15803D',
+  },
+  farmProfitColProfitNeg: {
+    color: '#DC2626',
+  },
+  farmProfitColSub: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  farmProfitFormulaBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(0,0,0,0.03)',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: Radius.sm,
+    marginTop: Spacing.xs + 2,
+  },
+  farmProfitFormulaText: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    flex: 1,
+    lineHeight: 14,
   },
 });
