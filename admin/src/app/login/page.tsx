@@ -97,6 +97,28 @@ export default function LoginPage() {
   const handleCreateAccount = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    if (!fullName.trim()) {
+      setError('Full name is required.');
+      return;
+    }
+    if (!dateOfBirth.trim()) {
+      setError('Date of birth is required.');
+      return;
+    }
+    if (!gender) {
+      setError('Please select a gender.');
+      return;
+    }
+    if (!address.trim()) {
+      setError('Address is required.');
+      return;
+    }
+    if (!pin.trim() || pin.trim().length < 4) {
+      setError('A 4-6 digit numeric security PIN is required.');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -105,13 +127,13 @@ export default function LoginPage() {
         await supabase.from('farmers').upsert(
           {
             farmer_id_code: farmId,
-            full_name: fullName.trim() || `Farmer ${farmId}`,
-            gender: gender || null,
-            date_of_birth: dateOfBirth.trim() || null,
+            full_name: fullName.trim(),
+            gender: gender,
+            date_of_birth: dateOfBirth.trim(),
             phone_number: '+231-77-000-0000',
             county: 'Nimba',
-            district: address.trim() || 'Central District',
-            community: address.trim() || 'Main Village',
+            district: address.trim(),
+            community: address.trim(),
             cooperative_id: '33333333-3333-3333-3333-333333333301',
           },
           { onConflict: 'farmer_id_code' }
@@ -364,14 +386,17 @@ export default function LoginPage() {
                 </button>
               </div>
 
-              {/* 2. Full Name (Optional) */}
+              {/* 2. Full Name (Mandatory) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-[#18181B]">Full Name</label>
-                  <span className="rounded bg-[#E8EDE5] px-1.5 py-0.5 text-[10px] font-medium text-[#526658]">Optional</span>
+                  <label className="block text-xs font-semibold text-[#18181B]">
+                    Full Name <span className="text-rose-600">*</span>
+                  </label>
+                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">Required</span>
                 </div>
                 <input
                   type="text"
+                  required
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   placeholder="e.g. Emmanuel Gaye"
@@ -379,25 +404,30 @@ export default function LoginPage() {
                 />
               </div>
 
-              {/* 3. Date of Birth (Optional) */}
+              {/* 3. Date of Birth (Mandatory) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-[#18181B]">Date of Birth</label>
-                  <span className="rounded bg-[#E8EDE5] px-1.5 py-0.5 text-[10px] font-medium text-[#526658]">Optional</span>
+                  <label className="block text-xs font-semibold text-[#18181B]">
+                    Date of Birth <span className="text-rose-600">*</span>
+                  </label>
+                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">Required</span>
                 </div>
                 <input
                   type="date"
+                  required
                   value={dateOfBirth}
                   onChange={(e) => setDateOfBirth(e.target.value)}
                   className="w-full rounded-xl border border-[#D4D4D8] bg-white py-2.5 px-3.5 text-sm text-[#18181B] placeholder-[#A1A1AA] transition-colors focus:border-[#0E2417] focus:outline-none focus:ring-1 focus:ring-[#0E2417]"
                 />
               </div>
 
-              {/* 4. Gender (Optional) */}
+              {/* 4. Gender (Mandatory) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-[#18181B]">Gender</label>
-                  <span className="rounded bg-[#E8EDE5] px-1.5 py-0.5 text-[10px] font-medium text-[#526658]">Optional</span>
+                  <label className="block text-xs font-semibold text-[#18181B]">
+                    Gender <span className="text-rose-600">*</span>
+                  </label>
+                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">Required</span>
                 </div>
                 <div className="flex gap-2">
                   {(['Male', 'Female', 'Other'] as const).map((g) => (
@@ -417,14 +447,17 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              {/* 5. Address (Optional) */}
+              {/* 5. Address (Mandatory) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-[#18181B]">Address</label>
-                  <span className="rounded bg-[#E8EDE5] px-1.5 py-0.5 text-[10px] font-medium text-[#526658]">Optional</span>
+                  <label className="block text-xs font-semibold text-[#18181B]">
+                    Address <span className="text-rose-600">*</span>
+                  </label>
+                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">Required</span>
                 </div>
                 <input
                   type="text"
+                  required
                   value={address}
                   onChange={(e) => setAddress(e.target.value)}
                   placeholder="e.g. Gbehley, Sanniquellie-Mahn, Nimba"
@@ -432,15 +465,18 @@ export default function LoginPage() {
                 />
               </div>
 
-              {/* 6. PIN (Optional) */}
+              {/* 6. PIN (Mandatory) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-[#18181B]">Security PIN</label>
-                  <span className="rounded bg-[#E8EDE5] px-1.5 py-0.5 text-[10px] font-medium text-[#526658]">Optional</span>
+                  <label className="block text-xs font-semibold text-[#18181B]">
+                    Security PIN <span className="text-rose-600">*</span>
+                  </label>
+                  <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-bold text-emerald-800">Required</span>
                 </div>
                 <div className="relative">
                   <input
                     type={showPin ? 'text' : 'password'}
+                    required
                     maxLength={6}
                     value={pin}
                     onChange={(e) => setPin(e.target.value)}

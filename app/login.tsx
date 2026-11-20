@@ -114,15 +114,36 @@ export default function LoginScreen() {
   };
 
   const handleCreateAccount = async () => {
+    if (!fullName.trim()) {
+      Alert.alert('Required Field', 'Please enter your Full Name.');
+      return;
+    }
+    if (!dateOfBirth.trim()) {
+      Alert.alert('Required Field', 'Please enter your Date of Birth (YYYY-MM-DD).');
+      return;
+    }
+    if (!gender) {
+      Alert.alert('Required Field', 'Please select your Gender.');
+      return;
+    }
+    if (!address.trim()) {
+      Alert.alert('Required Field', 'Please enter your Address (Community, District or County).');
+      return;
+    }
+    if (!pin.trim() || pin.trim().length < 4) {
+      Alert.alert('Required Field', 'Please enter a 4-6 digit numeric security PIN.');
+      return;
+    }
+
     setIsLoading(true);
     try {
       const created = await registerFarmerAccount({
         farm_id_code: farmId,
-        full_name: fullName.trim() || undefined,
-        date_of_birth: dateOfBirth.trim() || undefined,
-        gender: gender || undefined,
-        address: address.trim() || undefined,
-        pin: pin.trim() || undefined,
+        full_name: fullName.trim(),
+        date_of_birth: dateOfBirth.trim(),
+        gender: gender,
+        address: address.trim(),
+        pin: pin.trim(),
         id_type: idType || undefined,
         id_number: idNumber.trim() || undefined,
       });
@@ -419,11 +440,13 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {/* 2. Full Name (Optional) */}
+                {/* 2. Full Name (Mandatory) */}
                 <View style={styles.inputGroup}>
                   <View style={styles.optionalLabelRow}>
-                    <Text style={styles.inputFieldLabel}>Full Name</Text>
-                    <Text style={styles.optionalTag}>Optional</Text>
+                    <Text style={styles.inputFieldLabel}>
+                      Full Name <Text style={styles.requiredAsterisk}>*</Text>
+                    </Text>
+                    <Text style={styles.requiredTag}>Required</Text>
                   </View>
                   <View style={styles.inputFieldWrapper}>
                     <Ionicons
@@ -442,11 +465,13 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
-                {/* 3. Date of Birth (Optional) */}
+                {/* 3. Date of Birth (Mandatory) */}
                 <View style={styles.inputGroup}>
                   <View style={styles.optionalLabelRow}>
-                    <Text style={styles.inputFieldLabel}>Date of Birth</Text>
-                    <Text style={styles.optionalTag}>Optional</Text>
+                    <Text style={styles.inputFieldLabel}>
+                      Date of Birth <Text style={styles.requiredAsterisk}>*</Text>
+                    </Text>
+                    <Text style={styles.requiredTag}>Required</Text>
                   </View>
                   <View style={styles.inputFieldWrapper}>
                     <Ionicons
@@ -465,11 +490,13 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
-                {/* 4. Gender (Optional) */}
+                {/* 4. Gender (Mandatory) */}
                 <View style={styles.inputGroup}>
                   <View style={styles.optionalLabelRow}>
-                    <Text style={styles.inputFieldLabel}>Gender</Text>
-                    <Text style={styles.optionalTag}>Optional</Text>
+                    <Text style={styles.inputFieldLabel}>
+                      Gender <Text style={styles.requiredAsterisk}>*</Text>
+                    </Text>
+                    <Text style={styles.requiredTag}>Required</Text>
                   </View>
                   <View style={styles.genderRow}>
                     {(['Male', 'Female', 'Other'] as const).map((g) => {
@@ -512,11 +539,13 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
-                {/* 5. Address (Optional) */}
+                {/* 5. Address (Mandatory) */}
                 <View style={styles.inputGroup}>
                   <View style={styles.optionalLabelRow}>
-                    <Text style={styles.inputFieldLabel}>Address</Text>
-                    <Text style={styles.optionalTag}>Optional</Text>
+                    <Text style={styles.inputFieldLabel}>
+                      Address <Text style={styles.requiredAsterisk}>*</Text>
+                    </Text>
+                    <Text style={styles.requiredTag}>Required</Text>
                   </View>
                   <View style={styles.inputFieldWrapper}>
                     <Ionicons
@@ -535,11 +564,13 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
-                {/* 6. Security PIN (Optional) */}
+                {/* 6. Security PIN (Mandatory) */}
                 <View style={styles.inputGroup}>
                   <View style={styles.optionalLabelRow}>
-                    <Text style={styles.inputFieldLabel}>Security PIN</Text>
-                    <Text style={styles.optionalTag}>Optional</Text>
+                    <Text style={styles.inputFieldLabel}>
+                      Security PIN <Text style={styles.requiredAsterisk}>*</Text>
+                    </Text>
+                    <Text style={styles.requiredTag}>Required</Text>
                   </View>
                   <View style={styles.inputFieldWrapper}>
                     <Ionicons
@@ -961,6 +992,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
+  },
+  requiredTag: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  requiredAsterisk: {
+    color: '#DC2626',
+    fontWeight: '700',
   },
 
   /* Gender & ID Chips */
