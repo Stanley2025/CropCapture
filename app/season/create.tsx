@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -124,7 +125,12 @@ const MANAGEMENT_SYSTEMS = ['Free-range', 'Semi-intensive', 'Intensive'];
 export default function CreateSeasonScreen() {
   const router = useRouter();
   const { farmId } = useLocalSearchParams<{ farmId?: string }>();
-  const { refreshPendingSyncCount } = useAppStore();
+  const { currentFarmer, currentRole, refreshPendingSyncCount } = useAppStore();
+
+  const [activeTab, setActiveTab] = useState<'create' | 'log'>('create');
+  const [seasons, setSeasons] = useState<FarmSeason[]>([]);
+  const [logFilter, setLogFilter] = useState<'all' | 'crops' | 'livestock'>('all');
+  const [selectedLogFarmId, setSelectedLogFarmId] = useState<string>('all');
 
   const [farms, setFarms] = useState<Farm[]>([]);
   const [selectedFarmId, setSelectedFarmId] = useState<string>(farmId || '');
@@ -151,15 +157,24 @@ export default function CreateSeasonScreen() {
   const [seedQuantity, setSeedQuantity] = useState('120');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Fetch registered farms
+  // Fetch registered farms and existing active seasons
   useEffect(() => {
-    localDb.getFarms().then((f) => {
-      setFarms(f);
-      if (!selectedFarmId && f.length > 0) {
-        setSelectedFarmId(f[0].id);
+    Promise.all([localDb.getFarms(), localDb.getSeasons()]).then(([f, s]) => {
+      const myFarms =
+        currentRole === 'farmer' && currentFarmer?.id
+          ? f.filter((farm) => farm.farmer_id === currentFarmer.id)
+          : f;
+      const myFarmIds = new Set(myFarms.map((farm) => farm.id));
+      const mySeasons = s.filter((season) => myFarmIds.has(season.farm_id));
+
+      setFarms(myFarms);
+      setSeasons(mySeasons.length > 0 ? mySeasons : s);
+
+      if (!selectedFarmId && myFarms.length > 0) {
+        setSelectedFarmId(myFarms[0].id);
       }
     });
-  }, [selectedFarmId]);
+  }, [selectedFarmId, currentFarmer?.id, currentRole]);
 
   const selectedFarm = farms.find((f) => f.id === selectedFarmId);
 
@@ -223,6 +238,35 @@ export default function CreateSeasonScreen() {
       return next;
     });
   };
+
+  const farmLookup = useMemo(() => {
+    const map = new Map<string, Farm>();
+    farms.forEach((f) => map.set(f.id, f));
+    return map;
+  }, [farms]);
+
+  const cropSeasonsCount = useMemo(() => {
+    return seasons.filter(
+      (s) => s.cycle_type !== 'livestock' && s.crop?.category !== 'Livestock Cycle'
+    ).length;
+  }, [seasons]);
+
+  const livestockCyclesCount = useMemo(() => {
+    return seasons.length - cropSeasonsCount;
+  }, [seasons, cropSeasonsCount]);
+
+  const filteredSeasons = useMemo(() => {
+    return seasons.filter((item) => {
+      const isLive =
+        item.cycle_type === 'livestock' ||
+        item.crop?.category === 'Livestock Cycle' ||
+        item.crop_id?.startsWith('livestock-');
+      if (logFilter === 'crops' && isLive) return false;
+      if (logFilter === 'livestock' && !isLive) return false;
+      if (selectedLogFarmId !== 'all' && item.farm_id !== selectedLogFarmId) return false;
+      return true;
+    });
+  }, [seasons, logFilter, selectedLogFarmId]);
 
   const handleSubmit = async () => {
     if (!selectedFarmId) {
@@ -307,13 +351,24 @@ export default function CreateSeasonScreen() {
       await localDb.saveSeason(newSeason, true);
       await refreshPendingSyncCount();
 
+      // Prepend to in-memory seasons log immediately
+      setSeasons((prev) => [newSeason, ...prev]);
+
       Alert.alert(
         isLivestockCycle ? 'Livestock Cycle Activated!' : 'Season Activated!',
         `"${newSeason.season_name}" is now active on your farm parcel.`,
         [
           {
-            text: 'OK',
-            onPress: () => router.back(),
+            text: 'View in Seasons Log',
+            onPress: () => setActiveTab('log'),
+          },
+          {
+            text: 'Record Activity',
+            onPress: () => router.push(`/activity/record?farmId=${selectedFarmId}` as any),
+          },
+          {
+            text: 'Activate Another',
+            style: 'cancel',
           },
         ]
       );
@@ -327,19 +382,82 @@ export default function CreateSeasonScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header
-        title={cycleType === 'livestock' ? 'New Livestock Cycle' : 'New Crop Season'}
+        title={
+          activeTab === 'log'
+            ? 'Seasons & Production Cycles'
+            : cycleType === 'livestock'
+            ? 'New Livestock Cycle'
+            : 'New Crop Season'
+        }
         subtitle={
-          cycleType === 'livestock'
+          activeTab === 'log'
+            ? `${seasons.length} Active & Recorded Cycle${seasons.length === 1 ? '' : 's'}`
+            : cycleType === 'livestock'
             ? 'Plan herd/flock production & offtake'
             : 'Plan planting & expected harvest'
         }
         showBack
       />
 
+      {/* Segmented Tab Switcher */}
+      <View style={styles.tabSwitcher}>
+        <TouchableOpacity
+          style={[
+            styles.tabBtn,
+            activeTab === 'create' &&
+              (cycleType === 'livestock'
+                ? styles.tabBtnActiveLivestock
+                : styles.tabBtnActive),
+          ]}
+          onPress={() => setActiveTab('create')}
+        >
+          <Ionicons
+            name="add-circle-outline"
+            size={16}
+            color={activeTab === 'create' ? '#FFFFFF' : Colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.tabBtnText,
+              activeTab === 'create' && styles.tabBtnTextActive,
+            ]}
+          >
+            {cycleType === 'livestock' ? 'Activate Cycle' : 'Activate Season'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tabBtn,
+            activeTab === 'log' &&
+              (cycleType === 'livestock'
+                ? styles.tabBtnActiveLivestock
+                : styles.tabBtnActive),
+          ]}
+          onPress={() => setActiveTab('log')}
+        >
+          <Ionicons
+            name="calendar-outline"
+            size={16}
+            color={activeTab === 'log' ? '#FFFFFF' : Colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.tabBtnText,
+              activeTab === 'log' && styles.tabBtnTextActive,
+            ]}
+          >
+            Seasons Log ({seasons.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* ========================================================= */}
-        {/* SECTION 1: FARM PARCEL SELECTION */}
-        {/* ========================================================= */}
+        {activeTab === 'create' ? (
+          <>
+            {/* ========================================================= */}
+            {/* SECTION 1: FARM PARCEL SELECTION */}
+            {/* ========================================================= */}
         <Card style={styles.formCard}>
           <Text style={styles.sectionTitle}>1. Farm Parcel</Text>
           <Text style={styles.label}>Select Registered Farm</Text>
@@ -774,6 +892,369 @@ export default function CreateSeasonScreen() {
           icon={<Ionicons name="checkmark-circle-outline" size={20} color="#FFFFFF" />}
         />
 
+        {/* Recent Seasons & Production Cycles Log Preview */}
+        {seasons.length > 0 && (
+          <View style={styles.recentSection}>
+            <View style={styles.recentHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="time-outline" size={18} color={Colors.text} />
+                <Text style={styles.recentTitle}>Active & Recent Cycles Log</Text>
+              </View>
+              <TouchableOpacity onPress={() => setActiveTab('log')}>
+                <Text style={styles.viewAllText}>See all ({seasons.length}) →</Text>
+              </TouchableOpacity>
+            </View>
+
+            {seasons.slice(0, 3).map((item) => {
+              const itemIsLivestock =
+                item.cycle_type === 'livestock' ||
+                item.crop?.category === 'Livestock Cycle' ||
+                item.crop?.category === 'Livestock' ||
+                item.crop_id?.startsWith('livestock-');
+              const farmObj = farmLookup.get(item.farm_id);
+
+              return (
+                <Card key={item.id} style={styles.recentItemCard}>
+                  <View style={styles.recentTopRow}>
+                    <View style={styles.recentTitleWrap}>
+                      <Text style={styles.recentEmoji}>
+                        {itemIsLivestock ? '🐾' : '🌾'}
+                      </Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.recentSeasonName} numberOfLines={1}>
+                          {item.season_name}
+                        </Text>
+                        <Text style={styles.recentFarmSubtitle}>
+                          {farmObj?.name || 'Farm Parcel'}
+                          {farmObj?.county ? ` • ${farmObj.district}, ${farmObj.county}` : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    <Badge
+                      label={item.status}
+                      variant={
+                        item.status === 'active'
+                          ? 'success'
+                          : item.status === 'harvesting'
+                          ? 'gold'
+                          : 'default'
+                      }
+                      size="sm"
+                    />
+                  </View>
+
+                  <View style={styles.recentMetaRow}>
+                    <View style={styles.recentMetaBlock}>
+                      <Text style={styles.recentMetaLabel}>VARIETY / BREED</Text>
+                      <Text style={styles.recentMetaVal}>
+                        {item.crop?.name || 'Crop'} ({item.crop_variety_id || 'Standard'})
+                      </Text>
+                    </View>
+                    <View style={styles.recentMetaBlock}>
+                      <Text style={styles.recentMetaLabel}>
+                        {itemIsLivestock ? 'FLOCK / HERD' : 'CULTIVATED AREA'}
+                      </Text>
+                      <Text style={styles.recentMetaVal}>
+                        {itemIsLivestock
+                          ? `${item.head_count || item.seed_quantity || '25'} heads`
+                          : `${item.cultivated_area || '1'} acres`}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.recentBottomRow}>
+                    <Text style={styles.recentDate}>
+                      Start: <Text style={{ fontWeight: '700' }}>{item.planting_date}</Text>
+                    </Text>
+                    {item.expected_harvest_date ? (
+                      <Text style={styles.recentDate}>
+                        Offtake/Harvest: <Text style={{ fontWeight: '700' }}>{item.expected_harvest_date}</Text>
+                      </Text>
+                    ) : null}
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
+        )}
+      </>
+    ) : (
+      <View style={styles.logContainer}>
+        {/* Quick Metrics Bar */}
+        <View style={styles.statsRow}>
+          <Card style={styles.statCard}>
+            <Text style={styles.statLabel}>TOTAL CYCLES</Text>
+            <Text style={styles.statVal}>{seasons.length}</Text>
+          </Card>
+          <Card style={styles.statCard}>
+            <Text style={styles.statLabel}>CROP SEASONS</Text>
+            <Text style={[styles.statVal, { color: Colors.primary }]}>
+              {cropSeasonsCount}
+            </Text>
+          </Card>
+          <Card style={styles.statCard}>
+            <Text style={styles.statLabel}>LIVESTOCK</Text>
+            <Text style={[styles.statVal, { color: '#D97706' }]}>
+              {livestockCyclesCount}
+            </Text>
+          </Card>
+        </View>
+
+        {/* Enterprise Filter Pills */}
+        <View style={styles.logFilterSection}>
+          <Text style={styles.logFilterLabel}>FILTER ENTERPRISE</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.logFilterScroll}>
+            <TouchableOpacity
+              style={[styles.logFilterPill, logFilter === 'all' && styles.logFilterPillActive]}
+              onPress={() => setLogFilter('all')}
+            >
+              <Text style={[styles.logFilterText, logFilter === 'all' && styles.logFilterTextActive]}>
+                All Cycles ({seasons.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.logFilterPill, logFilter === 'crops' && styles.logFilterPillActive]}
+              onPress={() => setLogFilter('crops')}
+            >
+              <Ionicons
+                name="leaf-outline"
+                size={14}
+                color={logFilter === 'crops' ? '#FFFFFF' : Colors.primary}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.logFilterText, logFilter === 'crops' && styles.logFilterTextActive]}>
+                Crop Seasons ({cropSeasonsCount})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.logFilterPill, logFilter === 'livestock' && styles.logFilterPillActiveLive]}
+              onPress={() => setLogFilter('livestock')}
+            >
+              <Ionicons
+                name="paw"
+                size={14}
+                color={logFilter === 'livestock' ? '#FFFFFF' : '#D97706'}
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={[styles.logFilterText, logFilter === 'livestock' && styles.logFilterTextActive]}
+              >
+                Livestock Cycles ({livestockCyclesCount})
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {/* Filter by Farm (if multiple farms) */}
+        {farms.length > 1 && (
+          <View style={[styles.logFilterSection, { marginTop: 6 }]}>
+            <Text style={styles.logFilterLabel}>FILTER BY FARM</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.logFilterScroll}>
+              <TouchableOpacity
+                style={[
+                  styles.logFarmChip,
+                  selectedLogFarmId === 'all' && styles.logFarmChipActive,
+                ]}
+                onPress={() => setSelectedLogFarmId('all')}
+              >
+                <Text
+                  style={[
+                    styles.logFarmChipText,
+                    selectedLogFarmId === 'all' && styles.logFarmChipTextActive,
+                  ]}
+                >
+                  All Farms
+                </Text>
+              </TouchableOpacity>
+              {farms.map((f) => (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[
+                    styles.logFarmChip,
+                    selectedLogFarmId === f.id && styles.logFarmChipActive,
+                  ]}
+                  onPress={() => setSelectedLogFarmId(f.id)}
+                >
+                  <Text
+                    style={[
+                      styles.logFarmChipText,
+                      selectedLogFarmId === f.id && styles.logFarmChipTextActive,
+                    ]}
+                  >
+                    {f.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* List of Seasons and Cycles */}
+        {filteredSeasons.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Ionicons name="calendar-outline" size={48} color={Colors.textMuted} />
+            <Text style={styles.emptyTitle}>No Seasons or Cycles Found</Text>
+            <Text style={styles.emptySub}>
+              {logFilter === 'all'
+                ? "You haven't activated any crop seasons or livestock cycles yet. Use the 'Activate' tab to start your first production cycle."
+                : `No cycles found under "${logFilter === 'crops' ? 'Crop Seasons' : 'Livestock Cycles'}".`}
+            </Text>
+            <Button
+              title="+ Activate First Cycle"
+              onPress={() => setActiveTab('create')}
+              size="sm"
+              style={{ marginTop: Spacing.sm }}
+            />
+          </Card>
+        ) : (
+          filteredSeasons.map((item) => {
+            const itemIsLivestock =
+              item.cycle_type === 'livestock' ||
+              item.crop?.category === 'Livestock Cycle' ||
+              item.crop?.category === 'Livestock' ||
+              item.crop_id?.startsWith('livestock-');
+
+            const farmObj = farmLookup.get(item.farm_id);
+            const isHarvesting = item.status === 'harvesting';
+            const isActive = item.status === 'active';
+
+            return (
+              <Card key={item.id} style={styles.logSeasonCard}>
+                {/* Header: Enterprise Badge & Status */}
+                <View style={styles.logCardHeader}>
+                  <View
+                    style={[
+                      styles.logBadgeWrap,
+                      itemIsLivestock && styles.logBadgeWrapLivestock,
+                    ]}
+                  >
+                    <Ionicons
+                      name={itemIsLivestock ? 'paw' : 'leaf'}
+                      size={14}
+                      color={itemIsLivestock ? '#D97706' : Colors.primary}
+                    />
+                    <Text
+                      style={[
+                        styles.logBadgeText,
+                        itemIsLivestock && styles.logBadgeTextLivestock,
+                      ]}
+                    >
+                      {itemIsLivestock ? 'Livestock Cycle' : 'Crop Season'}
+                    </Text>
+                  </View>
+
+                  <Badge
+                    label={item.status}
+                    variant={isHarvesting ? 'gold' : isActive ? 'success' : 'default'}
+                    size="sm"
+                  />
+                </View>
+
+                {/* Season Title & Farm */}
+                <View style={styles.logTitleBlock}>
+                  <Text style={styles.logSeasonTitle}>
+                    {itemIsLivestock ? '🐾 ' : '🌾 '}
+                    {item.season_name}
+                  </Text>
+                  <Text style={styles.logVarietyText}>
+                    {item.crop?.name || 'Crop'} • {item.crop_variety_id || 'Standard Variety'}
+                    {item.crop?.category ? ` (${item.crop.category})` : ''}
+                  </Text>
+                  <Text style={styles.logFarmText}>
+                    {farmObj?.name || 'Farm Parcel'}
+                    {farmObj?.county ? ` • ${farmObj.district}, ${farmObj.county}` : ''}
+                  </Text>
+                </View>
+
+                {/* 4-Item Grid */}
+                <View style={styles.logMetaGrid}>
+                  <View style={styles.logMetaItem}>
+                    <Text style={styles.logMetaLabel}>START / PLANTING</Text>
+                    <Text style={styles.logMetaValue}>{item.planting_date}</Text>
+                  </View>
+
+                  <View style={styles.logMetaItem}>
+                    <Text style={styles.logMetaLabel}>EXPECTED HARVEST</Text>
+                    <Text style={styles.logMetaValue}>
+                      {item.expected_harvest_date || 'Ongoing'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.logMetaItem}>
+                    <Text style={styles.logMetaLabel}>
+                      {itemIsLivestock ? 'HERD / FLOCK SIZE' : 'CULTIVATED ACRES'}
+                    </Text>
+                    <Text style={styles.logMetaValue}>
+                      {itemIsLivestock
+                        ? `${item.head_count || item.seed_quantity || '25'} heads`
+                        : `${item.cultivated_area || '1'} acres`}
+                    </Text>
+                  </View>
+
+                  <View style={styles.logMetaItem}>
+                    <Text style={styles.logMetaLabel}>
+                      {itemIsLivestock ? 'PRIMARY PURPOSE' : 'SEED SOWN'}
+                    </Text>
+                    <Text style={styles.logMetaValue} numberOfLines={1}>
+                      {itemIsLivestock
+                        ? item.production_purpose?.[0] || 'Meat production'
+                        : item.seed_quantity
+                        ? `${item.seed_quantity} kg seeds`
+                        : 'Standard sowing'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Livestock Extra Tags */}
+                {itemIsLivestock && (
+                  <View style={styles.logPillsRow}>
+                    {item.management_system && (
+                      <View style={styles.logPill}>
+                        <Ionicons name="shield-outline" size={11} color={Colors.textMuted} />
+                        <Text style={styles.logPillText}>{item.management_system}</Text>
+                      </View>
+                    )}
+                    {item.production_purpose?.map((p) => (
+                      <View key={p} style={[styles.logPill, { backgroundColor: '#FEF3C7' }]}>
+                        <Text style={[styles.logPillText, { color: '#92400E' }]}>{p}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                {/* Action Shortcuts Footer */}
+                <View style={styles.logCardFooter}>
+                  <TouchableOpacity
+                    style={styles.logActionBtn}
+                    onPress={() =>
+                      router.push(`/activity/record?farmId=${item.farm_id}` as any)
+                    }
+                  >
+                    <Ionicons name="clipboard-outline" size={14} color={Colors.primary} />
+                    <Text style={styles.logActionBtnText}>Record Activity</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.logActionBtn, { backgroundColor: '#FFFBEB' }]}
+                    onPress={() =>
+                      router.push(`/harvest/register?farmId=${item.farm_id}` as any)
+                    }
+                  >
+                    <Ionicons name="basket-outline" size={14} color="#D97706" />
+                    <Text style={[styles.logActionBtnText, { color: '#B45309' }]}>
+                      {itemIsLivestock ? 'Register Offtake' : 'Register Harvest'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </Card>
+            );
+          })
+        )}
+      </View>
+    )}
+
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
     </SafeAreaView>
@@ -1024,5 +1505,355 @@ const styles = StyleSheet.create({
   },
   purposeChipTextActive: {
     color: '#FFFFFF',
+  },
+  // Tab Switcher Styles
+  tabSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: Spacing.sm,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  tabBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  tabBtnActiveLivestock: {
+    backgroundColor: '#D97706',
+  },
+  tabBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.textMuted,
+  },
+  tabBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  // Recent Cycles Preview Section
+  recentSection: {
+    marginTop: Spacing.lg,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  recentTitle: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  viewAllText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  recentItemCard: {
+    marginBottom: Spacing.xs,
+    padding: Spacing.sm,
+  },
+  recentTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  recentTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: Spacing.xs,
+    gap: 6,
+  },
+  recentEmoji: {
+    fontSize: 20,
+  },
+  recentSeasonName: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  recentFarmSubtitle: {
+    fontSize: 10,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  recentMetaRow: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    padding: 6,
+    marginVertical: 4,
+    gap: Spacing.sm,
+  },
+  recentMetaBlock: {
+    flex: 1,
+  },
+  recentMetaLabel: {
+    fontSize: 8,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    marginBottom: 1,
+  },
+  recentMetaVal: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  recentBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  recentDate: {
+    fontSize: 10,
+    color: Colors.textMuted,
+  },
+  // Seasons Log Tab Styles
+  logContainer: {
+    paddingBottom: Spacing.md,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  statLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    marginBottom: 2,
+    letterSpacing: 0.5,
+  },
+  statVal: {
+    fontSize: Typography.sizes.md,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  logFilterSection: {
+    marginBottom: Spacing.xs,
+  },
+  logFilterLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  logFilterScroll: {
+    flexDirection: 'row',
+    marginBottom: Spacing.xs,
+  },
+  logFilterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    marginRight: Spacing.xs,
+  },
+  logFilterPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  logFilterPillActiveLive: {
+    backgroundColor: '#D97706',
+    borderColor: '#B45309',
+  },
+  logFilterText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  logFilterTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  logFarmChip: {
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.md,
+    marginRight: 6,
+  },
+  logFarmChipActive: {
+    backgroundColor: '#E0E7FF',
+    borderColor: '#6366F1',
+  },
+  logFarmChipText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '600',
+  },
+  logFarmChipTextActive: {
+    color: '#4338CA',
+    fontWeight: '700',
+  },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    backgroundColor: Colors.surface,
+    marginTop: Spacing.sm,
+  },
+  emptyTitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: Spacing.sm,
+    marginBottom: 4,
+  },
+  emptySub: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: Spacing.xs,
+  },
+  logSeasonCard: {
+    marginBottom: Spacing.sm,
+    padding: Spacing.md,
+    backgroundColor: Colors.surface,
+  },
+  logCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  logBadgeWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    gap: 4,
+  },
+  logBadgeWrapLivestock: {
+    backgroundColor: '#FEF3C7',
+  },
+  logBadgeText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+  },
+  logBadgeTextLivestock: {
+    color: '#92400E',
+  },
+  logTitleBlock: {
+    marginBottom: Spacing.xs,
+  },
+  logSeasonTitle: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  logVarietyText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '600',
+    color: Colors.primaryDark,
+    marginBottom: 1,
+  },
+  logFarmText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+  },
+  logMetaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    padding: Spacing.xs,
+    marginVertical: Spacing.xs,
+    gap: Spacing.sm,
+  },
+  logMetaItem: {
+    minWidth: '45%',
+    flex: 1,
+  },
+  logMetaLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    marginBottom: 1,
+  },
+  logMetaValue: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  logPillsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    marginTop: 2,
+    marginBottom: Spacing.xs,
+  },
+  logPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.full,
+  },
+  logPillText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textMuted,
+  },
+  logCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    marginTop: Spacing.xs,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  logActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    backgroundColor: '#EFF6FF',
+    borderRadius: Radius.sm,
+  },
+  logActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
   },
 });
