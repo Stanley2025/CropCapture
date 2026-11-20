@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/theme';
 import { localDb, generateUUID } from '../../src/services/storage/localDatabase';
+import { syncEngine } from '../../src/services/sync/syncEngine';
 import { useAppStore } from '../../src/store/useAppStore';
 import { Header } from '../../src/components/Header';
 import { Button } from '../../src/components/Button';
@@ -163,6 +164,7 @@ export default function RegisterFarmScreen() {
 
       await localDb.saveFarm(newFarm, true);
       await refreshPendingSyncCount();
+      syncEngine.syncQueue().catch((e) => console.warn('Background auto-sync on farm save:', e));
 
       Alert.alert(
         'Farm Registered!',

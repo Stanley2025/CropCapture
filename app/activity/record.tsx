@@ -13,6 +13,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/theme';
 import { localDb, generateUUID } from '../../src/services/storage/localDatabase';
+import { syncEngine } from '../../src/services/sync/syncEngine';
 import { useAppStore } from '../../src/store/useAppStore';
 import { Farm, FarmSeason, FarmActivity } from '../../src/types/database';
 import { Header } from '../../src/components/Header';
@@ -128,6 +129,7 @@ export default function RecordActivityScreen() {
 
       await localDb.saveActivity(newActivity, true);
       await refreshPendingSyncCount();
+      syncEngine.syncQueue().catch((e) => console.warn('Background auto-sync on activity save:', e));
       await loadData();
 
       // Clear form inputs

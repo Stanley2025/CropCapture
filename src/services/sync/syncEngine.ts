@@ -169,6 +169,24 @@ export class SyncEngine {
       delete clean.id_type;
       delete clean.id_number;
       delete clean.address;
+      delete clean.photo_url;
+
+      // Ensure date_of_birth is valid ISO date (YYYY-MM-DD) or null for Postgres DATE type
+      if (!clean.date_of_birth || typeof clean.date_of_birth !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(clean.date_of_birth.trim())) {
+        clean.date_of_birth = null;
+      } else {
+        clean.date_of_birth = clean.date_of_birth.trim();
+      }
+
+      if (clean.profile_id && !isValidUUID(clean.profile_id)) {
+        clean.profile_id = null;
+      }
+      if (clean.cooperative_id && !isValidUUID(clean.cooperative_id)) {
+        clean.cooperative_id = null;
+      }
+      if (!clean.status) {
+        clean.status = 'active';
+      }
     }
 
     return clean;
@@ -206,17 +224,20 @@ export class SyncEngine {
             .maybeSingle();
 
           if (!farmerExists) {
+            const localFarmers = await localDb.getFarmers();
+            const localFarmer = localFarmers.find((f) => f.id === sanitized.farmer_id);
             await supabase.from('farmers').upsert(
               {
                 id: sanitized.farmer_id,
                 profile_id: null,
-                farmer_id_code: 'AGR-F-000001',
-                full_name: 'Emmanuel Gaye',
-                phone_number: '+231-77-654-3210',
-                email: 'farmer@cropcapture.app',
-                county: sanitized.county || 'Nimba',
-                district: sanitized.district || 'Sanniquellie-Mahn',
-                community: sanitized.community || 'Gbehley',
+                farmer_id_code: localFarmer?.farmer_id_code || '100001',
+                full_name: localFarmer?.full_name || 'Farmer',
+                phone_number: localFarmer?.phone_number || '+231-77-000-0000',
+                email: localFarmer?.email || null,
+                county: sanitized.county || localFarmer?.county || 'Nimba',
+                district: sanitized.district || localFarmer?.district || 'Central District',
+                community: sanitized.community || localFarmer?.community || 'Main Village',
+                status: 'active',
               },
               { onConflict: 'id' }
             );
@@ -226,9 +247,35 @@ export class SyncEngine {
         }
       }
 
+      // Check cooperative foreign key for farmer to prevent constraint failure
+      if (item.entity_type === 'farmer' && sanitized.cooperative_id) {
+        try {
+          const { data: coopExists } = await supabase
+            .from('cooperatives')
+            .select('id')
+            .eq('id', sanitized.cooperative_id)
+            .maybeSingle();
+          if (!coopExists) {
+            sanitized.cooperative_id = null;
+          }
+        } catch {
+          sanitized.cooperative_id = null;
+        }
+      }
+
       let { error } = await supabase.from(tableName).upsert(sanitized, {
         onConflict: 'id',
       });
+
+      // Gracefully retry without status if status column does not exist in remote schema yet
+      if (error && item.entity_type === 'farmer' && error.message.includes('status')) {
+        const withoutStatus = { ...sanitized };
+        delete withoutStatus.status;
+        const retryResult = await supabase.from(tableName).upsert(withoutStatus, {
+          onConflict: 'id',
+        });
+        error = retryResult.error;
+      }
 
       // Gracefully retry without farming_type if remote Supabase schema has not run migration yet
       if (error && item.entity_type === 'farm' && error.message.includes('farming_type')) {

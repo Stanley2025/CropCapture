@@ -364,6 +364,13 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     await localDb.saveFarmer(newFarmer, true);
 
+    // Immediately auto-sync with Supabase so the new farmer appears on the Admin Dashboard
+    if (!get().isOfflineMode) {
+      syncEngine.syncQueue().catch((e) => {
+        console.warn('Background auto-sync on registration:', e);
+      });
+    }
+
     await AsyncStorage.setItem(
       '@cropcapture_auth_session',
       JSON.stringify({
