@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   SafeAreaView,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -48,6 +49,11 @@ export default function RegisterHarvestScreen() {
   const router = useRouter();
   const { currentFarmer, refreshPendingSyncCount } = useAppStore();
 
+  const [activeTab, setActiveTab] = useState<'register' | 'log'>('register');
+  const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
+  const [logFilter, setLogFilter] = useState<'all' | 'crops' | 'livestock'>('all');
+  const [selectedLogFarmId, setSelectedLogFarmId] = useState<string>('all');
+
   const [farms, setFarms] = useState<Farm[]>([]);
   const [seasons, setSeasons] = useState<FarmSeason[]>([]);
   const [selectedFarmId, setSelectedFarmId] = useState('');
@@ -70,25 +76,35 @@ export default function RegisterHarvestScreen() {
   const [observations, setObservations] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load farms and seasons for the active farmer
+  // Load farms, seasons, and harvest records for the active farmer
   useEffect(() => {
-    Promise.all([localDb.getFarms(), localDb.getSeasons()]).then(([f, s]) => {
-      const myFarms = currentFarmer?.id
-        ? f.filter((farm) => farm.farmer_id === currentFarmer.id)
-        : f;
-      setFarms(myFarms);
-      setSeasons(s);
+    Promise.all([localDb.getFarms(), localDb.getSeasons(), localDb.getHarvests()]).then(
+      ([f, s, h]) => {
+        const myFarms = currentFarmer?.id
+          ? f.filter((farm) => farm.farmer_id === currentFarmer.id)
+          : f;
+        const myFarmIds = new Set(myFarms.map((farm) => farm.id));
+        const myHarvests = h.filter(
+          (batch) =>
+            (currentFarmer?.id && batch.farmer_id === currentFarmer.id) ||
+            myFarmIds.has(batch.farm_id)
+        );
 
-      if (myFarms.length > 0) {
-        const first = myFarms[0];
-        setSelectedFarmId(first.id);
-        if (first.farming_type === 'livestock') {
-          setUnit('heads');
-        } else {
-          setUnit('kg');
+        setFarms(myFarms);
+        setSeasons(s);
+        setHarvests(myHarvests);
+
+        if (myFarms.length > 0) {
+          const first = myFarms[0];
+          setSelectedFarmId(first.id);
+          if (first.farming_type === 'livestock') {
+            setUnit('heads');
+          } else {
+            setUnit('kg');
+          }
         }
       }
-    });
+    );
   }, [currentFarmer?.id]);
 
   const selectedFarm = farms.find((f) => f.id === selectedFarmId);
@@ -162,6 +178,48 @@ export default function RegisterHarvestScreen() {
   };
 
   const selectedSeason = farmSeasons.find((s) => s.id === selectedSeasonId);
+
+  const farmLookup = useMemo(() => {
+    const map = new Map<string, Farm>();
+    farms.forEach((f) => map.set(f.id, f));
+    return map;
+  }, [farms]);
+
+  const cropHarvestCount = useMemo(() => {
+    return harvests.filter((item) => {
+      const itemIsLivestock =
+        item.crop?.category === 'Livestock Offtake' ||
+        item.crop?.category === 'Livestock Cycle' ||
+        item.crop?.category === 'Livestock' ||
+        item.crop_id?.startsWith('livestock-') ||
+        ['heads', 'animals', 'crates / trays', 'litres', 'kg (meat)'].includes(item.unit);
+      return !itemIsLivestock;
+    }).length;
+  }, [harvests]);
+
+  const livestockHarvestCount = useMemo(() => {
+    return harvests.length - cropHarvestCount;
+  }, [harvests, cropHarvestCount]);
+
+  const totalYieldValue = useMemo(() => {
+    return harvests.reduce((acc, h) => acc + (Number(h.total_value) || 0), 0);
+  }, [harvests]);
+
+  const filteredHarvests = useMemo(() => {
+    return harvests.filter((item) => {
+      const itemIsLivestock =
+        item.crop?.category === 'Livestock Offtake' ||
+        item.crop?.category === 'Livestock Cycle' ||
+        item.crop?.category === 'Livestock' ||
+        item.crop_id?.startsWith('livestock-') ||
+        ['heads', 'animals', 'crates / trays', 'litres', 'kg (meat)'].includes(item.unit);
+
+      if (logFilter === 'crops' && itemIsLivestock) return false;
+      if (logFilter === 'livestock' && !itemIsLivestock) return false;
+      if (selectedLogFarmId !== 'all' && item.farm_id !== selectedLogFarmId) return false;
+      return true;
+    });
+  }, [harvests, logFilter, selectedLogFarmId]);
 
   const handleSubmit = async () => {
     if (!selectedFarmId) {
@@ -246,13 +304,29 @@ export default function RegisterHarvestScreen() {
       await localDb.saveHarvest(newHarvest, true);
       await refreshPendingSyncCount();
 
+      // Immediately prepend to in-memory harvests log
+      setHarvests((prev) => [newHarvest, ...prev]);
+
+      // Reset numerical inputs for clean successive entry
+      setQuantity('');
+      setTotalValue('');
+      setObservations('');
+
       Alert.alert(
         isLivestock ? 'Livestock Offtake Registered!' : 'Harvest Batch Registered!',
         `Assigned Batch Reference:\n\n${newHarvest.batch_reference}\n\nStatus: Submitted for Quality Inspection. A unique QR verification passport has been generated.`,
         [
           {
+            text: 'View in Harvest Log',
+            onPress: () => setActiveTab('log'),
+          },
+          {
             text: 'View Batch & QR',
-            onPress: () => router.replace(`/harvest/${newHarvest.id}` as any),
+            onPress: () => router.push(`/harvest/${newHarvest.id}` as any),
+          },
+          {
+            text: 'Register Another',
+            style: 'cancel',
           },
         ]
       );
@@ -266,18 +340,77 @@ export default function RegisterHarvestScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header
-        title={isLivestock ? 'Register Livestock Offtake' : 'Register Harvest'}
+        title={
+          activeTab === 'log'
+            ? 'Harvest & Offtake Log'
+            : isLivestock
+            ? 'Register Livestock Offtake'
+            : 'Register Harvest'
+        }
         subtitle={
-          isLivestock
+          activeTab === 'log'
+            ? `${harvests.length} Recorded Batch${harvests.length === 1 ? '' : 'es'}`
+            : isLivestock
             ? 'Assign batch reference & QR passport for animals/yield'
             : 'Assign unique batch reference & QR'
         }
         showBack
       />
 
+      {/* Segmented Navigation Tab Switcher */}
+      <View style={styles.tabSwitcher}>
+        <TouchableOpacity
+          style={[
+            styles.tabBtn,
+            activeTab === 'register' &&
+              (isLivestock ? styles.tabBtnActiveLivestock : styles.tabBtnActive),
+          ]}
+          onPress={() => setActiveTab('register')}
+        >
+          <Ionicons
+            name="create-outline"
+            size={16}
+            color={activeTab === 'register' ? '#FFFFFF' : Colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.tabBtnText,
+              activeTab === 'register' && styles.tabBtnTextActive,
+            ]}
+          >
+            {isLivestock ? 'Register Offtake' : 'Register Harvest'}
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.tabBtn,
+            activeTab === 'log' &&
+              (isLivestock ? styles.tabBtnActiveLivestock : styles.tabBtnActive),
+          ]}
+          onPress={() => setActiveTab('log')}
+        >
+          <Ionicons
+            name="list-outline"
+            size={16}
+            color={activeTab === 'log' ? '#FFFFFF' : Colors.textMuted}
+          />
+          <Text
+            style={[
+              styles.tabBtnText,
+              activeTab === 'log' && styles.tabBtnTextActive,
+            ]}
+          >
+            Harvest Log ({harvests.length})
+          </Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* ========================================================= */}
-        {/* SECTION 1: FARM PARCEL & ENTERPRISE AUTO-DETECTION */}
+        {activeTab === 'register' ? (
+          <>
+            {/* ========================================================= */}
+            {/* SECTION 1: FARM PARCEL & ENTERPRISE AUTO-DETECTION */}
         {/* ========================================================= */}
         <Card style={styles.formCard}>
           <Text style={styles.sectionTitle}>
@@ -728,10 +861,338 @@ export default function RegisterHarvestScreen() {
           }
         />
 
-        <View style={{ height: Spacing.xxl }} />
-      </ScrollView>
-    </SafeAreaView>
-  );
+        {/* Recent Harvest & Offtake Log Preview */}
+        {harvests.length > 0 && (
+          <View style={styles.recentSection}>
+            <View style={styles.recentHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="time-outline" size={18} color={Colors.text} />
+                <Text style={styles.recentTitle}>Recent Harvest Log</Text>
+              </View>
+              <TouchableOpacity onPress={() => setActiveTab('log')}>
+                <Text style={styles.viewAllText}>See all ({harvests.length}) →</Text>
+              </TouchableOpacity>
+            </View>
+
+            {harvests.slice(0, 3).map((item) => {
+              const itemIsLivestock =
+                item.crop?.category === 'Livestock Offtake' ||
+                item.crop?.category === 'Livestock Cycle' ||
+                item.crop?.category === 'Livestock' ||
+                item.crop_id?.startsWith('livestock-') ||
+                ['heads', 'animals', 'crates / trays', 'litres', 'kg (meat)'].includes(item.unit);
+              const isApproved = item.status === 'approved';
+              const isRejected = item.status === 'rejected';
+
+              return (
+                <Card
+                  key={item.id}
+                  style={styles.recentItemCard}
+                  onPress={() => router.push(`/harvest/${item.id}` as any)}
+                >
+                  <View style={styles.recentTopRow}>
+                    <View style={styles.recentRefWrap}>
+                      <Text style={styles.recentRefText}>{item.batch_reference}</Text>
+                      <Badge
+                        label={itemIsLivestock ? 'Livestock' : 'Crop'}
+                        variant={itemIsLivestock ? 'warning' : 'info'}
+                        size="sm"
+                      />
+                    </View>
+                    <Badge
+                      label={item.status.replace('_', ' ')}
+                      variant={isApproved ? 'success' : isRejected ? 'danger' : 'warning'}
+                      size="sm"
+                    />
+                  </View>
+
+                  <View style={styles.recentMetaRow}>
+                    <Text style={styles.recentCropName}>
+                      {itemIsLivestock ? '🐾 ' : '🌾 '}
+                      {item.crop?.name || 'Harvest'}
+                    </Text>
+                    <Text style={styles.recentQty}>
+                      {item.quantity.toLocaleString()} {item.unit}
+                    </Text>
+                  </View>
+
+                  <View style={styles.recentBottomRow}>
+                    <Text style={styles.recentDate}>{item.harvest_date}</Text>
+                    {item.total_value ? (
+                      <Text style={styles.recentValue}>
+                        ${Number(item.total_value).toFixed(2)} USD
+                      </Text>
+                    ) : null}
+                  </View>
+                </Card>
+              );
+            })}
+          </View>
+        )}
+      </>
+    ) : (
+      <View style={styles.logContainer}>
+        {/* Quick Metrics Bar */}
+        <View style={styles.statsRow}>
+          <Card style={styles.statCard}>
+            <Text style={styles.statLabel}>TOTAL BATCHES</Text>
+            <Text style={styles.statVal}>{harvests.length}</Text>
+          </Card>
+          <Card style={styles.statCard}>
+            <Text style={styles.statLabel}>CROPS / OFFTAKE</Text>
+            <Text style={styles.statVal}>
+              {cropHarvestCount} / {livestockHarvestCount}
+            </Text>
+          </Card>
+          <Card style={styles.statCard}>
+            <Text style={styles.statLabel}>TOTAL VALUE</Text>
+            <Text style={[styles.statVal, { color: '#15803D' }]}>
+              ${totalYieldValue > 0 ? totalYieldValue.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '0'}
+            </Text>
+          </Card>
+        </View>
+
+        {/* Enterprise Filter Pills */}
+        <View style={styles.logFilterSection}>
+          <Text style={styles.logFilterLabel}>FILTER ENTERPRISE</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.logFilterScroll}>
+            <TouchableOpacity
+              style={[styles.logFilterPill, logFilter === 'all' && styles.logFilterPillActive]}
+              onPress={() => setLogFilter('all')}
+            >
+              <Text style={[styles.logFilterText, logFilter === 'all' && styles.logFilterTextActive]}>
+                All Batches ({harvests.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.logFilterPill, logFilter === 'crops' && styles.logFilterPillActive]}
+              onPress={() => setLogFilter('crops')}
+            >
+              <Ionicons
+                name="leaf-outline"
+                size={14}
+                color={logFilter === 'crops' ? '#FFFFFF' : Colors.primary}
+                style={{ marginRight: 4 }}
+              />
+              <Text style={[styles.logFilterText, logFilter === 'crops' && styles.logFilterTextActive]}>
+                Crops Harvest ({cropHarvestCount})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.logFilterPill, logFilter === 'livestock' && styles.logFilterPillActiveLive]}
+              onPress={() => setLogFilter('livestock')}
+            >
+              <Ionicons
+                name="paw"
+                size={14}
+                color={logFilter === 'livestock' ? '#FFFFFF' : '#D97706'}
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={[styles.logFilterText, logFilter === 'livestock' && styles.logFilterTextActive]}
+              >
+                Livestock Offtake ({livestockHarvestCount})
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
+        {/* Filter by Farm (if multiple farms) */}
+        {farms.length > 1 && (
+          <View style={[styles.logFilterSection, { marginTop: 6 }]}>
+            <Text style={styles.logFilterLabel}>FILTER BY FARM</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.logFilterScroll}>
+              <TouchableOpacity
+                style={[
+                  styles.logFarmChip,
+                  selectedLogFarmId === 'all' && styles.logFarmChipActive,
+                ]}
+                onPress={() => setSelectedLogFarmId('all')}
+              >
+                <Text
+                  style={[
+                    styles.logFarmChipText,
+                    selectedLogFarmId === 'all' && styles.logFarmChipTextActive,
+                  ]}
+                >
+                  All Farms
+                </Text>
+              </TouchableOpacity>
+              {farms.map((f) => (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[
+                    styles.logFarmChip,
+                    selectedLogFarmId === f.id && styles.logFarmChipActive,
+                  ]}
+                  onPress={() => setSelectedLogFarmId(f.id)}
+                >
+                  <Text
+                    style={[
+                      styles.logFarmChipText,
+                      selectedLogFarmId === f.id && styles.logFarmChipTextActive,
+                    ]}
+                  >
+                    {f.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* List of Harvest & Offtake Logs */}
+        {filteredHarvests.length === 0 ? (
+          <Card style={styles.emptyCard}>
+            <Ionicons name="cube-outline" size={48} color={Colors.textMuted} />
+            <Text style={styles.emptyTitle}>No Harvest Records Found</Text>
+            <Text style={styles.emptySub}>
+              {logFilter === 'all'
+                ? "You haven't recorded any harvest or livestock offtake batches yet. Use the 'Register' tab to log your first batch."
+                : `No batches found under "${logFilter === 'crops' ? 'Crops Harvest' : 'Livestock Offtake'}".`}
+            </Text>
+            <Button
+              title="+ Register First Batch"
+              onPress={() => setActiveTab('register')}
+              size="sm"
+              style={{ marginTop: Spacing.sm }}
+            />
+          </Card>
+        ) : (
+          filteredHarvests.map((item) => {
+            const itemIsLivestock =
+              item.crop?.category === 'Livestock Offtake' ||
+              item.crop?.category === 'Livestock Cycle' ||
+              item.crop?.category === 'Livestock' ||
+              item.crop_id?.startsWith('livestock-') ||
+              ['heads', 'animals', 'crates / trays', 'litres', 'kg (meat)'].includes(item.unit);
+
+            const farmObj = farmLookup.get(item.farm_id) || item.farm;
+            const isApproved = item.status === 'approved';
+            const isRejected = item.status === 'rejected';
+
+            return (
+              <Card
+                key={item.id}
+                style={styles.logBatchCard}
+                onPress={() => router.push(`/harvest/${item.id}` as any)}
+              >
+                {/* Header: Batch Reference & Badges */}
+                <View style={styles.logCardHeader}>
+                  <View style={[styles.logRefBadge, itemIsLivestock && styles.logRefBadgeLivestock]}>
+                    <Ionicons
+                      name={itemIsLivestock ? 'paw' : 'leaf'}
+                      size={14}
+                      color={itemIsLivestock ? '#D97706' : Colors.primary}
+                    />
+                    <Text style={[styles.logRefText, itemIsLivestock && styles.logRefTextLivestock]}>
+                      {item.batch_reference}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                    <Badge
+                      label={itemIsLivestock ? 'Livestock' : 'Crop'}
+                      variant={itemIsLivestock ? 'warning' : 'info'}
+                      size="sm"
+                    />
+                    <Badge
+                      label={item.status.replace('_', ' ')}
+                      variant={isApproved ? 'success' : isRejected ? 'danger' : 'warning'}
+                      size="sm"
+                    />
+                  </View>
+                </View>
+
+                {/* Title & Farm Details */}
+                <View style={styles.logTitleBlock}>
+                  <Text style={styles.logBatchTitle}>
+                    {itemIsLivestock ? '🐾 ' : '🌾 '}
+                    {item.crop?.name || (itemIsLivestock ? 'Livestock Batch' : 'Crop Harvest')}
+                    {item.crop_variety_id && item.crop_variety_id !== 'Standard Variety'
+                      ? ` (${item.crop_variety_id})`
+                      : ''}
+                  </Text>
+                  <Text style={styles.logFarmSubtitle}>
+                    {farmObj?.name || 'Farm Parcel'}
+                    {farmObj?.county ? ` • ${farmObj.district}, ${farmObj.county}` : ''}
+                  </Text>
+                </View>
+
+                {/* 4-Item Grid */}
+                <View style={styles.logMetaGrid}>
+                  <View style={styles.logMetaItem}>
+                    <Text style={styles.logMetaLabel}>QUANTITY / YIELD</Text>
+                    <Text style={styles.logMetaValue}>
+                      {item.quantity.toLocaleString()} {item.unit}
+                    </Text>
+                  </View>
+
+                  <View style={styles.logMetaItem}>
+                    <Text style={styles.logMetaLabel}>HARVEST DATE</Text>
+                    <Text style={styles.logMetaValue}>{item.harvest_date}</Text>
+                  </View>
+
+                  <View style={styles.logMetaItem}>
+                    <Text style={styles.logMetaLabel}>EST. MARKET VALUE</Text>
+                    <Text style={[styles.logMetaValue, item.total_value ? { color: '#15803D' } : {}]}>
+                      {item.total_value
+                        ? `$${Number(item.total_value).toFixed(2)} USD`
+                        : 'Not Specified'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.logMetaItem}>
+                    <Text style={styles.logMetaLabel}>STORAGE / FACILITY</Text>
+                    <Text style={styles.logMetaValue} numberOfLines={1}>
+                      {item.storage_location ? item.storage_location.split(',')[0] : 'Farm Holding'}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Observations if present */}
+                {item.observations ? (
+                  <View style={styles.logNotesBox}>
+                    <Ionicons
+                      name="chatbox-ellipses-outline"
+                      size={13}
+                      color={Colors.textMuted}
+                      style={{ marginTop: 2, marginRight: 5 }}
+                    />
+                    <Text style={styles.logNotesText} numberOfLines={2}>
+                      {item.observations}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* Card Actions Footer */}
+                <View style={styles.logCardFooter}>
+                  <TouchableOpacity
+                    style={styles.logActionBtn}
+                    onPress={() => router.push(`/harvest/${item.id}` as any)}
+                  >
+                    <Ionicons name="qr-code-outline" size={15} color={Colors.primary} />
+                    <Text style={styles.logActionBtnText}>View QR Passport</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.logTraceabilityPill}>
+                    <Ionicons name="shield-checkmark" size={13} color="#15803D" />
+                    <Text style={styles.logTraceabilityText}>Traceable Batch</Text>
+                  </View>
+                </View>
+              </Card>
+            );
+          })
+        )}
+      </View>
+    )}
+
+    <View style={{ height: Spacing.xxl }} />
+  </ScrollView>
+</SafeAreaView>
+);
 }
 
 const styles = StyleSheet.create({
@@ -1065,5 +1526,344 @@ const styles = StyleSheet.create({
   unitTileTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+  },
+  // Tab Switcher Styles
+  tabSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: Colors.surface,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    gap: Spacing.sm,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  tabBtnActive: {
+    backgroundColor: Colors.primary,
+  },
+  tabBtnActiveLivestock: {
+    backgroundColor: '#D97706',
+  },
+  tabBtnText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.textMuted,
+  },
+  tabBtnTextActive: {
+    color: '#FFFFFF',
+  },
+  // Recent Harvest Section Styles
+  recentSection: {
+    marginTop: Spacing.lg,
+  },
+  recentHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  recentTitle: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  viewAllText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  recentItemCard: {
+    marginBottom: Spacing.xs,
+    padding: Spacing.sm,
+  },
+  recentTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  recentRefWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  recentRefText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.text,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  recentMetaRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  recentCropName: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  recentQty: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+  },
+  recentBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  recentDate: {
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  recentValue: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#15803D',
+  },
+  // Harvest Log Tab Styles
+  logContainer: {
+    paddingBottom: Spacing.md,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+    marginBottom: Spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Colors.surface,
+  },
+  statLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    marginBottom: 2,
+    letterSpacing: 0.5,
+  },
+  statVal: {
+    fontSize: Typography.sizes.md,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  logFilterSection: {
+    marginBottom: Spacing.xs,
+  },
+  logFilterLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  logFilterScroll: {
+    flexDirection: 'row',
+    marginBottom: Spacing.xs,
+  },
+  logFilterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: Radius.full,
+    marginRight: Spacing.xs,
+  },
+  logFilterPillActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  logFilterPillActiveLive: {
+    backgroundColor: '#D97706',
+    borderColor: '#B45309',
+  },
+  logFilterText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  logFilterTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  logFarmChip: {
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: Radius.md,
+    marginRight: 6,
+  },
+  logFarmChipActive: {
+    backgroundColor: '#E0E7FF',
+    borderColor: '#6366F1',
+  },
+  logFarmChipText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '600',
+  },
+  logFarmChipTextActive: {
+    color: '#4338CA',
+    fontWeight: '700',
+  },
+  emptyCard: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    backgroundColor: Colors.surface,
+    marginTop: Spacing.sm,
+  },
+  emptyTitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: Spacing.sm,
+    marginBottom: 4,
+  },
+  emptySub: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: Spacing.xs,
+  },
+  logBatchCard: {
+    marginBottom: Spacing.sm,
+    padding: Spacing.md,
+    backgroundColor: Colors.surface,
+  },
+  logCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.xs,
+  },
+  logRefBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DCFCE7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: Radius.sm,
+    gap: 4,
+  },
+  logRefBadgeLivestock: {
+    backgroundColor: '#FEF3C7',
+  },
+  logRefText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  logRefTextLivestock: {
+    color: '#92400E',
+  },
+  logTitleBlock: {
+    marginBottom: Spacing.xs,
+  },
+  logBatchTitle: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  logFarmSubtitle: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+  },
+  logMetaGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    padding: Spacing.xs,
+    marginVertical: Spacing.xs,
+    gap: Spacing.sm,
+  },
+  logMetaItem: {
+    minWidth: '45%',
+    flex: 1,
+  },
+  logMetaLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    marginBottom: 1,
+  },
+  logMetaValue: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  logNotesBox: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 8,
+    borderRadius: Radius.sm,
+    marginTop: 4,
+    marginBottom: Spacing.xs,
+  },
+  logNotesText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: Colors.textMuted,
+    flex: 1,
+    lineHeight: 16,
+  },
+  logCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: Spacing.xs,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  logActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: '#EFF6FF',
+    borderRadius: Radius.sm,
+  },
+  logActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primary,
+  },
+  logTraceabilityPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  logTraceabilityText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#15803D',
   },
 });

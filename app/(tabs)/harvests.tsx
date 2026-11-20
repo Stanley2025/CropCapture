@@ -62,6 +62,12 @@ export default function HarvestsScreen() {
   const renderItem = ({ item }: { item: HarvestBatch }) => {
     const isApproved = item.status === 'approved';
     const isRejected = item.status === 'rejected';
+    const isLivestock =
+      item.crop?.category === 'Livestock Offtake' ||
+      item.crop?.category === 'Livestock Cycle' ||
+      item.crop?.category === 'Livestock' ||
+      item.crop_id?.startsWith('livestock-') ||
+      ['heads', 'animals', 'crates / trays', 'litres', 'kg (meat)'].includes(item.unit);
 
     return (
       <Card
@@ -70,8 +76,12 @@ export default function HarvestsScreen() {
       >
         <View style={styles.topRow}>
           <View style={styles.batchInfo}>
-            <Text style={styles.batchRef}>{item.batch_reference}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={styles.batchRef}>{item.batch_reference}</Text>
+              {isLivestock && <Badge label="Livestock" variant="warning" size="sm" />}
+            </View>
             <Text style={styles.cropName}>
+              {isLivestock ? '🐾 ' : '🌾 '}
               {item.crop?.name || 'Crop'} ({item.crop_variety_id || 'Standard Variety'})
             </Text>
           </View>
@@ -89,15 +99,23 @@ export default function HarvestsScreen() {
             </Text>
           </View>
           <View style={styles.metaBlock}>
-            <Text style={styles.metaLabel}>HARVEST DATE</Text>
+            <Text style={styles.metaLabel}>{isLivestock ? 'OFFTAKE DATE' : 'HARVEST DATE'}</Text>
             <Text style={styles.metaVal}>{item.harvest_date}</Text>
           </View>
           <View style={styles.metaBlock}>
-            <Text style={styles.metaLabel}>STORAGE</Text>
+            <Text style={styles.metaLabel}>STORAGE / FACILITY</Text>
             <Text style={styles.metaVal} numberOfLines={1}>
               {item.storage_location ? item.storage_location.split(',')[0] : 'Farm Store'}
             </Text>
           </View>
+          {item.total_value ? (
+            <View style={styles.metaBlock}>
+              <Text style={styles.metaLabel}>VALUE ($ USD)</Text>
+              <Text style={[styles.metaVal, { color: '#15803D' }]}>
+                ${Number(item.total_value).toFixed(2)}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <View style={styles.cardFooter}>
