@@ -315,6 +315,63 @@ export async function createFarm(farm: Partial<Farm>): Promise<Farm | null> {
 // ============================================================================
 const CROP_SELECT_FIELDS = 'id, name, code, category, default_unit, description, variety, is_active';
 
+export const DEFAULT_CROPS: Crop[] = [
+  {
+    id: '11111111-1111-1111-1111-111111111105',
+    name: 'Coffee',
+    code: 'COFF',
+    category: 'Cash Crop',
+    default_unit: 'kg',
+    description: 'Robusta and Liberica indigenous coffee beans grown in forested belts.',
+    is_active: true,
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111104',
+    name: 'Cocoa',
+    code: 'COCO',
+    category: 'Cash Crop',
+    default_unit: 'kg',
+    description: 'Export-grade tree crop concentrated in Nimba, Lofa and Bong.',
+    is_active: true,
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111101',
+    name: 'Rice',
+    code: 'RICE',
+    category: 'Cereal / Staple',
+    default_unit: 'kg',
+    description: 'Primary staple food of Liberia, grown across lowlands and uplands.',
+    is_active: true,
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111102',
+    name: 'Cassava',
+    code: 'CASS',
+    category: 'Root / Tuber',
+    default_unit: 'kg',
+    description: 'Major food security root crop, widely processed into gari and fufu.',
+    is_active: true,
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111110',
+    name: 'Oil Palm',
+    code: 'PALM',
+    category: 'Tree Crop',
+    default_unit: 'kg',
+    description: 'Smallholder and estate oil palm cultivation.',
+    is_active: true,
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111103',
+    name: 'Maize',
+    code: 'MAIZ',
+    category: 'Cereal / Grain',
+    default_unit: 'kg',
+    description: 'Grown for fresh consumption and animal feed formulation.',
+    is_active: true,
+  },
+];
+
 export async function getCrops(): Promise<Crop[]> {
   const cacheKey = 'crops_all';
   const cached = getCached<Crop[]>(cacheKey);
@@ -324,7 +381,7 @@ export async function getCrops(): Promise<Crop[]> {
     const supabase = createClient();
     const query = supabase.from('crops').select(CROP_SELECT_FIELDS).order('name');
     const { data, error } = (await withTimeout(query, 8000)) as any;
-    if (!error && Array.isArray(data)) {
+    if (!error && Array.isArray(data) && data.length > 0) {
       setCache(cacheKey, data as Crop[]);
       return data as Crop[];
     }
@@ -332,7 +389,7 @@ export async function getCrops(): Promise<Crop[]> {
     console.warn('Failed to query crops from Supabase:', e);
   }
 
-  return [];
+  return DEFAULT_CROPS;
 }
 
 const SEASON_SELECT_FIELDS =

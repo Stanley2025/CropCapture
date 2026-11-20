@@ -235,6 +235,17 @@ export default function HomeScreen() {
 
               <TouchableOpacity
                 style={styles.actionBtn}
+                onPress={() => router.push('/season/create' as any)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.actionIconBox, { backgroundColor: '#FEF9C3' }]}>
+                  <Ionicons name="calendar" size={22} color="#CA8A04" />
+                </View>
+                <Text style={styles.actionBtnText}>New Season</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
                 onPress={() => router.push('/activity/record' as any)}
                 activeOpacity={0.7}
               >

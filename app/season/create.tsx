@@ -21,16 +21,86 @@ import { Card } from '../../src/components/Card';
 import { DatePickerField } from '../../src/components/DatePickerField';
 
 const CROPS = [
-  { id: '11111111-1111-1111-1111-111111111101', name: 'Rice', code: 'RICE', varieties: ['Suakoko 8', 'LAC 23', 'Nerica L-19'] },
-  { id: '11111111-1111-1111-1111-111111111102', name: 'Cassava', code: 'CASS', varieties: ['CARICASS 1', 'TMS 30572', 'Bassa Girl'] },
-  { id: '11111111-1111-1111-1111-111111111103', name: 'Maize', code: 'MAIZ', varieties: ['DMR-ESR-Y', 'Western Yellow'] },
-  { id: '11111111-1111-1111-1111-111111111104', name: 'Cocoa', code: 'COCO', varieties: ['Forastero Hybrid', 'Trinitario Elite'] },
-  { id: '11111111-1111-1111-1111-111111111105', name: 'Coffee', code: 'COFF', varieties: ['Liberica Indigenous', 'Robusta'] },
-  { id: '11111111-1111-1111-1111-111111111106', name: 'Pepper', code: 'PEPP', varieties: ['Scotch Bonnet', 'Habanero', 'Local Birdseye'] },
-  { id: '11111111-1111-1111-1111-111111111107', name: 'Plantain', code: 'PLAN', varieties: ['Giant False Horn', 'French Plantain'] },
-  { id: '11111111-1111-1111-1111-111111111108', name: 'Sweet Potato', code: 'SPOT', varieties: ['Orange-Fleshed (OFSP)', 'White Local'] },
-  { id: '11111111-1111-1111-1111-111111111109', name: 'Vegetables', code: 'VEG', varieties: ['Bitterball', 'Okra', 'Water Greens'] },
-  { id: '11111111-1111-1111-1111-111111111110', name: 'Oil Palm', code: 'PALM', varieties: ['Tenera Hybrid', 'Dura'] },
+  {
+    id: '11111111-1111-1111-1111-111111111105',
+    name: 'Coffee',
+    emoji: '☕',
+    code: 'COFF',
+    category: 'Cash Crop',
+    varieties: ['Liberica Indigenous', 'Robusta', 'Arabica'],
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111104',
+    name: 'Cocoa',
+    emoji: '🍫',
+    code: 'COCO',
+    category: 'Cash Crop',
+    varieties: ['Forastero Hybrid', 'Trinitario Elite'],
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111101',
+    name: 'Rice',
+    emoji: '🌾',
+    code: 'RICE',
+    category: 'Cereal / Staple',
+    varieties: ['Suakoko 8', 'LAC 23', 'Nerica L-19'],
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111102',
+    name: 'Cassava',
+    emoji: '🥔',
+    code: 'CASS',
+    category: 'Root / Tuber',
+    varieties: ['CARICASS 1', 'TMS 30572', 'Bassa Girl'],
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111110',
+    name: 'Oil Palm',
+    emoji: '🌴',
+    code: 'PALM',
+    category: 'Tree Crop',
+    varieties: ['Tenera Hybrid', 'Dura'],
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111103',
+    name: 'Maize',
+    emoji: '🌽',
+    code: 'MAIZ',
+    category: 'Cereal / Grain',
+    varieties: ['DMR-ESR-Y', 'Western Yellow'],
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111106',
+    name: 'Pepper',
+    emoji: '🌶️',
+    code: 'PEPP',
+    category: 'Vegetable / Spice',
+    varieties: ['Scotch Bonnet', 'Habanero', 'Local Birdseye'],
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111107',
+    name: 'Plantain',
+    emoji: '🍌',
+    code: 'PLAN',
+    category: 'Horticulture',
+    varieties: ['Giant False Horn', 'French Plantain'],
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111108',
+    name: 'Sweet Potato',
+    emoji: '🍠',
+    code: 'SPOT',
+    category: 'Root / Tuber',
+    varieties: ['Orange-Fleshed (OFSP)', 'White Local'],
+  },
+  {
+    id: '11111111-1111-1111-1111-111111111109',
+    name: 'Vegetables',
+    emoji: '🥬',
+    code: 'VEG',
+    category: 'Horticulture',
+    varieties: ['Bitterball', 'Okra', 'Water Greens'],
+  },
 ];
 
 export default function CreateSeasonScreen() {
@@ -61,7 +131,7 @@ export default function CreateSeasonScreen() {
   const handleCropChange = (crop: typeof CROPS[0]) => {
     setSelectedCrop(crop);
     setSelectedVariety(crop.varieties[0]);
-    setSeasonName(`2026 ${crop.name} Season`);
+    setSeasonName(`${new Date().getFullYear()} ${crop.name} (${crop.varieties[0]}) Season`);
   };
 
   const handleSubmit = async () => {
@@ -93,7 +163,7 @@ export default function CreateSeasonScreen() {
           id: selectedCrop.id,
           name: selectedCrop.name,
           code: selectedCrop.code,
-          category: 'Cereal / Cash Crop',
+          category: selectedCrop.category || 'Cash Crop',
           default_unit: 'kg',
           is_active: true,
         },
@@ -149,23 +219,42 @@ export default function CreateSeasonScreen() {
             {CROPS.map((c) => (
               <TouchableOpacity
                 key={c.id}
-                style={[styles.chip, selectedCrop.id === c.id && styles.chipActive]}
+                style={[styles.cropChip, selectedCrop.id === c.id && styles.cropChipActive]}
                 onPress={() => handleCropChange(c)}
               >
-                <Text style={[styles.chipText, selectedCrop.id === c.id && styles.chipTextActive]}>
+                <Text style={styles.cropChipEmoji}>{c.emoji}</Text>
+                <Text style={[styles.cropChipText, selectedCrop.id === c.id && styles.cropChipTextActive]}>
                   {c.name}
                 </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
 
-          <Text style={[styles.label, { marginTop: Spacing.sm }]}>Crop Variety</Text>
+          {/* Selected Crop Banner */}
+          <View style={styles.selectedCropBanner}>
+            <Text style={styles.selectedCropEmoji}>{selectedCrop.emoji}</Text>
+            <View style={{ flex: 1, marginLeft: Spacing.xs }}>
+              <Text style={styles.selectedCropTitle}>
+                {selectedCrop.name} ({selectedCrop.code})
+              </Text>
+              <Text style={styles.selectedCropCategory}>
+                Category: {selectedCrop.category} • Selected Variety: {selectedVariety}
+              </Text>
+            </View>
+          </View>
+
+          <Text style={[styles.label, { marginTop: Spacing.sm }]}>
+            Crop Variety ({selectedCrop.varieties.length})
+          </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
             {selectedCrop.varieties.map((v) => (
               <TouchableOpacity
                 key={v}
                 style={[styles.chip, selectedVariety === v && styles.chipActive]}
-                onPress={() => setSelectedVariety(v)}
+                onPress={() => {
+                  setSelectedVariety(v);
+                  setSeasonName(`${new Date().getFullYear()} ${selectedCrop.name} (${v}) Season`);
+                }}
               >
                 <Text style={[styles.chipText, selectedVariety === v && styles.chipTextActive]}>
                   {v}
@@ -180,7 +269,7 @@ export default function CreateSeasonScreen() {
               style={styles.input}
               value={seasonName}
               onChangeText={setSeasonName}
-              placeholder="e.g. 2026 Suakoko 8 Main Season"
+              placeholder="e.g. 2026 Coffee (Liberica Indigenous) Season"
             />
           </View>
         </Card>
@@ -309,5 +398,55 @@ const styles = StyleSheet.create({
   },
   chipTextActive: {
     color: '#FFFFFF',
+  },
+  cropChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: Radius.full,
+    marginRight: Spacing.xs,
+  },
+  cropChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  cropChipEmoji: {
+    fontSize: 16,
+  },
+  cropChipText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.text,
+    fontWeight: '700',
+  },
+  cropChipTextActive: {
+    color: '#FFFFFF',
+  },
+  selectedCropBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    padding: Spacing.sm,
+    borderRadius: Radius.md,
+    marginVertical: Spacing.xs + 2,
+  },
+  selectedCropEmoji: {
+    fontSize: 24,
+  },
+  selectedCropTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+  },
+  selectedCropCategory: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 1,
   },
 });
