@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserRole, Farmer, Profile, SyncStatusType, AppNotification } from '../types/database';
-import { localDb } from '../services/storage/localDatabase';
+import { localDb, generateUUID } from '../services/storage/localDatabase';
 import { syncEngine } from '../services/sync/syncEngine';
 
 export interface PersonaDetails {
@@ -130,6 +130,16 @@ interface AppState {
   refreshPendingSyncCount: () => Promise<void>;
   markNotificationRead: (id: string) => void;
   updateProfilePhoto: (photoUri: string | null) => Promise<void>;
+  registerFarmerAccount: (farmerData: {
+    farm_id_code: string;
+    full_name?: string;
+    date_of_birth?: string;
+    gender?: string;
+    address?: string;
+    pin?: string;
+    id_type?: string;
+    id_number?: string;
+  }) => Promise<Farmer>;
 }
 
 const DEMO_NOTIFICATIONS: AppNotification[] = [
@@ -306,6 +316,59 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentUserProfile: PERSONAS.farmer.profile,
       currentFarmer: PERSONAS.farmer.farmer!,
     });
+  },
+
+  registerFarmerAccount: async (farmerData) => {
+    const id = generateUUID();
+    const newFarmer: Farmer = {
+      id,
+      profile_id: null,
+      farmer_id_code: farmerData.farm_id_code,
+      full_name: farmerData.full_name?.trim() || `Farmer ${farmerData.farm_id_code}`,
+      gender: farmerData.gender || null,
+      date_of_birth: farmerData.date_of_birth || null,
+      phone_number: '+231-77-000-0000',
+      email: `farmer_${farmerData.farm_id_code}@cropcapture.app`,
+      county: 'Nimba',
+      district: farmerData.address?.trim() || 'Central District',
+      community: farmerData.address?.trim() || 'Main Village',
+      address: farmerData.address?.trim() || null,
+      cooperative_id: '33333333-3333-3333-3333-333333333301',
+      pin: farmerData.pin || null,
+      id_type: farmerData.id_type || null,
+      id_number: farmerData.id_number || null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    await localDb.saveFarmer(newFarmer, true);
+
+    await AsyncStorage.setItem(
+      '@cropcapture_auth_session',
+      JSON.stringify({
+        role: 'farmer',
+        email: newFarmer.email,
+        farmId: newFarmer.farmer_id_code,
+        loggedInAt: new Date().toISOString(),
+      })
+    );
+
+    set({
+      isAuthenticated: true,
+      currentRole: 'farmer',
+      currentUserProfile: {
+        id: newFarmer.id,
+        full_name: newFarmer.full_name,
+        role: 'farmer',
+        county: newFarmer.county,
+        district: newFarmer.district,
+        community: newFarmer.community,
+        created_at: newFarmer.created_at,
+      },
+      currentFarmer: newFarmer,
+    });
+
+    return newFarmer;
   },
 
   setRole: (role: UserRole) => {

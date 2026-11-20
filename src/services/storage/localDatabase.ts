@@ -15,7 +15,7 @@ import {
 
 export interface SyncQueueItem {
   id: string; // client uuid
-  entity_type: 'farm' | 'season' | 'activity' | 'input' | 'expense' | 'harvest' | 'inspection';
+  entity_type: 'farm' | 'season' | 'activity' | 'input' | 'expense' | 'harvest' | 'inspection' | 'farmer';
   action: 'create' | 'update' | 'delete';
   payload: any;
   status: SyncStatusType;
@@ -142,6 +142,26 @@ export class LocalDatabase {
 
   public async setLastSyncTimestamp(timestamp: string): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, timestamp);
+  }
+
+  // --- FARMERS ---
+  public async getFarmers(): Promise<Farmer[]> {
+    return this.getItems<Farmer>(STORAGE_KEYS.FARMERS);
+  }
+
+  public async saveFarmer(farmer: Farmer, queueSync = true): Promise<Farmer> {
+    const farmers = await this.getFarmers();
+    const index = farmers.findIndex((f) => f.id === farmer.id);
+    if (index >= 0) {
+      farmers[index] = { ...farmer, updated_at: new Date().toISOString() };
+    } else {
+      farmers.unshift(farmer);
+    }
+    await this.setItems(STORAGE_KEYS.FARMERS, farmers);
+    if (queueSync) {
+      await this.addToSyncQueue('farmer', index >= 0 ? 'update' : 'create', farmer);
+    }
+    return farmer;
   }
 
   // --- FARMS ---

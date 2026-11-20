@@ -163,6 +163,12 @@ export class SyncEngine {
       if (clean.inspector_id && !isValidUUID(clean.inspector_id)) {
         clean.inspector_id = null;
       }
+    } else if (entityType === 'farmer') {
+      delete clean.cooperative;
+      delete clean.pin;
+      delete clean.id_type;
+      delete clean.id_number;
+      delete clean.address;
     }
 
     return clean;
@@ -173,6 +179,7 @@ export class SyncEngine {
   ): Promise<{ success: boolean; error?: string }> {
     const tableMap: Record<string, string> = {
       farm: 'farms',
+      farmer: 'farmers',
       season: 'farm_seasons',
       activity: 'farm_activities',
       input: 'input_records',

@@ -57,8 +57,12 @@ export interface Farmer {
   county: string;
   district: string;
   community: string;
+  address?: string | null;
   cooperative_id?: string | null;
   photo_url?: string | null;
+  pin?: string | null;
+  id_type?: 'passport' | 'national_id' | string | null;
+  id_number?: string | null;
   created_at: string;
   updated_at?: string;
 }

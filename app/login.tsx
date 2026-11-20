@@ -62,13 +62,33 @@ const ROLE_TABS: RoleTab[] = [
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { login } = useAppStore();
+  const { login, registerFarmerAccount } = useAppStore();
 
+  // Mode: Sign In or Create Account
+  const [authMode, setAuthMode] = useState<'signin' | 'create_account'>('signin');
+
+  // Sign In State
   const [selectedRole, setSelectedRole] = useState<UserRole>('farmer');
   const [email, setEmail] = useState(ROLE_TABS[0].defaultEmail);
   const [password, setPassword] = useState('••••••••');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Helper: Generate full-digits Farm ID (e.g. 8 full numeric digits)
+  const generateFullDigitsFarmId = () => {
+    return Math.floor(10000000 + Math.random() * 90000000).toString();
+  };
+
+  // Create Account State (all fields optional per user instruction)
+  const [farmId, setFarmId] = useState(generateFullDigitsFarmId());
+  const [fullName, setFullName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [gender, setGender] = useState<'Male' | 'Female' | 'Other' | ''>('');
+  const [address, setAddress] = useState('');
+  const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [idType, setIdType] = useState<'Passport' | 'National ID card' | ''>('');
+  const [idNumber, setIdNumber] = useState('');
 
   const activeTab = ROLE_TABS.find((r) => r.key === selectedRole) || ROLE_TABS[0];
 
@@ -88,6 +108,39 @@ export default function LoginScreen() {
       router.replace('/(tabs)');
     } catch (e: any) {
       Alert.alert('Sign-In Error', e?.message || 'Authentication failed.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleCreateAccount = async () => {
+    setIsLoading(true);
+    try {
+      const created = await registerFarmerAccount({
+        farm_id_code: farmId,
+        full_name: fullName.trim() || undefined,
+        date_of_birth: dateOfBirth.trim() || undefined,
+        gender: gender || undefined,
+        address: address.trim() || undefined,
+        pin: pin.trim() || undefined,
+        id_type: idType || undefined,
+        id_number: idNumber.trim() || undefined,
+      });
+
+      Alert.alert(
+        'Account Created Successfully!',
+        `Your Farm ID is: ${created.farmer_id_code}\n${
+          pin ? `Your security PIN is: ${pin}\n` : ''
+        }You are now logged into CropCapture.`,
+        [
+          {
+            text: 'Enter Dashboard',
+            onPress: () => router.replace('/(tabs)'),
+          },
+        ]
+      );
+    } catch (e: any) {
+      Alert.alert('Account Creation Failed', e?.message || 'Could not register account.');
     } finally {
       setIsLoading(false);
     }
@@ -165,9 +218,13 @@ export default function LoginScreen() {
             </View>
 
             {/* Welcome Heading */}
-            <Text style={styles.welcomeHeading}>Welcome back</Text>
+            <Text style={styles.welcomeHeading}>
+              {authMode === 'signin' ? 'Welcome back' : 'Create account'}
+            </Text>
             <Text style={styles.welcomeSubheading}>
-              From field to frame. Every harvest verified.
+              {authMode === 'signin'
+                ? 'From field to frame. Every harvest verified.'
+                : 'Join CropCapture. System-generated Farm ID assigned.'}
             </Text>
           </View>
 
@@ -175,103 +232,430 @@ export default function LoginScreen() {
           {/* BOTTOM SHEET: Warm Cream Card Matching Design Mockup      */}
           {/* ========================================================= */}
           <View style={styles.bottomCard}>
-            {/* Label: I am signing in as */}
-            <Text style={styles.sectionLabel}>I am signing in as</Text>
+            {/* Mode Switcher: Sign in vs Create account */}
+            <View style={styles.tabToggleRow}>
+              <TouchableOpacity
+                style={[styles.tabToggleBtn, authMode === 'signin' && styles.tabToggleBtnActive]}
+                onPress={() => setAuthMode('signin')}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.tabToggleText,
+                    authMode === 'signin' && styles.tabToggleTextActive,
+                  ]}
+                >
+                  Sign in
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.tabToggleBtn,
+                  authMode === 'create_account' && styles.tabToggleBtnActive,
+                ]}
+                onPress={() => {
+                  if (!farmId) setFarmId(generateFullDigitsFarmId());
+                  setAuthMode('create_account');
+                }}
+                activeOpacity={0.7}
+              >
+                <Text
+                  style={[
+                    styles.tabToggleText,
+                    authMode === 'create_account' && styles.tabToggleTextActive,
+                  ]}
+                >
+                  Create account
+                </Text>
+              </TouchableOpacity>
+            </View>
 
-            {/* Role Tiles Row */}
-            <View style={styles.rolesRow}>
-              {ROLE_TABS.map((tab) => {
-                const isSelected = selectedRole === tab.key;
-                return (
+            {authMode === 'signin' ? (
+              <>
+                {/* Label: I am signing in as */}
+                <Text style={styles.sectionLabel}>I am signing in as</Text>
+
+                {/* Role Tiles Row */}
+                <View style={styles.rolesRow}>
+                  {ROLE_TABS.map((tab) => {
+                    const isSelected = selectedRole === tab.key;
+                    return (
+                      <TouchableOpacity
+                        key={tab.key}
+                        style={[
+                          styles.roleTile,
+                          isSelected ? styles.roleTileSelected : styles.roleTileUnselected,
+                        ]}
+                        onPress={() => handleSelectRole(tab)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name={tab.icon}
+                          size={24}
+                          color={isSelected ? '#1C3822' : '#2A3C2F'}
+                        />
+                        <Text
+                          style={[
+                            styles.roleTileText,
+                            isSelected
+                              ? styles.roleTileTextSelected
+                              : styles.roleTileTextUnselected,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {tab.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Input: Email address */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputFieldLabel}>Email address</Text>
+                  <View style={styles.inputFieldWrapper}>
+                    <Ionicons
+                      name="mail-outline"
+                      size={20}
+                      color="#526658"
+                      style={styles.fieldLeftIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      value={email}
+                      onChangeText={setEmail}
+                      autoCapitalize="none"
+                      keyboardType="email-address"
+                      placeholder="name@example.com"
+                      placeholderTextColor="#7F8F84"
+                    />
+                  </View>
+                </View>
+
+                {/* Input: Password */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.passwordLabelRow}>
+                    <Text style={styles.inputFieldLabel}>Password</Text>
+                    <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
+                      <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.inputFieldWrapper}>
+                    <Ionicons
+                      name="lock-closed-outline"
+                      size={20}
+                      color="#526658"
+                      style={styles.fieldLeftIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      value={password}
+                      onChangeText={setPassword}
+                      secureTextEntry={!showPassword}
+                      placeholder="Your password"
+                      placeholderTextColor="#7F8F84"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPassword(!showPassword)}
+                      style={styles.eyeToggleBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#526658"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Primary Action Button: Sign in as [Role] */}
+                <TouchableOpacity
+                  style={styles.primarySignInBtn}
+                  onPress={handleRegularLogin}
+                  disabled={isLoading}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.primarySignInText}>
+                    {isLoading ? 'Signing in...' : `Sign in as ${activeTab.name}`}
+                  </Text>
+                </TouchableOpacity>
+
+                {/* Footer Switch Prompt */}
+                <View style={styles.footerPromptRow}>
+                  <Text style={styles.footerPromptText}>Don't have an account?</Text>
                   <TouchableOpacity
-                    key={tab.key}
-                    style={[
-                      styles.roleTile,
-                      isSelected ? styles.roleTileSelected : styles.roleTileUnselected,
-                    ]}
-                    onPress={() => handleSelectRole(tab)}
+                    onPress={() => {
+                      if (!farmId) setFarmId(generateFullDigitsFarmId());
+                      setAuthMode('create_account');
+                    }}
                     activeOpacity={0.7}
                   >
-                    <Ionicons
-                      name={tab.icon}
-                      size={24}
-                      color={isSelected ? '#1C3822' : '#2A3C2F'}
-                    />
-                    <Text
-                      style={[
-                        styles.roleTileText,
-                        isSelected ? styles.roleTileTextSelected : styles.roleTileTextUnselected,
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {tab.label}
-                    </Text>
+                    <Text style={styles.footerPromptLink}>Create account</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
+                </View>
+              </>
+            ) : (
+              <>
+                {/* 1. System Generated Farm ID (Full Digits) */}
+                <View style={styles.farmIdBadgeCard}>
+                  <View style={styles.farmIdLeftCol}>
+                    <View style={styles.farmIdHeaderRow}>
+                      <Text style={styles.farmIdLabel}>FARM ID</Text>
+                      <View style={styles.autoTag}>
+                        <Text style={styles.autoTagText}>Auto-generated Full Digits</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.farmIdDigits}>{farmId}</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setFarmId(generateFullDigitsFarmId())}
+                    style={styles.regenerateBtn}
+                    activeOpacity={0.7}
+                    accessibilityLabel="Generate new Farm ID"
+                  >
+                    <Ionicons name="refresh" size={18} color="#1C3822" />
+                  </TouchableOpacity>
+                </View>
 
-            {/* Input: Email address */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.inputFieldLabel}>Email address</Text>
-              <View style={styles.inputFieldWrapper}>
-                <Ionicons name="mail-outline" size={20} color="#526658" style={styles.fieldLeftIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  value={email}
-                  onChangeText={setEmail}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  placeholder="name@example.com"
-                  placeholderTextColor="#7F8F84"
-                />
-              </View>
-            </View>
+                {/* 2. Full Name (Optional) */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.optionalLabelRow}>
+                    <Text style={styles.inputFieldLabel}>Full Name</Text>
+                    <Text style={styles.optionalTag}>Optional</Text>
+                  </View>
+                  <View style={styles.inputFieldWrapper}>
+                    <Ionicons
+                      name="person-outline"
+                      size={20}
+                      color="#526658"
+                      style={styles.fieldLeftIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      value={fullName}
+                      onChangeText={setFullName}
+                      placeholder="e.g. Emmanuel Gaye"
+                      placeholderTextColor="#7F8F84"
+                    />
+                  </View>
+                </View>
 
-            {/* Input: Password */}
-            <View style={styles.inputGroup}>
-              <View style={styles.passwordLabelRow}>
-                <Text style={styles.inputFieldLabel}>Password</Text>
-                <TouchableOpacity onPress={handleForgotPassword} activeOpacity={0.7}>
-                  <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-                </TouchableOpacity>
-              </View>
+                {/* 3. Date of Birth (Optional) */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.optionalLabelRow}>
+                    <Text style={styles.inputFieldLabel}>Date of Birth</Text>
+                    <Text style={styles.optionalTag}>Optional</Text>
+                  </View>
+                  <View style={styles.inputFieldWrapper}>
+                    <Ionicons
+                      name="calendar-outline"
+                      size={20}
+                      color="#526658"
+                      style={styles.fieldLeftIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      value={dateOfBirth}
+                      onChangeText={setDateOfBirth}
+                      placeholder="YYYY-MM-DD (e.g. 1985-04-12)"
+                      placeholderTextColor="#7F8F84"
+                    />
+                  </View>
+                </View>
 
-              <View style={styles.inputFieldWrapper}>
-                <Ionicons name="lock-closed-outline" size={20} color="#526658" style={styles.fieldLeftIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  placeholder="Your password"
-                  placeholderTextColor="#7F8F84"
-                />
+                {/* 4. Gender (Optional) */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.optionalLabelRow}>
+                    <Text style={styles.inputFieldLabel}>Gender</Text>
+                    <Text style={styles.optionalTag}>Optional</Text>
+                  </View>
+                  <View style={styles.genderRow}>
+                    {(['Male', 'Female', 'Other'] as const).map((g) => {
+                      const isSelected = gender === g;
+                      return (
+                        <TouchableOpacity
+                          key={g}
+                          style={[
+                            styles.genderChip,
+                            isSelected ? styles.genderChipSelected : styles.genderChipUnselected,
+                          ]}
+                          onPress={() => setGender(gender === g ? '' : g)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name={
+                              g === 'Male'
+                                ? 'male-outline'
+                                : g === 'Female'
+                                ? 'female-outline'
+                                : 'transgender-outline'
+                            }
+                            size={16}
+                            color={isSelected ? '#1C3822' : '#526658'}
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text
+                            style={[
+                              styles.genderChipText,
+                              isSelected
+                                ? styles.genderChipTextSelected
+                                : styles.genderChipTextUnselected,
+                            ]}
+                          >
+                            {g}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                {/* 5. Address (Optional) */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.optionalLabelRow}>
+                    <Text style={styles.inputFieldLabel}>Address</Text>
+                    <Text style={styles.optionalTag}>Optional</Text>
+                  </View>
+                  <View style={styles.inputFieldWrapper}>
+                    <Ionicons
+                      name="location-outline"
+                      size={20}
+                      color="#526658"
+                      style={styles.fieldLeftIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      value={address}
+                      onChangeText={setAddress}
+                      placeholder="e.g. Gbehley Town, Sanniquellie-Mahn, Nimba"
+                      placeholderTextColor="#7F8F84"
+                    />
+                  </View>
+                </View>
+
+                {/* 6. Security PIN (Optional) */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.optionalLabelRow}>
+                    <Text style={styles.inputFieldLabel}>Security PIN</Text>
+                    <Text style={styles.optionalTag}>Optional</Text>
+                  </View>
+                  <View style={styles.inputFieldWrapper}>
+                    <Ionicons
+                      name="keypad-outline"
+                      size={20}
+                      color="#526658"
+                      style={styles.fieldLeftIcon}
+                    />
+                    <TextInput
+                      style={styles.textInput}
+                      value={pin}
+                      onChangeText={setPin}
+                      keyboardType="numeric"
+                      maxLength={6}
+                      secureTextEntry={!showPin}
+                      placeholder="e.g. 4-6 digit numeric PIN"
+                      placeholderTextColor="#7F8F84"
+                    />
+                    <TouchableOpacity
+                      onPress={() => setShowPin(!showPin)}
+                      style={styles.eyeToggleBtn}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={showPin ? 'eye-off-outline' : 'eye-outline'}
+                        size={20}
+                        color="#526658"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* 7. ID Type: Passport, National ID card (Optional) */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.optionalLabelRow}>
+                    <Text style={styles.inputFieldLabel}>Identification Type</Text>
+                    <Text style={styles.optionalTag}>Optional</Text>
+                  </View>
+                  <View style={styles.idTypeRow}>
+                    {(['Passport', 'National ID card'] as const).map((type) => {
+                      const isSelected = idType === type;
+                      return (
+                        <TouchableOpacity
+                          key={type}
+                          style={[
+                            styles.idTypeChip,
+                            isSelected ? styles.idTypeChipSelected : styles.idTypeChipUnselected,
+                          ]}
+                          onPress={() => setIdType(idType === type ? '' : type)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name={type === 'Passport' ? 'airplane-outline' : 'card-outline'}
+                            size={16}
+                            color={isSelected ? '#1C3822' : '#526658'}
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text
+                            style={[
+                              styles.idTypeChipText,
+                              isSelected
+                                ? styles.idTypeChipTextSelected
+                                : styles.idTypeChipTextUnselected,
+                            ]}
+                          >
+                            {type}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {/* Document Number if ID Type chosen */}
+                  {idType !== '' && (
+                    <View style={[styles.inputFieldWrapper, { marginTop: 10 }]}>
+                      <Ionicons
+                        name="barcode-outline"
+                        size={20}
+                        color="#526658"
+                        style={styles.fieldLeftIcon}
+                      />
+                      <TextInput
+                        style={styles.textInput}
+                        value={idNumber}
+                        onChangeText={setIdNumber}
+                        placeholder={`Enter ${idType} Number (Optional)`}
+                        placeholderTextColor="#7F8F84"
+                      />
+                    </View>
+                  )}
+                </View>
+
+                {/* Primary Action Button: Create Account */}
                 <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  style={styles.eyeToggleBtn}
-                  activeOpacity={0.7}
+                  style={styles.primarySignInBtn}
+                  onPress={handleCreateAccount}
+                  disabled={isLoading}
+                  activeOpacity={0.8}
                 >
-                  <Ionicons
-                    name={showPassword ? 'eye-off-outline' : 'eye-outline'}
-                    size={20}
-                    color="#526658"
-                  />
+                  <Text style={styles.primarySignInText}>
+                    {isLoading ? 'Creating Account...' : 'Create Account'}
+                  </Text>
                 </TouchableOpacity>
-              </View>
-            </View>
 
-            {/* Primary Action Button: Sign in as [Role] */}
-            <TouchableOpacity
-              style={styles.primarySignInBtn}
-              onPress={handleRegularLogin}
-              disabled={isLoading}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.primarySignInText}>
-                {isLoading ? 'Signing in...' : `Sign in as ${activeTab.name}`}
-              </Text>
-            </TouchableOpacity>
+                {/* Footer Switch Prompt */}
+                <View style={styles.footerPromptRow}>
+                  <Text style={styles.footerPromptText}>Already have an account?</Text>
+                  <TouchableOpacity
+                    onPress={() => setAuthMode('signin')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.footerPromptLink}>Sign in</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -472,5 +856,197 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#1C2E20',
     letterSpacing: -0.2,
+  },
+
+  /* Mode Switcher Tabs */
+  tabToggleRow: {
+    flexDirection: 'row',
+    backgroundColor: '#EAEFE6',
+    borderRadius: 14,
+    padding: 4,
+    marginBottom: 20,
+  },
+  tabToggleBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    alignItems: 'center',
+    borderRadius: 10,
+  },
+  tabToggleBtnActive: {
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  tabToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#556658',
+  },
+  tabToggleTextActive: {
+    color: '#142E1B',
+    fontWeight: '700',
+  },
+
+  /* Farm ID Badge Card */
+  farmIdBadgeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#EBF4E5',
+    borderWidth: 1.5,
+    borderColor: '#BDDDAB',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 18,
+  },
+  farmIdLeftCol: {
+    flex: 1,
+  },
+  farmIdHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  farmIdLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#2A4A2F',
+    letterSpacing: 0.5,
+  },
+  autoTag: {
+    backgroundColor: '#D1E8C5',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  autoTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#1E4023',
+  },
+  farmIdDigits: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: '#133319',
+    letterSpacing: 2,
+  },
+  regenerateBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#C6DEB7',
+  },
+
+  /* Labels with Optional tag */
+  optionalLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  optionalTag: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#7A8C7F',
+    backgroundColor: '#E8EDE5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+
+  /* Gender & ID Chips */
+  genderRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  genderChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  genderChipSelected: {
+    backgroundColor: '#E5F2DC',
+    borderColor: '#1C3822',
+  },
+  genderChipUnselected: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#DDE2D9',
+  },
+  genderChipText: {
+    fontSize: 13,
+  },
+  genderChipTextSelected: {
+    fontWeight: '700',
+    color: '#1C3822',
+  },
+  genderChipTextUnselected: {
+    fontWeight: '500',
+    color: '#4B5C4F',
+  },
+
+  idTypeRow: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  idTypeChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  idTypeChipSelected: {
+    backgroundColor: '#E5F2DC',
+    borderColor: '#1C3822',
+  },
+  idTypeChipUnselected: {
+    backgroundColor: '#FFFFFF',
+    borderColor: '#DDE2D9',
+  },
+  idTypeChipText: {
+    fontSize: 13,
+  },
+  idTypeChipTextSelected: {
+    fontWeight: '700',
+    color: '#1C3822',
+  },
+  idTypeChipTextUnselected: {
+    fontWeight: '500',
+    color: '#4B5C4F',
+  },
+
+  /* Footer Switch Prompt */
+  footerPromptRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  footerPromptText: {
+    fontSize: 13,
+    color: '#5E6E61',
+    fontWeight: '500',
+  },
+  footerPromptLink: {
+    fontSize: 13,
+    color: '#165B27',
+    fontWeight: '700',
   },
 });
