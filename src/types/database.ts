@@ -119,6 +119,7 @@ export interface Farm {
   soil_type?: string | null;
   photo_url?: string | null;
   description?: string | null;
+  registration_date?: string | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -227,6 +228,8 @@ export interface HarvestBatch {
   harvest_date: string;
   quantity: number;
   unit: string;
+  total_value?: number | null;
+  unit_price?: number | null;
   storage_location?: string | null;
   photo_url?: string | null;
   observations?: string | null;

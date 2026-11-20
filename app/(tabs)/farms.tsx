@@ -64,6 +64,12 @@ export default function FarmsListScreen() {
               {item.community}, {item.district}, {item.county}
             </Text>
           </View>
+          <View style={styles.registrationRow}>
+            <Ionicons name="calendar-outline" size={13} color={Colors.textMuted} />
+            <Text style={styles.registrationText}>
+              Reg: {item.registration_date || item.created_at?.split('T')[0] || '2026'} (Year {(item.registration_date || item.created_at || '2026').split('-')[0]})
+            </Text>
+          </View>
         </View>
         <Badge
           label={`${item.size} ${item.size_unit}`}
@@ -279,6 +285,17 @@ const styles = StyleSheet.create({
   locationText: {
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
+  },
+  registrationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  registrationText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    fontWeight: '600',
   },
   description: {
     fontSize: Typography.sizes.xs,

@@ -212,8 +212,21 @@ export default function ReportsScreen() {
 
   const grandTotalCost = totalActivityCost + totalInputCost + totalDirectExpense;
 
-  // Estimated gross commodity revenue at average Liberian farm gate value ($0.45/kg)
-  const estimatedRevenue = Math.round(totalHarvestKg * 0.45);
+  // Real gross revenue: prioritizes recorded harvest total_value ($ USD),
+  // falling back to commodity rates ($50/head for livestock or $0.45/kg for crops)
+  const estimatedRevenue = useMemo(() => {
+    return filteredHarvests.reduce((acc, h) => {
+      if (h.total_value && Number(h.total_value) > 0) {
+        return acc + Number(h.total_value);
+      }
+      const isLivestock =
+        (h as any).crop?.category === 'Livestock Offtake' ||
+        (h.unit || '').toLowerCase().includes('head') ||
+        (h.unit || '').toLowerCase().includes('animal');
+      const rate = isLivestock ? 50 : 0.45;
+      return acc + (Number(h.quantity) || 0) * rate;
+    }, 0);
+  }, [filteredHarvests]);
   const netReturn = estimatedRevenue - grandTotalCost;
 
   // Average yield productivity per acre

@@ -42,6 +42,7 @@ export default function RegisterHarvestScreen() {
 
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('kg');
+  const [totalValue, setTotalValue] = useState('');
   const [harvestDate, setHarvestDate] = useState(new Date().toISOString().split('T')[0]);
   const [storageLocation, setStorageLocation] = useState(
     'Central Cooperative Warehouse, Sanniquellie'
@@ -174,6 +175,11 @@ export default function RegisterHarvestScreen() {
         harvest_date: harvestDate,
         quantity: parseFloat(quantity),
         unit,
+        total_value: totalValue.trim() && !isNaN(Number(totalValue)) ? parseFloat(totalValue) : null,
+        unit_price:
+          totalValue.trim() && !isNaN(Number(totalValue)) && parseFloat(quantity) > 0
+            ? parseFloat(totalValue) / parseFloat(quantity)
+            : null,
         storage_location: storageLocation.trim(),
         photo_url: isLivestock
           ? 'https://images.unsplash.com/photo-1570042225831-d98fa7577f1e?auto=format&fit=crop&w=600&q=80'
@@ -484,6 +490,25 @@ export default function RegisterHarvestScreen() {
                   : 'Date this batch was reaped from the field'
               }
             />
+          </View>
+
+          {/* Gross Market / Sale Value for Real Farm Profit Tracking */}
+          <View style={[styles.inputGroup, { marginTop: Spacing.md }]}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <Text style={styles.label}>Estimated / Market Sale Value ($ USD)</Text>
+              <Badge label="Revenue & Profit" variant="success" size="sm" />
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder="e.g. 600"
+              placeholderTextColor={Colors.textMuted}
+              keyboardType="numeric"
+              value={totalValue}
+              onChangeText={setTotalValue}
+            />
+            <Text style={styles.helperText}>
+              Gross value/revenue from this harvest or offtake (used to calculate real farm profit & loss)
+            </Text>
           </View>
         </Card>
 
@@ -803,5 +828,11 @@ const styles = StyleSheet.create({
     color: Colors.primaryDark,
     flex: 1,
     lineHeight: 16,
+  },
+  helperText: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 4,
+    lineHeight: 15,
   },
 });

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/theme';
 import { localDb } from '../../src/services/storage/localDatabase';
-import { Farm, FarmSeason, FarmActivity, HarvestBatch } from '../../src/types/database';
+import { Farm, FarmSeason, FarmActivity, HarvestBatch, ExpenseRecord, InputRecord } from '../../src/types/database';
 import { Header } from '../../src/components/Header';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
@@ -27,6 +27,51 @@ export default function FarmDetailsScreen() {
   const [seasons, setSeasons] = useState<FarmSeason[]>([]);
   const [activities, setActivities] = useState<FarmActivity[]>([]);
   const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
+  const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [inputs, setInputs] = useState<InputRecord[]>([]);
+
+  // Calculate Real Farm Financial Profit & Loss (P&L)
+  const financialSummary = useMemo(() => {
+    // 1. Gross Harvest Revenue ($ USD)
+    const harvestRevenue = harvests.reduce((acc, h) => {
+      if (h.total_value && Number(h.total_value) > 0) {
+        return acc + Number(h.total_value);
+      }
+      const isLivestock =
+        (h as any).animal_type ||
+        (h.unit || '').toLowerCase().includes('head') ||
+        (h.unit || '').toLowerCase().includes('animal');
+      const rate = isLivestock ? 50 : 0.45;
+      return acc + (Number(h.quantity) || 0) * rate;
+    }, 0);
+
+    // 2. Direct Inputs Cost ($ USD)
+    const totalInputsCost = inputs.reduce((acc, i) => acc + (Number(i.cost) || 0), 0);
+
+    // 3. Labor & Field Activities Cost ($ USD)
+    const totalActivitiesCost = activities.reduce((acc, a) => acc + (Number(a.cost) || 0), 0);
+
+    // 4. Direct Farm Operating Expenses ($ USD)
+    const totalDirectExpenses = expenses.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+
+    // Total Farm Expenses
+    const totalExpenses = totalInputsCost + totalActivitiesCost + totalDirectExpenses;
+
+    // Real Net Profit ($ USD)
+    const netProfit = harvestRevenue - totalExpenses;
+    const profitMargin = harvestRevenue > 0 ? (netProfit / harvestRevenue) * 100 : 0;
+
+    return {
+      harvestRevenue,
+      totalInputsCost,
+      totalActivitiesCost,
+      totalDirectExpenses,
+      totalExpenses,
+      netProfit,
+      profitMargin,
+      isProfitable: netProfit >= 0,
+    };
+  }, [harvests, inputs, activities, expenses]);
 
   const loadFarmData = useCallback(async () => {
     if (!id) return;
@@ -35,15 +80,20 @@ export default function FarmDetailsScreen() {
       const current = allFarms.find((f) => f.id === id);
       setFarm(current || null);
 
-      const [allSeasons, allActivities, allHarvests] = await Promise.all([
-        localDb.getSeasons(),
-        localDb.getActivities(),
-        localDb.getHarvests(),
-      ]);
+      const [allSeasons, allActivities, allHarvests, allExpenses, allInputs] =
+        await Promise.all([
+          localDb.getSeasons(),
+          localDb.getActivities(),
+          localDb.getHarvests(),
+          localDb.getExpenses(),
+          localDb.getInputs(),
+        ]);
 
       setSeasons(allSeasons.filter((s) => s.farm_id === id));
       setActivities(allActivities.filter((a) => a.farm_id === id));
       setHarvests(allHarvests.filter((h) => h.farm_id === id));
+      setExpenses(allExpenses.filter((e) => e.farm_id === id));
+      setInputs(allInputs.filter((i) => i.farm_id === id));
     } catch (e) {
       console.error('Failed to load farm details:', e);
     }
@@ -105,6 +155,28 @@ export default function FarmDetailsScreen() {
             </View>
           </View>
 
+          {/* Farm Registration Date & Year */}
+          <View style={styles.registrationBanner}>
+            <View style={styles.registrationLeft}>
+              <Ionicons name="calendar-outline" size={18} color={Colors.primary} />
+              <View style={{ marginLeft: Spacing.sm }}>
+                <Text style={styles.registrationTitle}>Registration & Establishment Date</Text>
+                <Text style={styles.registrationDateText}>
+                  {farm.registration_date
+                    ? `${farm.registration_date} (Year: ${farm.registration_date.split('-')[0]})`
+                    : farm.created_at
+                    ? `${farm.created_at.split('T')[0]} (Year: ${farm.created_at.split('-')[0]})`
+                    : '2026 Season Registry'}
+                </Text>
+              </View>
+            </View>
+            <Badge
+              label={`Year ${(farm.registration_date || farm.created_at || '2026').split('-')[0]}`}
+              variant="default"
+              size="sm"
+            />
+          </View>
+
           {/* GPS Coordinates & Interactive Map Representation */}
           <View style={styles.gpsBanner}>
             <View style={styles.gpsLeft}>
@@ -151,6 +223,102 @@ export default function FarmDetailsScreen() {
             style={{ flex: 1, marginLeft: Spacing.xs }}
           />
         </View>
+
+        {/* Real Farm Financial Profit & Loss (P&L) Card */}
+        <Card style={styles.financialCard}>
+          <View style={styles.financialHeader}>
+            <View style={styles.financialTitleRow}>
+              <View
+                style={[
+                  styles.financialIconWrap,
+                  financialSummary.isProfitable
+                    ? styles.financialIconWrapProfitable
+                    : styles.financialIconWrapLoss,
+                ]}
+              >
+                <Ionicons
+                  name={financialSummary.isProfitable ? 'trending-up' : 'trending-down'}
+                  size={20}
+                  color={financialSummary.isProfitable ? '#15803D' : '#DC2626'}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.financialTitle}>Farm Financial Profit & Loss (P&L)</Text>
+                <Text style={styles.financialSubtitle}>
+                  Real harvest revenue minus total farm operating expenses
+                </Text>
+              </View>
+            </View>
+            <Badge
+              label={
+                financialSummary.isProfitable
+                  ? `Profitable (+${financialSummary.profitMargin.toFixed(0)}%)`
+                  : `Net Loss (${financialSummary.profitMargin.toFixed(0)}%)`
+              }
+              variant={financialSummary.isProfitable ? 'success' : 'danger'}
+            />
+          </View>
+
+          {/* Revenue, Cost & Net Profit Highlight */}
+          <View style={styles.pnlHighlightContainer}>
+            <View style={styles.pnlColumn}>
+              <Text style={styles.pnlLabel}>TOTAL REVENUE</Text>
+              <Text style={styles.pnlRevenue}>
+                ${financialSummary.harvestRevenue.toLocaleString()} USD
+              </Text>
+              <Text style={styles.pnlSub}>from {harvests.length} harvest(s)</Text>
+            </View>
+            <View style={styles.pnlDivider} />
+            <View style={styles.pnlColumn}>
+              <Text style={styles.pnlLabel}>TOTAL EXPENSES</Text>
+              <Text style={styles.pnlExpense}>
+                -${financialSummary.totalExpenses.toLocaleString()} USD
+              </Text>
+              <Text style={styles.pnlSub}>inputs, labor & ops</Text>
+            </View>
+            <View style={styles.pnlDivider} />
+            <View style={styles.pnlColumn}>
+              <Text style={styles.pnlLabel}>NET PROFIT</Text>
+              <Text
+                style={[
+                  styles.pnlProfit,
+                  financialSummary.isProfitable ? styles.pnlProfitPositive : styles.pnlProfitNegative,
+                ]}
+              >
+                {financialSummary.netProfit >= 0 ? '+' : ''}
+                ${financialSummary.netProfit.toLocaleString()} USD
+              </Text>
+              <Text style={styles.pnlSub}>
+                {financialSummary.isProfitable ? 'Net Gain' : 'Net Deficit'}
+              </Text>
+            </View>
+          </View>
+
+          {/* Expense Breakdown */}
+          <View style={styles.pnlBreakdownWrap}>
+            <Text style={styles.pnlBreakdownTitle}>EXPENSE BREAKDOWN:</Text>
+            <View style={styles.pnlChipsRow}>
+              <View style={styles.pnlChip}>
+                <Ionicons name="basket-outline" size={13} color={Colors.primary} />
+                <Text style={styles.pnlChipText}>
+                  Inputs: ${financialSummary.totalInputsCost.toLocaleString()}
+                </Text>
+              </View>
+              <View style={styles.pnlChip}>
+                <Ionicons name="construct-outline" size={13} color="#D97706" />
+                <Text style={styles.pnlChipText}>
+                  Labor/Activities: ${financialSummary.totalActivitiesCost.toLocaleString()}
+                </Text>
+              </View>
+              <View style={styles.pnlChip}>
+                <Ionicons name="receipt-outline" size={13} color="#6366F1" />
+                <Text style={styles.pnlChipText}>
+                  Operating: ${financialSummary.totalDirectExpenses.toLocaleString()}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Card>
 
         {/* Crop Seasons on this Farm */}
         <View style={styles.sectionHeaderRow}>
@@ -470,5 +638,166 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
     marginTop: 2,
+  },
+  // Registration Banner
+  registrationBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.sm,
+  },
+  registrationLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  registrationTitle: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+  },
+  registrationDateText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.text,
+    marginTop: 1,
+  },
+  // Financial P&L Card
+  financialCard: {
+    marginBottom: Spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+  },
+  financialHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: Spacing.md,
+  },
+  financialTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: Spacing.xs,
+  },
+  financialIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  financialIconWrapProfitable: {
+    backgroundColor: '#DCFCE7',
+  },
+  financialIconWrapLoss: {
+    backgroundColor: '#FEE2E2',
+  },
+  financialTitle: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  financialSubtitle: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  pnlHighlightContainer: {
+    flexDirection: 'row',
+    backgroundColor: '#F8FAFC',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.xs,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  pnlColumn: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  pnlDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#CBD5E1',
+  },
+  pnlLabel: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  pnlRevenue: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '800',
+    color: '#15803D',
+    marginTop: 2,
+  },
+  pnlExpense: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '800',
+    color: '#DC2626',
+    marginTop: 2,
+  },
+  pnlProfit: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  pnlProfitPositive: {
+    color: '#15803D',
+  },
+  pnlProfitNegative: {
+    color: '#DC2626',
+  },
+  pnlSub: {
+    fontSize: 9,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  pnlBreakdownWrap: {
+    marginTop: Spacing.sm,
+    paddingTop: Spacing.xs,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  pnlBreakdownTitle: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: Colors.textMuted,
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  pnlChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+  },
+  pnlChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: Radius.full,
+  },
+  pnlChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.text,
   },
 });

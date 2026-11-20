@@ -24,6 +24,7 @@ import { Header } from '../../src/components/Header';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
+import { DatePickerField } from '../../src/components/DatePickerField';
 import {
   COUNTIES,
   DISTRICTS,
@@ -127,6 +128,9 @@ export default function RegisterFarmScreen() {
   const { currentFarmer, refreshPendingSyncCount } = useAppStore();
 
   const [name, setName] = useState('');
+  const [registrationDate, setRegistrationDate] = useState(
+    new Date().toISOString().split('T')[0]
+  );
   const [farmingType, setFarmingType] = useState<'crops' | 'livestock' | 'both'>('crops');
 
   // Livestock Specific State (Multi-selection enabled)
@@ -393,8 +397,11 @@ export default function RegisterFarmScreen() {
             : farmingType === 'both'
             ? `Integrated farm: Cultivating ${selectedCrops.join(', ') || 'crops'} and rearing ${selectedAnimals.join(' & ')} (${headCount || '0'} head).`
             : `Crops parcel cultivating ${selectedCrops.join(', ') || 'crops'}.`),
+        registration_date: registrationDate,
         is_active: true,
-        created_at: new Date().toISOString(),
+        created_at: registrationDate
+          ? `${registrationDate}T12:00:00.000Z`
+          : new Date().toISOString(),
         updated_at: new Date().toISOString(),
       };
 
@@ -457,6 +464,16 @@ export default function RegisterFarmScreen() {
               placeholderTextColor={Colors.textMuted}
               value={name}
               onChangeText={setName}
+            />
+          </View>
+
+          {/* Farm Registration Date & Year */}
+          <View style={{ marginBottom: Spacing.sm }}>
+            <DatePickerField
+              label="Farm Registration Date & Year *"
+              value={registrationDate}
+              onChange={setRegistrationDate}
+              helperText="Date and year this farm was established / registered with the registry"
             />
           </View>
 
@@ -1825,10 +1842,12 @@ const styles = StyleSheet.create({
   // Animal Type Selector
   animalSelectorContainer: {
     marginTop: 6,
+    marginBottom: Spacing.sm,
   },
   animalRow: {
     flexDirection: 'row',
     gap: Spacing.xs,
+    marginBottom: Spacing.xs,
   },
   animalCard: {
     flex: 1,
@@ -1841,7 +1860,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    minHeight: 96,
+    minHeight: 92,
   },
   animalCardActive: {
     backgroundColor: '#F0FDF4',
