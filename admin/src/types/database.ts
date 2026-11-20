@@ -92,6 +92,7 @@ export interface Farm {
   community: string;
   size: number;
   size_unit?: 'acres' | 'hectares';
+  farming_type?: 'crops' | 'livestock' | 'both';
   latitude?: number | null;
   longitude?: number | null;
   gps_lat?: number;

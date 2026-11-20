@@ -84,6 +84,14 @@ export default function FarmDetailsScreen() {
 
           <View style={styles.metricRow}>
             <View style={styles.metricItem}>
+              <Text style={styles.metricLabel}>ENTERPRISE</Text>
+              <Text style={[styles.metricValue, { textTransform: 'capitalize' }]}>
+                {farm.farming_type === 'both'
+                  ? 'Crops & Livestock'
+                  : farm.farming_type || 'Crops'}
+              </Text>
+            </View>
+            <View style={styles.metricItem}>
               <Text style={styles.metricLabel}>TENURE</Text>
               <Text style={styles.metricValue}>{farm.ownership_type || 'Customary'}</Text>
             </View>

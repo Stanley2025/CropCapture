@@ -62,6 +62,7 @@ export default function RegisterFarmScreen() {
   const { currentFarmer, refreshPendingSyncCount } = useAppStore();
 
   const [name, setName] = useState('');
+  const [farmingType, setFarmingType] = useState<'crops' | 'livestock' | 'both'>('crops');
   const [county, setCounty] = useState('Nimba');
   const [district, setDistrict] = useState('');
   const [community, setCommunity] = useState('');
@@ -142,6 +143,7 @@ export default function RegisterFarmScreen() {
         id: generateUUID(),
         farmer_id: currentFarmer.id,
         name: name.trim(),
+        farming_type: farmingType,
         county,
         district: district.trim() || `${county} Central District`,
         community: community.trim(),
@@ -153,7 +155,7 @@ export default function RegisterFarmScreen() {
         irrigation,
         soil_type: soilType,
         photo_url: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=600&q=80',
-        description: description.trim() || 'Agricultural farmland parcel.',
+        description: description.trim() || `${farmingType === 'crops' ? 'Crops' : farmingType === 'livestock' ? 'Livestock' : 'Mixed crop & livestock'} farm parcel.`,
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -197,6 +199,144 @@ export default function RegisterFarmScreen() {
               value={name}
               onChangeText={setName}
             />
+          </View>
+
+          {/* Farm Category / Enterprise Selection */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Farm Enterprise / Category *</Text>
+            <Text style={styles.helperText}>
+              Select whether this farm produces crops, raises livestock, or both
+            </Text>
+            <View style={styles.enterpriseContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.enterpriseCard,
+                  farmingType === 'crops' && styles.enterpriseCardActive,
+                ]}
+                onPress={() => setFarmingType('crops')}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.enterpriseIconWrap,
+                    farmingType === 'crops' && styles.enterpriseIconWrapActive,
+                  ]}
+                >
+                  <Ionicons
+                    name="leaf"
+                    size={20}
+                    color={farmingType === 'crops' ? '#FFFFFF' : Colors.primary}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.enterpriseTitle,
+                    farmingType === 'crops' && styles.enterpriseTitleActive,
+                  ]}
+                >
+                  Crops
+                </Text>
+                <Text
+                  style={[
+                    styles.enterpriseDesc,
+                    farmingType === 'crops' && styles.enterpriseDescActive,
+                  ]}
+                >
+                  Rice, cassava, vegetables & trees
+                </Text>
+                {farmingType === 'crops' && (
+                  <View style={styles.enterpriseCheckBadge}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.enterpriseCard,
+                  farmingType === 'livestock' && styles.enterpriseCardActive,
+                ]}
+                onPress={() => setFarmingType('livestock')}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.enterpriseIconWrap,
+                    farmingType === 'livestock' && styles.enterpriseIconWrapActive,
+                  ]}
+                >
+                  <Ionicons
+                    name="paw"
+                    size={20}
+                    color={farmingType === 'livestock' ? '#FFFFFF' : '#D97706'}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.enterpriseTitle,
+                    farmingType === 'livestock' && styles.enterpriseTitleActive,
+                  ]}
+                >
+                  Livestock
+                </Text>
+                <Text
+                  style={[
+                    styles.enterpriseDesc,
+                    farmingType === 'livestock' && styles.enterpriseDescActive,
+                  ]}
+                >
+                  Poultry, cattle, goats, pigs & fishery
+                </Text>
+                {farmingType === 'livestock' && (
+                  <View style={styles.enterpriseCheckBadge}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.enterpriseCard,
+                  farmingType === 'both' && styles.enterpriseCardActive,
+                ]}
+                onPress={() => setFarmingType('both')}
+                activeOpacity={0.7}
+              >
+                <View
+                  style={[
+                    styles.enterpriseIconWrap,
+                    farmingType === 'both' && styles.enterpriseIconWrapActive,
+                  ]}
+                >
+                  <Ionicons
+                    name="grid"
+                    size={20}
+                    color={farmingType === 'both' ? '#FFFFFF' : '#059669'}
+                  />
+                </View>
+                <Text
+                  style={[
+                    styles.enterpriseTitle,
+                    farmingType === 'both' && styles.enterpriseTitleActive,
+                  ]}
+                >
+                  Both
+                </Text>
+                <Text
+                  style={[
+                    styles.enterpriseDesc,
+                    farmingType === 'both' && styles.enterpriseDescActive,
+                  ]}
+                >
+                  Integrated crop and animal farming
+                </Text>
+                {farmingType === 'both' && (
+                  <View style={styles.enterpriseCheckBadge}>
+                    <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
@@ -529,6 +669,60 @@ const styles = StyleSheet.create({
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
     marginTop: 2,
+  },
+  helperText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    marginBottom: Spacing.sm,
+  },
+  enterpriseContainer: {
+    gap: Spacing.sm,
+  },
+  enterpriseCard: {
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.lg,
+    padding: Spacing.md,
+    position: 'relative',
+  },
+  enterpriseCardActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: Colors.primary,
+  },
+  enterpriseIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.md,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: Spacing.xs,
+  },
+  enterpriseIconWrapActive: {
+    backgroundColor: Colors.primary,
+  },
+  enterpriseTitle: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  enterpriseTitleActive: {
+    color: Colors.primaryDark,
+  },
+  enterpriseDesc: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  enterpriseDescActive: {
+    color: Colors.text,
+  },
+  enterpriseCheckBadge: {
+    position: 'absolute',
+    top: Spacing.sm,
+    right: Spacing.sm,
   },
   buttonContainer: {
     marginTop: Spacing.sm,

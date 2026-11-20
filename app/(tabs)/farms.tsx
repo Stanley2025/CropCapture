@@ -23,18 +23,22 @@ import { useAppStore } from '../../src/store/useAppStore';
 
 export default function FarmsListScreen() {
   const router = useRouter();
-  const { currentRole } = useAppStore();
+  const { currentRole, currentFarmer } = useAppStore();
   const [farms, setFarms] = useState<Farm[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadFarms = useCallback(async () => {
     try {
       const data = await localDb.getFarms();
-      setFarms(data);
+      const filtered =
+        currentRole === 'farmer' && currentFarmer?.id
+          ? data.filter((f) => f.farmer_id === currentFarmer.id)
+          : data;
+      setFarms(filtered);
     } catch (e) {
       console.error('Error loading farms:', e);
     }
-  }, []);
+  }, [currentRole, currentFarmer?.id]);
 
   useEffect(() => {
     loadFarms();
@@ -73,6 +77,56 @@ export default function FarmsListScreen() {
       </Text>
 
       <View style={styles.featuresRow}>
+        {item.farming_type && (
+          <View
+            style={[
+              styles.featurePill,
+              {
+                backgroundColor:
+                  item.farming_type === 'crops'
+                    ? '#DCFCE7'
+                    : item.farming_type === 'livestock'
+                    ? '#FEF3C7'
+                    : '#E0E7FF',
+              },
+            ]}
+          >
+            <Ionicons
+              name={
+                item.farming_type === 'crops'
+                  ? 'leaf'
+                  : item.farming_type === 'livestock'
+                  ? 'paw'
+                  : 'grid'
+              }
+              size={13}
+              color={
+                item.farming_type === 'crops'
+                  ? '#15803D'
+                  : item.farming_type === 'livestock'
+                  ? '#B45309'
+                  : '#4338CA'
+              }
+            />
+            <Text
+              style={[
+                styles.featureText,
+                {
+                  color:
+                    item.farming_type === 'crops'
+                      ? '#15803D'
+                      : item.farming_type === 'livestock'
+                      ? '#B45309'
+                      : '#4338CA',
+                  fontWeight: '700',
+                  textTransform: 'capitalize',
+                },
+              ]}
+            >
+              {item.farming_type === 'both' ? 'Crops & Livestock' : item.farming_type}
+            </Text>
+          </View>
+        )}
         <View style={styles.featurePill}>
           <Ionicons
             name={item.irrigation ? 'water' : 'water-outline'}
