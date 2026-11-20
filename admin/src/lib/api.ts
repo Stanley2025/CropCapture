@@ -750,6 +750,35 @@ export async function getInputs(limit?: number): Promise<InputRecord[]> {
   return [];
 }
 
+const EXPENSE_SELECT_FIELDS =
+  'id, farm_id, season_id, category, amount, currency, expense_date, description, created_at, farm:farms(id, name)';
+
+export async function getExpenses(limit?: number): Promise<ExpenseRecord[]> {
+  const cacheKey = `expenses_${limit || 'all'}`;
+  const cached = getCached<ExpenseRecord[]>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const supabase = createClient();
+    let query = supabase
+      .from('expenses')
+      .select(EXPENSE_SELECT_FIELDS)
+      .order('expense_date', { ascending: false });
+
+    if (limit) query = query.limit(limit);
+
+    const { data, error } = (await withTimeout(query, 8000)) as any;
+    if (!error && Array.isArray(data)) {
+      setCache(cacheKey, data as ExpenseRecord[]);
+      return data as ExpenseRecord[];
+    }
+  } catch (e) {
+    console.warn('Failed to query expenses from Supabase:', e);
+  }
+
+  return [];
+}
+
 const AUDIT_SELECT_FIELDS = 'id, user_id, action, entity_type, entity_id, details, ip_address, created_at';
 
 export async function getAuditLogs(limit?: number): Promise<AuditLog[]> {

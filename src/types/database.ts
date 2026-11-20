@@ -198,6 +198,8 @@ export interface InputRecord {
   currency: 'USD' | 'LRD';
   notes?: string | null;
   created_at: string;
+  farm?: Farm;
+  season?: FarmSeason;
 }
 
 export interface ExpenseRecord {
@@ -210,6 +212,8 @@ export interface ExpenseRecord {
   expense_date: string;
   description?: string | null;
   created_at: string;
+  farm?: Farm;
+  season?: FarmSeason;
 }
 
 export interface HarvestBatch {
