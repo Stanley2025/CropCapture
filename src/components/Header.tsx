@@ -22,9 +22,13 @@ export const Header: React.FC<HeaderProps> = ({
   const { currentRole, isOfflineMode, syncStatus, pendingSyncCount, toggleOfflineMode } =
     useAppStore();
 
+  const isFarmer = currentRole === 'farmer';
+
   const getSyncLabel = () => {
     if (isOfflineMode) return 'Offline';
     if (syncStatus === 'synchronizing') return 'Syncing...';
+    // For farmers, remove queue indication completely
+    if (isFarmer) return 'Online';
     if (pendingSyncCount > 0) return `${pendingSyncCount} Queue`;
     return 'Online';
   };
@@ -32,6 +36,7 @@ export const Header: React.FC<HeaderProps> = ({
   const getSyncColor = () => {
     if (isOfflineMode) return Colors.warning;
     if (syncStatus === 'synchronizing') return Colors.info;
+    if (isFarmer) return Colors.accent;
     if (pendingSyncCount > 0) return Colors.warning;
     return Colors.accent;
   };
@@ -57,40 +62,44 @@ export const Header: React.FC<HeaderProps> = ({
         </View>
 
         <View style={styles.rightSection}>
-          {/* Offline / Online Sync Indicator Pill */}
-          <TouchableOpacity
-            style={[styles.syncPill, { borderColor: getSyncColor() }]}
-            onPress={toggleOfflineMode}
-            accessibilityLabel={`Toggle offline mode. Current: ${getSyncLabel()}`}
-          >
-            <View style={[styles.statusDot, { backgroundColor: getSyncColor() }]} />
-            <Text style={[styles.syncText, { color: getSyncColor() }]}>
-              {getSyncLabel()}
-            </Text>
-          </TouchableOpacity>
+          {/* Offline / Online Sync Indicator Pill - Clean display for farmers without queue text */}
+          {(!isFarmer || isOfflineMode || syncStatus === 'synchronizing') && (
+            <TouchableOpacity
+              style={[styles.syncPill, { borderColor: getSyncColor() }]}
+              onPress={toggleOfflineMode}
+              accessibilityLabel={`Toggle offline mode. Current: ${getSyncLabel()}`}
+            >
+              <View style={[styles.statusDot, { backgroundColor: getSyncColor() }]} />
+              <Text style={[styles.syncText, { color: getSyncColor() }]}>
+                {getSyncLabel()}
+              </Text>
+            </TouchableOpacity>
+          )}
 
-          {/* Sync Center Navigation */}
+          {/* Sync Center Navigation - Queue badge removed on farmer portal */}
           <TouchableOpacity
             style={styles.iconButton}
             onPress={() => router.push('/sync-center' as any)}
             accessibilityLabel="Open Offline Sync Center"
           >
             <Ionicons name="cloud-outline" size={22} color={Colors.white} />
-            {pendingSyncCount > 0 && (
+            {!isFarmer && pendingSyncCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{pendingSyncCount}</Text>
               </View>
             )}
           </TouchableOpacity>
 
-          {/* Scanner shortcut */}
-          <TouchableOpacity
-            style={styles.iconButton}
-            onPress={() => router.push('/qr-scanner' as any)}
-            accessibilityLabel="Scan QR Batch"
-          >
-            <Ionicons name="qr-code-outline" size={20} color={Colors.white} />
-          </TouchableOpacity>
+          {/* Scanner shortcut - Removed on farmer portal */}
+          {!isFarmer && (
+            <TouchableOpacity
+              style={styles.iconButton}
+              onPress={() => router.push('/qr-scanner' as any)}
+              accessibilityLabel="Scan QR Batch"
+            >
+              <Ionicons name="qr-code-outline" size={20} color={Colors.white} />
+            </TouchableOpacity>
+          )}
 
           {rightAction}
         </View>

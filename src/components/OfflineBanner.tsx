@@ -7,11 +7,13 @@ import { useAppStore } from '../store/useAppStore';
 
 export const OfflineBanner: React.FC = () => {
   const router = useRouter();
-  const { isOfflineMode, pendingSyncCount, syncStatus, triggerManualSync } = useAppStore();
+  const { isOfflineMode, pendingSyncCount, syncStatus, triggerManualSync, currentRole } = useAppStore();
 
   if (!isOfflineMode && pendingSyncCount === 0 && syncStatus !== 'sync_failed') {
     return null;
   }
+
+  const isFarmer = currentRole === 'farmer';
 
   const getBannerDetails = () => {
     if (isOfflineMode) {
@@ -21,7 +23,7 @@ export const OfflineBanner: React.FC = () => {
         textColor: '#92400E',
         icon: 'cloud-offline-outline' as const,
         text: 'Working in Offline Mode. Records saved locally on device.',
-        actionText: 'Review Queue',
+        actionText: isFarmer ? 'Sync Status' : 'Review Queue',
       };
     }
     if (syncStatus === 'sync_failed') {
@@ -39,7 +41,9 @@ export const OfflineBanner: React.FC = () => {
       border: '#BAE6FD',
       textColor: '#075985',
       icon: 'cloud-upload-outline' as const,
-      text: `${pendingSyncCount} record(s) queued for synchronization.`,
+      text: isFarmer
+        ? `${pendingSyncCount} record(s) ready to sync.`
+        : `${pendingSyncCount} record(s) queued for synchronization.`,
       actionText: 'Sync Now',
     };
   };
