@@ -3,37 +3,26 @@
 -- Date: 2026-11-20
 -- Description:
 --   Resolves all Offline Sync Center errors:
---   1. "insert or update on table 'farms' violates foreign key constraint 'farms_farmer_id_fkey'"
---      -> Seeds default profiles and farmers (including 'f0000000-0000-0000-0000-000000000001')
---   2. "new row violates row-level security policy for table 'farms' / 'input_records' / 'expenses'"
---      -> Configures RLS policies allowing authenticated users and mobile offline sync (anon)
---   3. Covers farm_seasons, harvest_batches, quality_inspections, and inspection_results.
+--   1. Fixes foreign key constraint 'farms_farmer_id_fkey' by seeding standard farmers
+--      with valid hexadecimal UUIDs (e.g. 'f0000000-0000-0000-0000-000000000001').
+--   2. Resolves RLS violations on farms, farm_seasons, farm_activities, input_records,
+--      expenses, harvest_batches, quality_inspections, and inspection_results.
 -- ==============================================================================
 
 -- ------------------------------------------------------------------------------
--- 1. SEED DEFAULT PROFILES & FARMERS (Satisfies foreign key constraints)
+-- 1. SEED DEFAULT COOPERATIVES & FARMERS (Valid RFC 4122 Hexadecimal UUIDs)
 -- ------------------------------------------------------------------------------
 
--- Ensure default cooperative exists
+-- Ensure default cooperatives exist
 INSERT INTO public.cooperatives (id, name, code, county, district, address, contact_person, contact_phone) VALUES
   ('33333333-3333-3333-3333-333333333301', 'Nimba Farmers Multipurpose Cooperative', 'NFMC-01', 'Nimba', 'Sanniquellie-Mahn', 'Main Market Rd, Sanniquellie', 'Sarah Cooper', '+231-77-512-3401'),
   ('33333333-3333-3333-3333-333333333302', 'Bong Central Farmers Cooperative Society', 'BCFC-02', 'Bong', 'Suakoko', 'Gbarnga-Phebe Highway', 'Emmanuel Dennis', '+231-88-421-9988'),
   ('33333333-3333-3333-3333-333333333303', 'Lofa Agricultural Development Union', 'LADU-03', 'Lofa', 'Foya', 'Foya City Center', 'Korto Flomo', '+231-77-622-4411')
 ON CONFLICT (code) DO NOTHING;
 
--- Seed default profiles
-INSERT INTO public.profiles (id, full_name, phone, email, role, county, district, community, cooperative_id) VALUES
-  ('p0000000-0000-0000-0000-000000000001', 'Emmanuel Gaye', '+231-77-654-3210', 'farmer@cropcapture.app', 'farmer', 'Nimba', 'Sanniquellie-Mahn', 'Gbehley', '33333333-3333-3333-3333-333333333301'),
-  ('p0000000-0000-0000-0000-000000000002', 'Kebbeh Flomo', '+231-88-123-4567', 'extension@cropcapture.app', 'extension_officer', 'Bong & Nimba', 'Central Agricultural Zone', 'Suakoko Extension Hub', '33333333-3333-3333-3333-333333333301'),
-  ('p0000000-0000-0000-0000-000000000003', 'Varney Fahnbulleh', '+231-77-888-9999', 'inspector@cropcapture.app', 'quality_inspector', 'Montserrado & Nimba', 'National Standards & Metrology', 'National Rice & Cocoa Quality Bureau', '33333333-3333-3333-3333-333333333301'),
-  ('1526b229-c847-47e2-9b53-1616bbf9f340', 'Administrator', '+231-77-000-0000', 'admin@test.com', 'super_admin', 'Montserrado', 'Monrovia', 'Central', '33333333-3333-3333-3333-333333333301')
-ON CONFLICT (id) DO UPDATE SET
-  full_name = EXCLUDED.full_name,
-  role = EXCLUDED.role;
-
--- Seed default farmers
+-- Seed default farmers with valid UUIDs (profile_id is nullable to prevent auth.users foreign key constraint errors)
 INSERT INTO public.farmers (id, profile_id, farmer_id_code, full_name, gender, date_of_birth, phone_number, email, county, district, community, cooperative_id) VALUES
-  ('f0000000-0000-0000-0000-000000000001', 'p0000000-0000-0000-0000-000000000001', 'AGR-F-000001', 'Emmanuel Gaye', 'Male', '1984-05-12', '+231-77-654-3210', 'farmer@cropcapture.app', 'Nimba', 'Sanniquellie-Mahn', 'Gbehley', '33333333-3333-3333-3333-333333333301'),
+  ('f0000000-0000-0000-0000-000000000001', NULL, 'AGR-F-000001', 'Emmanuel Gaye', 'Male', '1984-05-12', '+231-77-654-3210', 'farmer@cropcapture.app', 'Nimba', 'Sanniquellie-Mahn', 'Gbehley', '33333333-3333-3333-3333-333333333301'),
   ('f0000000-0000-0000-0000-000000000002', NULL, 'FARM-LR-0095', 'Emmanuel B. Dennis', 'Male', '1979-11-23', '+231-88-421-9988', 'emmanuel.dennis@agritrack.lr', 'Bong', 'Suakoko', 'Phebe', '33333333-3333-3333-3333-333333333302'),
   ('f0000000-0000-0000-0000-000000000003', NULL, 'FARM-LR-0114', 'Korto M. Flomo', 'Female', '1990-03-08', '+231-77-622-4411', 'korto.flomo@agritrack.lr', 'Lofa', 'Foya', 'Shelloe', '33333333-3333-3333-3333-333333333303'),
   ('f0000000-0000-0000-0000-000000000004', NULL, 'FARM-LR-0130', 'Patrick J. Weah', 'Male', '1982-08-30', '+231-88-633-1122', 'patrick.weah@agritrack.lr', 'Nimba', 'Zoe-Geh', 'Bannahn', '33333333-3333-3333-3333-333333333301'),

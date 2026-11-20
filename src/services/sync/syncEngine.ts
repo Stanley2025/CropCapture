@@ -199,24 +199,10 @@ export class SyncEngine {
             .maybeSingle();
 
           if (!farmerExists) {
-            await supabase.from('profiles').upsert(
-              {
-                id: 'p0000000-0000-0000-0000-000000000001',
-                full_name: 'Emmanuel Gaye',
-                phone: '+231-77-654-3210',
-                email: 'farmer@cropcapture.app',
-                role: 'farmer',
-                county: sanitized.county || 'Nimba',
-                district: sanitized.district || 'Sanniquellie-Mahn',
-                community: sanitized.community || 'Gbehley',
-              },
-              { onConflict: 'id' }
-            );
-
             await supabase.from('farmers').upsert(
               {
                 id: sanitized.farmer_id,
-                profile_id: 'p0000000-0000-0000-0000-000000000001',
+                profile_id: null,
                 farmer_id_code: 'AGR-F-000001',
                 full_name: 'Emmanuel Gaye',
                 phone_number: '+231-77-654-3210',
