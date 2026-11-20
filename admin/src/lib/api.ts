@@ -286,6 +286,30 @@ export async function getFarmById(id: string): Promise<Farm | null> {
   return null;
 }
 
+export async function createFarm(farm: Partial<Farm>): Promise<Farm | null> {
+  clearApiCache();
+  try {
+    const supabase = createClient();
+    const payload = {
+      ...farm,
+      created_at: farm.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const { data, error } = (await withTimeout(
+      supabase.from('farms').insert(payload).select(FARM_SELECT_FIELDS).single(),
+      8000
+    )) as any;
+    if (!error && data) {
+      clearApiCache();
+      return data as Farm;
+    }
+    console.warn('Error creating farm in Supabase:', error?.message);
+  } catch (e) {
+    console.warn('Failed to create farm in Supabase:', e);
+  }
+  return null;
+}
+
 // ============================================================================
 // 4. CROPS & SEASONS
 // ============================================================================

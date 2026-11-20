@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
   Alert,
   ActivityIndicator,
   SafeAreaView,
+  Modal,
+  FlatList,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,24 +23,14 @@ import { useAppStore } from '../../src/store/useAppStore';
 import { Header } from '../../src/components/Header';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
-
-const LIBERIAN_COUNTIES = [
-  'Nimba',
-  'Bong',
-  'Lofa',
-  'Montserrado',
-  'Grand Bassa',
-  'Margibi',
-  'Grand Gedeh',
-  'Sinoe',
-  'Maryland',
-  'River Gee',
-  'Grand Cape Mount',
-  'Bomi',
-  'Gbarpolu',
-  'Rivercess',
-  'Grand Kru',
-];
+import {
+  COUNTIES,
+  DISTRICTS,
+  getCounties,
+  getDistrictsByCounty,
+  County,
+  District,
+} from '../../src/constants/liberiaGeographicData';
 
 const SOIL_TYPES = [
   'Clay Loam (Swamp Basin)',
@@ -64,8 +56,22 @@ export default function RegisterFarmScreen() {
 
   const [name, setName] = useState('');
   const [farmingType, setFarmingType] = useState<'crops' | 'livestock' | 'both'>('crops');
-  const [county, setCounty] = useState('Nimba');
+
+  // Dependent County & District State (Offline-first)
+  const [countiesList, setCountiesList] = useState<County[]>(COUNTIES);
+  const [county, setCounty] = useState('');
+  const [countyId, setCountyId] = useState<string | null>(null);
   const [district, setDistrict] = useState('');
+  const [districtId, setDistrictId] = useState<string | null>(null);
+  const [countyError, setCountyError] = useState<string | null>(null);
+  const [districtError, setDistrictError] = useState<string | null>(null);
+
+  // Search & Modal Pickers State
+  const [countyModalVisible, setCountyModalVisible] = useState(false);
+  const [districtModalVisible, setDistrictModalVisible] = useState(false);
+  const [countySearch, setCountySearch] = useState('');
+  const [districtSearch, setDistrictSearch] = useState('');
+
   const [community, setCommunity] = useState('');
   const [size, setSize] = useState('');
   const [sizeUnit, setSizeUnit] = useState<'acres' | 'hectares'>('acres');
@@ -80,6 +86,43 @@ export default function RegisterFarmScreen() {
   const [isLocating, setIsLocating] = useState(false);
   const [gpsAccuracy, setGpsAccuracy] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Load offline cached counties on mount
+  useEffect(() => {
+    async function loadOfflineGeo() {
+      try {
+        const stored = await localDb.getCounties();
+        if (stored && stored.length > 0) {
+          setCountiesList(stored);
+        }
+      } catch (err) {
+        console.warn('Could not load cached counties:', err);
+      }
+    }
+    loadOfflineGeo();
+  }, []);
+
+  // Filtered counties for picker modal (15 Liberian counties A-Z)
+  const filteredCounties = useMemo(() => {
+    if (!countySearch.trim()) return countiesList;
+    const term = countySearch.toLowerCase();
+    return countiesList.filter(
+      (c) => c.name.toLowerCase().includes(term) || c.code.toLowerCase().includes(term)
+    );
+  }, [countiesList, countySearch]);
+
+  // Available districts strictly for the selected county
+  const availableDistricts = useMemo(() => {
+    if (!county) return [];
+    return getDistrictsByCounty(countyId || county);
+  }, [county, countyId]);
+
+  // Filtered districts for search
+  const filteredDistricts = useMemo(() => {
+    if (!districtSearch.trim()) return availableDistricts;
+    const term = districtSearch.toLowerCase();
+    return availableDistricts.filter((d) => d.name.toLowerCase().includes(term));
+  }, [availableDistricts, districtSearch]);
 
   const captureGPSCoordinates = async () => {
     setIsLocating(true);
@@ -125,8 +168,21 @@ export default function RegisterFarmScreen() {
   };
 
   const handleSubmit = async () => {
+    setCountyError(null);
+    setDistrictError(null);
+
     if (!name.trim()) {
       Alert.alert('Required Field', 'Please enter a name for the farm parcel.');
+      return;
+    }
+    if (!county.trim()) {
+      setCountyError('Select a county');
+      Alert.alert('Required Field', 'Select a county');
+      return;
+    }
+    if (!district.trim()) {
+      setDistrictError('Select a district');
+      Alert.alert('Required Field', 'Select a district');
       return;
     }
     if (!community.trim()) {
@@ -140,13 +196,22 @@ export default function RegisterFarmScreen() {
 
     setIsSubmitting(true);
     try {
+      const resolvedCounty =
+        countiesList.find((c) => c.name.toLowerCase() === county.toLowerCase()) ||
+        COUNTIES.find((c) => c.name.toLowerCase() === county.toLowerCase());
+      const resolvedDistrict = availableDistricts.find(
+        (d) => d.name.toLowerCase() === district.toLowerCase()
+      );
+
       const newFarm = {
         id: generateUUID(),
-        farmer_id: currentFarmer.id,
+        farmer_id: currentFarmer?.id || '00000000-0000-0000-0000-000000000001',
         name: name.trim(),
         farming_type: farmingType,
-        county,
-        district: district.trim() || `${county} Central District`,
+        county: resolvedCounty?.name || county.trim(),
+        district: resolvedDistrict?.name || district.trim(),
+        county_id: countyId || resolvedCounty?.id || null,
+        district_id: districtId || resolvedDistrict?.id || null,
         community: community.trim(),
         size: parseFloat(size),
         size_unit: sizeUnit,
@@ -341,32 +406,80 @@ export default function RegisterFarmScreen() {
             </View>
           </View>
 
+          {/* County Selector */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>County *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {LIBERIAN_COUNTIES.map((c) => (
-                <TouchableOpacity
-                  key={c}
-                  style={[styles.chip, county === c && styles.chipActive]}
-                  onPress={() => setCounty(c)}
-                >
-                  <Text style={[styles.chipText, county === c && styles.chipTextActive]}>{c}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
+            <TouchableOpacity
+              style={[styles.selectBox, countyError ? styles.selectBoxError : null]}
+              onPress={() => {
+                setCountySearch('');
+                setCountyModalVisible(true);
+              }}
+              activeOpacity={0.7}
+            >
+              <View style={styles.selectContent}>
+                <Ionicons
+                  name="map-outline"
+                  size={18}
+                  color={county ? Colors.primary : Colors.textMuted}
+                  style={styles.selectIcon}
+                />
+                <Text style={[styles.selectValue, !county && styles.placeholderText]}>
+                  {county || 'Select a county'}
+                </Text>
+              </View>
+              <Ionicons name="chevron-down" size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+            {countyError ? <Text style={styles.inlineError}>{countyError}</Text> : null}
           </View>
 
+          {/* District & Community Row */}
           <View style={styles.inputRow}>
             <View style={[styles.inputGroup, { flex: 1, marginRight: Spacing.xs }]}>
-              <Text style={styles.label}>District</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Sanniquellie-Mahn"
-                placeholderTextColor={Colors.textMuted}
-                value={district}
-                onChangeText={setDistrict}
-              />
+              <Text style={styles.label}>District *</Text>
+              <TouchableOpacity
+                style={[
+                  styles.selectBox,
+                  !county && styles.selectBoxDisabled,
+                  districtError ? styles.selectBoxError : null,
+                ]}
+                onPress={() => {
+                  if (!county) {
+                    setCountyError('Select a county first');
+                    return;
+                  }
+                  setDistrictSearch('');
+                  setDistrictModalVisible(true);
+                }}
+                disabled={!county}
+                activeOpacity={0.7}
+              >
+                <View style={styles.selectContent}>
+                  <Ionicons
+                    name="location-outline"
+                    size={18}
+                    color={district ? Colors.primary : Colors.textMuted}
+                    style={styles.selectIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.selectValue,
+                      (!district || !county) && styles.placeholderText,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {!county ? 'Select county first' : district || 'Select a district'}
+                  </Text>
+                </View>
+                <Ionicons
+                  name="chevron-down"
+                  size={18}
+                  color={county ? Colors.textMuted : Colors.border}
+                />
+              </TouchableOpacity>
+              {districtError ? <Text style={styles.inlineError}>{districtError}</Text> : null}
             </View>
+
             <View style={[styles.inputGroup, { flex: 1, marginLeft: Spacing.xs }]}>
               <Text style={styles.label}>Community / Town *</Text>
               <TextInput
@@ -525,6 +638,164 @@ export default function RegisterFarmScreen() {
 
         <View style={{ height: Spacing.xxl }} />
       </ScrollView>
+
+      {/* County Selection Modal */}
+      <Modal
+        visible={countyModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setCountyModalVisible(false)}
+      >
+        <SafeAreaView style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Select County</Text>
+                <Text style={styles.modalSubtitle}>15 Counties of Liberia (A to Z)</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setCountyModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={22} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search 15 counties..."
+                placeholderTextColor={Colors.textMuted}
+                value={countySearch}
+                onChangeText={setCountySearch}
+                autoCorrect={false}
+              />
+              {countySearch ? (
+                <TouchableOpacity onPress={() => setCountySearch('')}>
+                  <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <FlatList
+              data={filteredCounties}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item }) => {
+                const isSelected = county.toLowerCase() === item.name.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    style={[styles.modalItem, isSelected && styles.modalItemActive]}
+                    onPress={() => {
+                      if (county.toLowerCase() !== item.name.toLowerCase()) {
+                        setCounty(item.name);
+                        setCountyId(item.id);
+                        setDistrict(''); // Clear district when county changes
+                        setDistrictId(null);
+                      }
+                      setCountyError(null);
+                      setCountyModalVisible(false);
+                    }}
+                  >
+                    <View style={styles.modalItemLeft}>
+                      <View style={[styles.badgeCode, isSelected && styles.badgeCodeActive]}>
+                        <Text style={[styles.badgeCodeText, isSelected && styles.badgeCodeTextActive]}>
+                          {item.code}
+                        </Text>
+                      </View>
+                      <Text style={[styles.modalItemText, isSelected && styles.modalItemTextActive]}>
+                        {item.name}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* District Selection Modal */}
+      <Modal
+        visible={districtModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setDistrictModalVisible(false)}
+      >
+        <SafeAreaView style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Select District</Text>
+                <Text style={styles.modalSubtitle}>
+                  {county} County ({availableDistricts.length} districts)
+                </Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setDistrictModalVisible(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={22} color={Colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.searchBox}>
+              <Ionicons name="search" size={18} color={Colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={`Search ${county || ''} districts...`}
+                placeholderTextColor={Colors.textMuted}
+                value={districtSearch}
+                onChangeText={setDistrictSearch}
+                autoCorrect={false}
+              />
+              {districtSearch ? (
+                <TouchableOpacity onPress={() => setDistrictSearch('')}>
+                  <Ionicons name="close-circle" size={16} color={Colors.textMuted} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            <FlatList
+              data={filteredDistricts}
+              keyExtractor={(item) => item.id}
+              showsVerticalScrollIndicator={false}
+              ListEmptyComponent={
+                <View style={styles.emptyResults}>
+                  <Text style={styles.emptyResultsText}>
+                    No districts matching "{districtSearch}"
+                  </Text>
+                </View>
+              }
+              renderItem={({ item }) => {
+                const isSelected = district.toLowerCase() === item.name.toLowerCase();
+                return (
+                  <TouchableOpacity
+                    style={[styles.modalItem, isSelected && styles.modalItemActive]}
+                    onPress={() => {
+                      setDistrict(item.name);
+                      setDistrictId(item.id);
+                      setDistrictError(null);
+                      setDistrictModalVisible(false);
+                    }}
+                  >
+                    <Text style={[styles.modalItemText, isSelected && styles.modalItemTextActive]}>
+                      {item.name}
+                    </Text>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={20} color={Colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              }}
+            />
+          </View>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -728,5 +999,157 @@ const styles = StyleSheet.create({
   },
   buttonContainer: {
     marginTop: Spacing.sm,
+  },
+  selectBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 11,
+    minHeight: 46,
+  },
+  selectBoxDisabled: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+    opacity: 0.7,
+  },
+  selectBoxError: {
+    borderColor: '#DC2626',
+    backgroundColor: '#FEF2F2',
+  },
+  selectContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: Spacing.xs,
+  },
+  selectIcon: {
+    marginRight: Spacing.xs,
+  },
+  selectValue: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  placeholderText: {
+    color: Colors.textMuted,
+    fontWeight: '400',
+  },
+  inlineError: {
+    fontSize: Typography.sizes.xs,
+    color: '#DC2626',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    maxHeight: '80%',
+    padding: Spacing.lg,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+  },
+  modalTitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  modalSubtitle: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  modalCloseBtn: {
+    padding: Spacing.xs,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.surfaceAlt,
+  },
+  searchBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 8,
+    marginBottom: Spacing.md,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: Spacing.xs,
+    fontSize: Typography.sizes.sm,
+    color: Colors.text,
+    paddingVertical: 0,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    borderRadius: Radius.md,
+  },
+  modalItemActive: {
+    backgroundColor: '#F0FDF4',
+  },
+  modalItemLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  badgeCode: {
+    backgroundColor: Colors.surfaceAlt,
+    borderRadius: Radius.sm,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginRight: Spacing.sm,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  badgeCodeActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: Colors.primary,
+  },
+  badgeCodeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textMuted,
+  },
+  badgeCodeTextActive: {
+    color: Colors.primaryDark,
+  },
+  modalItemText: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  modalItemTextActive: {
+    color: Colors.primaryDark,
+    fontWeight: '700',
+  },
+  emptyResults: {
+    paddingVertical: Spacing.xl,
+    alignItems: 'center',
+  },
+  emptyResultsText: {
+    fontSize: Typography.sizes.sm,
+    color: Colors.textMuted,
   },
 });

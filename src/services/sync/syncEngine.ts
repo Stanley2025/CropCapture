@@ -128,6 +128,12 @@ export class SyncEngine {
 
     if (entityType === 'farm') {
       delete clean.farmer;
+      if (clean.county_id && !isValidUUID(clean.county_id)) {
+        clean.county_id = null;
+      }
+      if (clean.district_id && !isValidUUID(clean.district_id)) {
+        clean.district_id = null;
+      }
     } else if (entityType === 'season') {
       delete clean.crop;
       delete clean.variety;

@@ -24,6 +24,7 @@ import { getFarmers, getCooperatives, updateFarmerStatus } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Farmer, Cooperative } from '@/types/database';
 import { StatusToggle } from '@/components/ui/StatusToggle';
+import { getCounties } from '@/lib/liberiaGeographicData';
 
 export default function FarmersPage() {
   const [farmers, setFarmers] = useState<Farmer[]>([]);
@@ -181,12 +182,12 @@ export default function FarmersPage() {
               onChange={(e) => setCountyFilter(e.target.value)}
               className="rounded-lg border border-[#E2E8F0] bg-slate-50 px-3 py-2 text-xs font-medium text-slate-700 focus:border-[#15803D] focus:outline-none"
             >
-              <option value="All">All Counties</option>
-              <option value="Nimba">Nimba</option>
-              <option value="Bong">Bong</option>
-              <option value="Lofa">Lofa</option>
-              <option value="Margibi">Margibi</option>
-              <option value="Grand Bassa">Grand Bassa</option>
+              <option value="All">All Counties (15)</option>
+              {getCounties().map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
             </select>
 
             <select

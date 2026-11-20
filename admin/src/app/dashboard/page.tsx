@@ -11,6 +11,7 @@ import { AdminLayout } from '@/components/layout/AdminLayout';
 import { getDashboardMetrics, getFarmers, getHarvestBatches } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Farmer, HarvestBatch } from '@/types/database';
+import { getCounties } from '@/lib/liberiaGeographicData';
 
 function MetricsSkeleton() {
   return (
@@ -164,10 +165,11 @@ export default function DashboardPage() {
               className="appearance-none rounded-full border border-[#DDD7C8] bg-white py-1.5 pl-4 pr-8 text-xs font-medium text-slate-800 shadow-2xs focus:outline-none focus:ring-1 focus:ring-[#15803D] cursor-pointer"
             >
               <option value="All counties (15)">All counties (15)</option>
-              <option value="Nimba">Nimba</option>
-              <option value="Bong">Bong</option>
-              <option value="Lofa">Lofa</option>
-              <option value="Margibi">Margibi</option>
+              {getCounties().map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
             </select>
             <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
           </div>

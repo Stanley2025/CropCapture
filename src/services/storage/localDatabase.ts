@@ -11,7 +11,15 @@ import {
   SyncStatusType,
   Farmer,
   Profile,
+  County,
+  District,
 } from '../../types/database';
+import {
+  COUNTIES,
+  DISTRICTS,
+  getCounties as getStaticCounties,
+  getDistrictsByCounty as getStaticDistrictsByCounty,
+} from '../../constants/liberiaGeographicData';
 
 export interface SyncQueueItem {
   id: string; // client uuid
@@ -35,6 +43,8 @@ const STORAGE_KEYS = {
   INSPECTIONS: '@agritrack_inspections',
   FARMERS: '@agritrack_farmers',
   PROFILES: '@agritrack_profiles',
+  COUNTIES: '@agritrack_counties',
+  DISTRICTS: '@agritrack_districts',
   SYNC_QUEUE: '@agritrack_sync_queue',
   LAST_SYNC: '@agritrack_last_sync_time',
 };
@@ -142,6 +152,35 @@ export class LocalDatabase {
 
   public async setLastSyncTimestamp(timestamp: string): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.LAST_SYNC, timestamp);
+  }
+
+  // --- COUNTIES & DISTRICTS (OFFLINE-FIRST) ---
+  public async getCounties(): Promise<County[]> {
+    const cached = await this.getItems<County>(STORAGE_KEYS.COUNTIES);
+    if (cached && cached.length > 0) {
+      return cached;
+    }
+    // Seed initial standard counties if local cache is empty
+    await this.setItems(STORAGE_KEYS.COUNTIES, COUNTIES);
+    return COUNTIES;
+  }
+
+  public async getDistricts(countyIdentifier?: string): Promise<District[]> {
+    let districts = await this.getItems<District>(STORAGE_KEYS.DISTRICTS);
+    if (!districts || districts.length === 0) {
+      districts = DISTRICTS;
+      await this.setItems(STORAGE_KEYS.DISTRICTS, DISTRICTS);
+    }
+    if (!countyIdentifier) return districts;
+    const normalized = countyIdentifier.trim().toLowerCase();
+    const county = COUNTIES.find(
+      (c) =>
+        c.id.toLowerCase() === normalized ||
+        c.name.toLowerCase() === normalized ||
+        c.code.toLowerCase() === normalized
+    );
+    if (!county) return [];
+    return districts.filter((d) => d.county_id === county.id);
   }
 
   // --- FARMERS ---

@@ -83,12 +83,28 @@ export interface Farmer {
   profile?: Profile;
 }
 
+export interface County {
+  id: string;
+  name: string;
+  code: string;
+  created_at?: string;
+}
+
+export interface District {
+  id: string;
+  county_id: string;
+  name: string;
+  created_at?: string;
+}
+
 export interface Farm {
   id: string;
   farmer_id: string;
   name: string;
   county: string;
   district: string;
+  county_id?: string | null;
+  district_id?: string | null;
   community: string;
   size: number;
   size_unit?: 'acres' | 'hectares';
