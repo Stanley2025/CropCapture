@@ -9,6 +9,7 @@ import {
   RefreshControl,
   SafeAreaView,
   Alert,
+  Modal,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -159,6 +160,7 @@ export default function InputsExpensesScreen() {
   // Global Context Filter State (Farm and Year)
   const [selectedFarmFilter, setSelectedFarmFilter] = useState<string>('all');
   const [selectedYearFilter, setSelectedYearFilter] = useState<string>('all');
+  const [yearDropdownVisible, setYearDropdownVisible] = useState(false);
 
   // Input / Inventory Form State
   const [inputFarmId, setInputFarmId] = useState<string>('');
@@ -536,7 +538,7 @@ export default function InputsExpensesScreen() {
       {/* GLOBAL SELECTORS: YEAR & FARM FILTER BAR */}
       {/* ========================================================= */}
       <View style={styles.filterSection}>
-        {/* Year Filter Selector */}
+        {/* Year Filter Dropdown Selector */}
         <View style={styles.filterGroup}>
           <View style={styles.filterHeaderRow}>
             <Ionicons name="calendar-outline" size={14} color={Colors.primaryDark} />
@@ -545,50 +547,117 @@ export default function InputsExpensesScreen() {
               <Badge label={`Year ${selectedYearFilter}`} variant="info" size="sm" />
             )}
           </View>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.filterScrollView}
+          <TouchableOpacity
+            style={styles.yearDropdownSelectBox}
+            onPress={() => setYearDropdownVisible(true)}
+            activeOpacity={0.7}
           >
-            <TouchableOpacity
-              style={[
-                styles.filterChip,
-                selectedYearFilter === 'all' && styles.filterChipActive,
-              ]}
-              onPress={() => handleYearFilterChange('all')}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.filterChipText,
-                  selectedYearFilter === 'all' && styles.filterChipTextActive,
-                ]}
-              >
-                All Years
+            <View style={styles.yearDropdownSelectLeft}>
+              <Ionicons name="calendar" size={16} color={Colors.primary} />
+              <Text style={styles.yearDropdownSelectText}>
+                {selectedYearFilter === 'all'
+                  ? 'All Production Years'
+                  : `Production Year ${selectedYearFilter}`}
               </Text>
-            </TouchableOpacity>
-            {availableYears.map((yr) => (
-              <TouchableOpacity
-                key={yr}
-                style={[
-                  styles.filterChip,
-                  selectedYearFilter === yr && styles.filterChipActive,
-                ]}
-                onPress={() => handleYearFilterChange(yr)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[
-                    styles.filterChipText,
-                    selectedYearFilter === yr && styles.filterChipTextActive,
-                  ]}
-                >
-                  {yr}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+            </View>
+            <View style={styles.yearDropdownSelectRight}>
+              <Text style={styles.yearDropdownBadgeText}>Change</Text>
+              <Ionicons name="chevron-down" size={16} color={Colors.textMuted} />
+            </View>
+          </TouchableOpacity>
         </View>
+
+        {/* Year Dropdown Modal */}
+        <Modal
+          visible={yearDropdownVisible}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setYearDropdownVisible(false)}
+        >
+          <TouchableOpacity
+            style={styles.modalOverlay}
+            activeOpacity={1}
+            onPress={() => setYearDropdownVisible(false)}
+          >
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="calendar" size={20} color={Colors.primary} />
+                  <Text style={styles.modalTitle}>Select Production Year</Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setYearDropdownVisible(false)}
+                  style={styles.modalCloseBtn}
+                >
+                  <Ionicons name="close" size={20} color={Colors.text} />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={[
+                  styles.modalYearItem,
+                  selectedYearFilter === 'all' && styles.modalYearItemActive,
+                ]}
+                onPress={() => {
+                  handleYearFilterChange('all');
+                  setYearDropdownVisible(false);
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={18}
+                    color={selectedYearFilter === 'all' ? Colors.primary : Colors.textMuted}
+                  />
+                  <Text
+                    style={[
+                      styles.modalYearText,
+                      selectedYearFilter === 'all' && styles.modalYearTextActive,
+                    ]}
+                  >
+                    All Production Years (Consolidated)
+                  </Text>
+                </View>
+                {selectedYearFilter === 'all' && (
+                  <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+                )}
+              </TouchableOpacity>
+
+              {availableYears.map((yr) => {
+                const isSelected = selectedYearFilter === yr;
+                return (
+                  <TouchableOpacity
+                    key={yr}
+                    style={[styles.modalYearItem, isSelected && styles.modalYearItemActive]}
+                    onPress={() => {
+                      handleYearFilterChange(yr);
+                      setYearDropdownVisible(false);
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons
+                        name="calendar"
+                        size={18}
+                        color={isSelected ? Colors.primary : Colors.textMuted}
+                      />
+                      <Text
+                        style={[
+                          styles.modalYearText,
+                          isSelected && styles.modalYearTextActive,
+                        ]}
+                      >
+                        Production Year {yr}
+                      </Text>
+                    </View>
+                    {isSelected && (
+                      <Ionicons name="checkmark-circle" size={18} color={Colors.primary} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         {/* Farm Filter Selector */}
         <View style={[styles.filterGroup, { marginTop: Spacing.xs }]}>
@@ -1633,6 +1702,89 @@ const styles = StyleSheet.create({
   },
   filterGroup: {
     marginBottom: 2,
+  },
+  yearDropdownSelectBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 10,
+    marginBottom: Spacing.xs,
+  },
+  yearDropdownSelectLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  yearDropdownSelectText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  yearDropdownSelectRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  yearDropdownBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.primaryDark,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.xl,
+    borderTopRightRadius: Radius.xl,
+    padding: Spacing.lg,
+    maxHeight: '60%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: Spacing.md,
+    paddingBottom: Spacing.xs,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  modalTitle: {
+    fontSize: Typography.sizes.md,
+    fontWeight: Typography.weights.bold,
+    color: Colors.text,
+  },
+  modalCloseBtn: {
+    padding: 4,
+  },
+  modalYearItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    borderRadius: Radius.md,
+  },
+  modalYearItemActive: {
+    backgroundColor: '#F0FDF4',
+  },
+  modalYearText: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  modalYearTextActive: {
+    color: Colors.primaryDark,
+    fontWeight: '700',
   },
   filterHeaderRow: {
     flexDirection: 'row',
