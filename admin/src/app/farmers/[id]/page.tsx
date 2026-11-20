@@ -34,6 +34,7 @@ import {
 } from '@/lib/api';
 import { formatDate, formatCurrency } from '@/lib/utils';
 import { Farmer, Farm, HarvestBatch, FarmActivity, InputRecord, QualityInspection } from '@/types/database';
+import { StatusToggle } from '@/components/ui/StatusToggle';
 
 export default function FarmerDetailPage() {
   const params = useParams();
@@ -211,38 +212,34 @@ export default function FarmerDetailPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2.5">
-              {farmer.status === 'disabled' ? (
-                <span className="rounded-lg bg-rose-100 px-3 py-1.5 text-xs font-bold text-rose-800 border border-rose-200 flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-rose-600" />
-                  Account Disabled
-                </span>
-              ) : (
-                <span className="rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-800 border border-emerald-100 flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-600" />
-                  Active Smallholder
-                </span>
-              )}
-
-              {farmer.status === 'disabled' ? (
-                <button
-                  onClick={() => handleToggleStatus('active')}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/90 px-4 py-2.5 shadow-2xs">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Account Status
+                  </span>
+                  <span
+                    className={`text-xs font-extrabold ${
+                      farmer.status === 'disabled' ? 'text-rose-600' : 'text-emerald-700'
+                    }`}
+                  >
+                    {farmer.status === 'disabled' ? 'Disabled' : 'Active'}
+                  </span>
+                </div>
+                <StatusToggle
+                  checked={farmer.status !== 'disabled'}
+                  onChange={() => {
+                    if (farmer.status === 'disabled') {
+                      handleToggleStatus('active');
+                    } else {
+                      setShowConfirmModal(true);
+                    }
+                  }}
                   disabled={isUpdating}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-[#15803D] px-3.5 py-1.5 text-xs font-bold text-white hover:bg-[#14532D] shadow-sm transition disabled:opacity-50"
-                >
-                  <ShieldCheck className="h-4 w-4" />
-                  {isUpdating ? 'Enabling...' : 'Enable Account'}
-                </button>
-              ) : (
-                <button
-                  onClick={() => setShowConfirmModal(true)}
-                  disabled={isUpdating}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-rose-300 bg-rose-50 px-3.5 py-1.5 text-xs font-bold text-rose-700 hover:bg-rose-100 hover:border-rose-400 shadow-2xs transition disabled:opacity-50"
-                >
-                  <ShieldAlert className="h-4 w-4 text-rose-600" />
-                  Disable Account
-                </button>
-              )}
+                  size="md"
+                  ariaLabel={farmer.status === 'disabled' ? 'Enable farmer account' : 'Disable farmer account'}
+                />
+              </div>
             </div>
           </div>
 

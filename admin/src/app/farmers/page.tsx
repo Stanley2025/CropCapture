@@ -23,6 +23,7 @@ import { AdminLayout } from '@/components/layout/AdminLayout';
 import { getFarmers, getCooperatives, updateFarmerStatus } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Farmer, Cooperative } from '@/types/database';
+import { StatusToggle } from '@/components/ui/StatusToggle';
 
 export default function FarmersPage() {
   const [farmers, setFarmers] = useState<Farmer[]>([]);
@@ -284,52 +285,40 @@ export default function FarmersPage() {
                         )}
                       </td>
                       <td className="py-3.5 px-4">
-                        {f.status === 'disabled' ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 text-rose-700 px-2.5 py-0.5 text-[10px] font-bold">
-                            <span className="h-1.5 w-1.5 rounded-full bg-rose-600" />
-                            DISABLED
+                        <div className="flex items-center gap-2">
+                          <StatusToggle
+                            checked={f.status !== 'disabled'}
+                            onChange={() => {
+                              if (f.status === 'disabled') {
+                                handleToggleStatus(f, 'active');
+                              } else {
+                                setConfirmTarget(f);
+                              }
+                            }}
+                            disabled={updatingId === f.id}
+                            size="sm"
+                            ariaLabel={f.status === 'disabled' ? 'Enable farmer account' : 'Disable farmer account'}
+                          />
+                          <span
+                            className={`text-[11px] font-bold ${
+                              f.status === 'disabled' ? 'text-rose-600' : 'text-emerald-700'
+                            }`}
+                          >
+                            {f.status === 'disabled' ? 'Disabled' : 'Active'}
                           </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 text-emerald-800 px-2.5 py-0.5 text-[10px] font-bold">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-600" />
-                            ACTIVE
-                          </span>
-                        )}
+                        </div>
                       </td>
                       <td className="py-3.5 px-4 text-slate-600">
                         {formatDate(f.created_at)}
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Link
-                            href={`/farmers/${f.id}`}
-                            className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1 text-xs font-semibold text-[#15803D] hover:bg-[#DCFCE7] transition"
-                          >
-                            <Eye className="h-3.5 w-3.5" />
-                            View
-                          </Link>
-                          {f.status === 'disabled' ? (
-                            <button
-                              onClick={() => handleToggleStatus(f, 'active')}
-                              disabled={updatingId === f.id}
-                              className="inline-flex items-center gap-1 rounded-lg border border-emerald-300 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-800 hover:bg-emerald-100 transition disabled:opacity-50"
-                              title="Enable Farmer Account"
-                            >
-                              <ShieldCheck className="h-3.5 w-3.5 text-emerald-700" />
-                              {updatingId === f.id ? '...' : 'Enable'}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => setConfirmTarget(f)}
-                              disabled={updatingId === f.id}
-                              className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700 hover:bg-rose-100 transition disabled:opacity-50"
-                              title="Disable Farmer Account"
-                            >
-                              <ShieldAlert className="h-3.5 w-3.5 text-rose-600" />
-                              {updatingId === f.id ? '...' : 'Disable'}
-                            </button>
-                          )}
-                        </div>
+                        <Link
+                          href={`/farmers/${f.id}`}
+                          className="inline-flex items-center gap-1 rounded-lg border border-[#E2E8F0] bg-white px-2.5 py-1 text-xs font-semibold text-[#15803D] hover:bg-[#DCFCE7] transition"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          View Profile
+                        </Link>
                       </td>
                     </tr>
                   ))
