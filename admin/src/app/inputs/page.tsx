@@ -11,12 +11,54 @@ import {
   Calendar,
   Building2,
   Package,
-  ArrowUpDown,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { getInputs, getExpenses, getFarms } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { InputRecord, ExpenseRecord, Farm } from '@/types/database';
+
+const CROP_ONLY_INPUT_CATEGORIES = new Set([
+  'Seeds & Seedlings',
+  'Fertilizers & Nutrients',
+  'Crop Protection',
+  'Herbicides',
+  'Seeds',
+  'Fertilizers',
+  'Pesticides',
+  'Other Crop Materials',
+]);
+
+const LIVESTOCK_ONLY_INPUT_CATEGORIES = new Set([
+  'Animal Feed & Nutrition',
+  'Veterinary & Vaccines',
+  'Livestock Mineral Licks & Supplements',
+  'Livestock Housing Materials',
+  'Other Livestock Materials',
+]);
+
+const CROP_ONLY_EXPENSE_CATEGORIES = new Set([
+  'Land Preparation',
+  'Land preparation',
+  'Seeds & Seedlings',
+  'Seeds',
+  'Fertilizer Application',
+  'Fertilizer',
+  'Pest & Weed Control',
+  'Pesticides',
+  'Irrigation & Water',
+  'Irrigation',
+  'Other Crop Operations',
+]);
+
+const LIVESTOCK_ONLY_EXPENSE_CATEGORIES = new Set([
+  'Animal Feed & Care',
+  'Veterinary Services',
+  'Herd / Flock Vaccination',
+  'Livestock Housing & Pen Maintenance',
+  'Pasture & Grazing Maintenance',
+  'Labour & Wages (Herd Management)',
+  'Other Livestock Operations',
+]);
 
 export default function InputsAndExpensesPage() {
   const [activeTab, setActiveTab] = useState<'inputs' | 'expenses'>('inputs');
@@ -75,7 +117,9 @@ export default function InputsAndExpensesPage() {
     return map;
   }, [farms]);
 
-  // Filtered Inputs
+  const activeFarm = selectedFarmId !== 'All' ? farmMap.get(selectedFarmId) : null;
+
+  // Filtered Inputs with Enterprise Isolation
   const filteredInputs = useMemo(() => {
     return inputs.filter((inp) => {
       const matchesSearch =
@@ -87,11 +131,25 @@ export default function InputsAndExpensesPage() {
       const yr = inp.purchase_date?.substring(0, 4);
       const matchesYear = selectedYear === 'All' || yr === selectedYear;
 
-      return matchesSearch && matchesCat && matchesFarm && matchesYear;
-    });
-  }, [inputs, search, categoryFilter, selectedFarmId, selectedYear]);
+      if (!matchesSearch || !matchesCat || !matchesFarm || !matchesYear) return false;
 
-  // Filtered Expenses
+      // Strict Enterprise Isolation:
+      if (selectedFarmId !== 'All') {
+        const farm = farmMap.get(selectedFarmId);
+        if (farm?.farming_type === 'livestock') {
+          // Do not bring crops data
+          if (CROP_ONLY_INPUT_CATEGORIES.has(inp.category)) return false;
+        } else if (farm?.farming_type === 'crops') {
+          // Do not bring livestock data
+          if (LIVESTOCK_ONLY_INPUT_CATEGORIES.has(inp.category)) return false;
+        }
+      }
+
+      return true;
+    });
+  }, [inputs, search, categoryFilter, selectedFarmId, selectedYear, farmMap]);
+
+  // Filtered Expenses with Enterprise Isolation
   const filteredExpenses = useMemo(() => {
     return expenses.filter((exp) => {
       const matchesSearch =
@@ -103,9 +161,23 @@ export default function InputsAndExpensesPage() {
       const yr = exp.expense_date?.substring(0, 4);
       const matchesYear = selectedYear === 'All' || yr === selectedYear;
 
-      return matchesSearch && matchesCat && matchesFarm && matchesYear;
+      if (!matchesSearch || !matchesCat || !matchesFarm || !matchesYear) return false;
+
+      // Strict Enterprise Isolation:
+      if (selectedFarmId !== 'All') {
+        const farm = farmMap.get(selectedFarmId);
+        if (farm?.farming_type === 'livestock') {
+          // Do not bring crops data
+          if (CROP_ONLY_EXPENSE_CATEGORIES.has(exp.category)) return false;
+        } else if (farm?.farming_type === 'crops') {
+          // Do not bring livestock data
+          if (LIVESTOCK_ONLY_EXPENSE_CATEGORIES.has(exp.category)) return false;
+        }
+      }
+
+      return true;
     });
-  }, [expenses, search, categoryFilter, selectedFarmId, selectedYear]);
+  }, [expenses, search, categoryFilter, selectedFarmId, selectedYear, farmMap]);
 
   // Financial aggregates
   const totalInputsUSD = filteredInputs
@@ -131,7 +203,7 @@ export default function InputsAndExpensesPage() {
               Agricultural Inputs & Operating Expenses
             </h1>
             <p className="text-sm text-slate-500">
-              Review certified foundation seeds, mineral fertilizers, crop protection purchases, and farm cost ledgers by year and farm parcel.
+              Review certified foundation seeds, mineral fertilizers, livestock feeds, veterinary supplies, and operating cost ledgers by farm and year.
             </p>
           </div>
 
@@ -171,21 +243,27 @@ export default function InputsAndExpensesPage() {
 
           <div>
             <label className="block text-[11px] font-bold uppercase tracking-wider text-emerald-900 mb-1">
-              Farm Parcel
+              Farm Parcel (Enterprise Isolation)
             </label>
             <div className="relative">
               <Building2 className="absolute left-2.5 top-2.5 h-4 w-4 text-emerald-700" />
               <select
                 value={selectedFarmId}
-                onChange={(e) => setSelectedFarmId(e.target.value)}
+                onChange={(e) => {
+                  setSelectedFarmId(e.target.value);
+                  setCategoryFilter('All');
+                }}
                 className="w-full rounded-lg border border-emerald-200 bg-white py-2 pl-9 pr-4 text-xs font-semibold text-slate-800 shadow-sm focus:border-emerald-500 focus:outline-none"
               >
                 <option value="All">All Farm Parcels ({farms.length})</option>
-                {farms.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name} ({f.county || 'Liberia'}) • {f.size} {f.size_unit}
-                  </option>
-                ))}
+                {farms.map((f) => {
+                  const ent = f.farming_type === 'livestock' ? 'Livestock only' : f.farming_type === 'both' ? 'Both' : 'Crops only';
+                  return (
+                    <option key={f.id} value={f.id}>
+                      {f.name} [{ent}] • {f.size} {f.size_unit} ({f.county || 'Liberia'})
+                    </option>
+                  );
+                })}
               </select>
             </div>
           </div>
@@ -203,22 +281,57 @@ export default function InputsAndExpensesPage() {
               >
                 <option value="All">All Categories</option>
                 {activeTab === 'inputs' ? (
-                  <>
-                    <option value="Seeds">Seeds & Seedlings</option>
-                    <option value="Fertilizers">Fertilizers</option>
-                    <option value="Pesticides">Pesticides</option>
-                    <option value="Herbicides">Herbicides</option>
-                    <option value="Tools">Tools</option>
-                    <option value="Equipment">Equipment</option>
-                  </>
+                  activeFarm?.farming_type === 'livestock' ? (
+                    <>
+                      <option value="Animal Feed & Nutrition">Animal Feed & Nutrition</option>
+                      <option value="Veterinary & Vaccines">Veterinary & Vaccines</option>
+                      <option value="Livestock Housing Materials">Housing Materials</option>
+                      <option value="Tools & Implements">Tools & Implements</option>
+                      <option value="Equipment & Machinery">Equipment</option>
+                    </>
+                  ) : activeFarm?.farming_type === 'crops' ? (
+                    <>
+                      <option value="Seeds & Seedlings">Seeds & Seedlings</option>
+                      <option value="Fertilizers & Nutrients">Fertilizers & Nutrients</option>
+                      <option value="Crop Protection">Crop Protection</option>
+                      <option value="Herbicides">Herbicides</option>
+                      <option value="Tools & Implements">Tools & Implements</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="Seeds & Seedlings">Seeds & Seedlings</option>
+                      <option value="Fertilizers & Nutrients">Fertilizers & Nutrients</option>
+                      <option value="Animal Feed & Nutrition">Animal Feed & Nutrition</option>
+                      <option value="Veterinary & Vaccines">Veterinary & Vaccines</option>
+                      <option value="Tools & Implements">Tools & Implements</option>
+                    </>
+                  )
                 ) : (
-                  <>
-                    <option value="Labour">Labour & Wages</option>
-                    <option value="Land preparation">Land Preparation</option>
-                    <option value="Fertilizer">Fertilizer Application</option>
-                    <option value="Transportation">Transportation</option>
-                    <option value="Equipment rental">Equipment Rental</option>
-                  </>
+                  activeFarm?.farming_type === 'livestock' ? (
+                    <>
+                      <option value="Animal Feed & Care">Animal Feed & Care</option>
+                      <option value="Veterinary Services">Veterinary Services</option>
+                      <option value="Herd / Flock Vaccination">Herd Vaccination</option>
+                      <option value="Labour & Wages (Herd Management)">Labour & Wages</option>
+                      <option value="Livestock Housing & Pen Maintenance">Housing & Pen Maintenance</option>
+                    </>
+                  ) : activeFarm?.farming_type === 'crops' ? (
+                    <>
+                      <option value="Labour & Wages">Labour & Wages</option>
+                      <option value="Land Preparation">Land Preparation</option>
+                      <option value="Fertilizer Application">Fertilizer Application</option>
+                      <option value="Pest & Weed Control">Pest & Weed Control</option>
+                      <option value="Irrigation & Water">Irrigation</option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="Labour & Wages">Labour & Wages</option>
+                      <option value="Land Preparation">Land Preparation</option>
+                      <option value="Animal Feed & Care">Animal Feed & Care</option>
+                      <option value="Veterinary Services">Veterinary Services</option>
+                      <option value="Transportation & Haulage">Transportation</option>
+                    </>
+                  )
                 )}
               </select>
             </div>
@@ -240,6 +353,34 @@ export default function InputsAndExpensesPage() {
             </div>
           </div>
         </div>
+
+        {/* Enterprise Notice Banner in Admin */}
+        {activeFarm && (
+          <div
+            className={`flex items-center gap-2 rounded-xl p-3 border text-xs font-semibold ${
+              activeFarm.farming_type === 'livestock'
+                ? 'bg-amber-50 border-amber-200 text-amber-900'
+                : activeFarm.farming_type === 'crops'
+                ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+                : 'bg-blue-50 border-blue-200 text-blue-900'
+            }`}
+          >
+            <span className="font-bold">
+              {activeFarm.farming_type === 'livestock'
+                ? '🐐 LIVESTOCK FARM SELECTED:'
+                : activeFarm.farming_type === 'crops'
+                ? '🌾 CROPS FARM SELECTED:'
+                : '🌱 INTEGRATED FARM SELECTED:'}
+            </span>
+            <span>
+              {activeFarm.farming_type === 'livestock'
+                ? 'Excluding all crops data. Displaying livestock feeds, medicines, and herd expenses only.'
+                : activeFarm.farming_type === 'crops'
+                ? 'Excluding all livestock data. Displaying seeds, fertilizers, and crop expenses only.'
+                : 'Displaying both crop and livestock records for this parcel.'}
+            </span>
+          </div>
+        )}
 
         {/* Financial KPI Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
@@ -292,7 +433,7 @@ export default function InputsAndExpensesPage() {
             <div className="text-[11px] text-slate-400 mt-1">
               {selectedFarmId === 'All'
                 ? 'Consolidated farm view'
-                : `${farmMap.get(selectedFarmId)?.size || 0} ${farmMap.get(selectedFarmId)?.size_unit || 'acres'} in ${farmMap.get(selectedFarmId)?.county || 'Liberia'}`}
+                : `${farmMap.get(selectedFarmId)?.farming_type === 'livestock' ? 'Livestock only' : farmMap.get(selectedFarmId)?.farming_type === 'both' ? 'Both' : 'Crops only'} • ${farmMap.get(selectedFarmId)?.size || 0} ${farmMap.get(selectedFarmId)?.size_unit || 'acres'}`}
             </div>
           </div>
 
@@ -358,17 +499,25 @@ export default function InputsAndExpensesPage() {
                   {filteredInputs.length === 0 ? (
                     <tr>
                       <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
-                        No input records match the selected year and farm filters.
+                        No input records match the selected farm and year filters.
                       </td>
                     </tr>
                   ) : (
                     filteredInputs.map((item) => {
-                      const farmName = item.farm?.name || farmMap.get(item.farm_id)?.name || 'Parcel';
+                      const farm = item.farm || farmMap.get(item.farm_id);
+                      const farmName = farm?.name || 'Parcel';
+                      const isLivestock = farm?.farming_type === 'livestock';
                       return (
                         <tr key={item.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3.5 px-4 font-bold text-slate-900">{item.name}</td>
                           <td className="py-3.5 px-4">
-                            <span className="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-700">
+                            <span
+                              className={`rounded px-2 py-0.5 text-[11px] font-semibold ${
+                                isLivestock
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}
+                            >
                               {item.category}
                             </span>
                           </td>
@@ -413,16 +562,24 @@ export default function InputsAndExpensesPage() {
                   {filteredExpenses.length === 0 ? (
                     <tr>
                       <td colSpan={5} className="py-8 text-center text-slate-400 font-medium">
-                        No farm expenses match the selected year and farm filters.
+                        No farm expenses match the selected farm and year filters.
                       </td>
                     </tr>
                   ) : (
                     filteredExpenses.map((exp) => {
-                      const farmName = exp.farm?.name || farmMap.get(exp.farm_id)?.name || 'Parcel';
+                      const farm = exp.farm || farmMap.get(exp.farm_id);
+                      const farmName = farm?.name || 'Parcel';
+                      const isLivestock = farm?.farming_type === 'livestock';
                       return (
                         <tr key={exp.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="py-3.5 px-4">
-                            <span className="rounded bg-amber-50 px-2 py-0.5 text-[11px] font-bold text-amber-800 border border-amber-200">
+                            <span
+                              className={`rounded px-2 py-0.5 text-[11px] font-bold border ${
+                                isLivestock
+                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                              }`}
+                            >
                               {exp.category}
                             </span>
                           </td>

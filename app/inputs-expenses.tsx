@@ -23,19 +23,88 @@ import { Button } from '../src/components/Button';
 import { Badge } from '../src/components/Badge';
 import { DatePickerField } from '../src/components/DatePickerField';
 
-const INPUT_CATEGORIES = [
+// ============================================================================
+// ENTERPRISE CATEGORIES: CROPS vs. LIVESTOCK vs. ALL
+// ============================================================================
+const CROPS_INPUT_CATEGORIES = [
+  'Seeds & Seedlings',
+  'Fertilizers & Nutrients',
+  'Crop Protection',
+  'Herbicides',
+  'Tools & Implements',
+  'Equipment & Machinery',
+  'Other Crop Materials',
+];
+
+const LIVESTOCK_INPUT_CATEGORIES = [
+  'Animal Feed & Nutrition',
+  'Veterinary & Vaccines',
+  'Livestock Mineral Licks & Supplements',
+  'Livestock Housing Materials',
+  'Tools & Implements',
+  'Equipment & Machinery',
+  'Other Livestock Materials',
+];
+
+const ALL_INPUT_CATEGORIES = [
   'Seeds & Seedlings',
   'Fertilizers & Nutrients',
   'Crop Protection',
   'Herbicides',
   'Animal Feed & Nutrition',
   'Veterinary & Vaccines',
+  'Livestock Mineral Licks & Supplements',
+  'Livestock Housing Materials',
   'Tools & Implements',
   'Equipment & Machinery',
   'Other Agricultural Materials',
 ];
 
-const EXPENSE_CATEGORIES = [
+const CROP_ONLY_INPUT_CATEGORIES = new Set([
+  'Seeds & Seedlings',
+  'Fertilizers & Nutrients',
+  'Crop Protection',
+  'Herbicides',
+  'Seeds',
+  'Fertilizers',
+  'Pesticides',
+  'Other Crop Materials',
+]);
+
+const LIVESTOCK_ONLY_INPUT_CATEGORIES = new Set([
+  'Animal Feed & Nutrition',
+  'Veterinary & Vaccines',
+  'Livestock Mineral Licks & Supplements',
+  'Livestock Housing Materials',
+  'Other Livestock Materials',
+]);
+
+const CROPS_EXPENSE_CATEGORIES = [
+  'Labour & Wages',
+  'Land Preparation',
+  'Seeds & Seedlings',
+  'Fertilizer Application',
+  'Pest & Weed Control',
+  'Equipment Rental',
+  'Transportation & Haulage',
+  'Storage & Processing',
+  'Irrigation & Water',
+  'Other Crop Operations',
+];
+
+const LIVESTOCK_EXPENSE_CATEGORIES = [
+  'Animal Feed & Care',
+  'Veterinary Services',
+  'Herd / Flock Vaccination',
+  'Labour & Wages (Herd Management)',
+  'Livestock Housing & Pen Maintenance',
+  'Pasture & Grazing Maintenance',
+  'Equipment Rental',
+  'Transportation & Haulage',
+  'Other Livestock Operations',
+];
+
+const ALL_EXPENSE_CATEGORIES = [
   'Labour & Wages',
   'Land Preparation',
   'Seeds & Seedlings',
@@ -43,12 +112,39 @@ const EXPENSE_CATEGORIES = [
   'Pest & Weed Control',
   'Animal Feed & Care',
   'Veterinary Services',
+  'Herd / Flock Vaccination',
+  'Livestock Housing & Pen Maintenance',
+  'Pasture & Grazing Maintenance',
   'Equipment Rental',
   'Transportation & Haulage',
   'Storage & Processing',
   'Irrigation & Water',
   'Other Operations',
 ];
+
+const CROP_ONLY_EXPENSE_CATEGORIES = new Set([
+  'Land Preparation',
+  'Land preparation',
+  'Seeds & Seedlings',
+  'Seeds',
+  'Fertilizer Application',
+  'Fertilizer',
+  'Pest & Weed Control',
+  'Pesticides',
+  'Irrigation & Water',
+  'Irrigation',
+  'Other Crop Operations',
+]);
+
+const LIVESTOCK_ONLY_EXPENSE_CATEGORIES = new Set([
+  'Animal Feed & Care',
+  'Veterinary Services',
+  'Herd / Flock Vaccination',
+  'Livestock Housing & Pen Maintenance',
+  'Pasture & Grazing Maintenance',
+  'Labour & Wages (Herd Management)',
+  'Other Livestock Operations',
+]);
 
 export default function InputsExpensesScreen() {
   const router = useRouter();
@@ -108,8 +204,27 @@ export default function InputsExpensesScreen() {
 
       // Default the quick-add farm picker to the first farm if available
       if (f.length > 0) {
-        setInputFarmId((prev) => (prev ? prev : f[0].id));
-        setExpenseFarmId((prev) => (prev ? prev : f[0].id));
+        setInputFarmId((prev) => {
+          const chosen = prev || f[0].id;
+          const chosenFarm = f.find((fm) => fm.id === chosen);
+          if (chosenFarm?.farming_type === 'livestock') {
+            setInputCat('Animal Feed & Nutrition');
+          } else if (chosenFarm?.farming_type === 'crops') {
+            setInputCat('Seeds & Seedlings');
+          }
+          return chosen;
+        });
+
+        setExpenseFarmId((prev) => {
+          const chosen = prev || f[0].id;
+          const chosenFarm = f.find((fm) => fm.id === chosen);
+          if (chosenFarm?.farming_type === 'livestock') {
+            setExpenseCat('Animal Feed & Care');
+          } else if (chosenFarm?.farming_type === 'crops') {
+            setExpenseCat('Labour & Wages');
+          }
+          return chosen;
+        });
       }
     } catch (e) {
       console.error('Failed to load inputs and expenses:', e);
@@ -153,12 +268,51 @@ export default function InputsExpensesScreen() {
     return map;
   }, [farms]);
 
-  // When top farm filter changes, sync quick-add farm selector
+  // When top farm filter changes, sync quick-add farm selector and adapt categories
   const handleFarmFilterChange = (farmId: string) => {
     setSelectedFarmFilter(farmId);
     if (farmId !== 'all') {
       setInputFarmId(farmId);
       setExpenseFarmId(farmId);
+
+      const target = farmMap.get(farmId);
+      if (target?.farming_type === 'livestock') {
+        setInputCat('Animal Feed & Nutrition');
+        setExpenseCat('Animal Feed & Care');
+      } else if (target?.farming_type === 'crops') {
+        setInputCat('Seeds & Seedlings');
+        setExpenseCat('Labour & Wages');
+      }
+    }
+  };
+
+  // When farmer selects a farm in the Input form
+  const handleSelectInputFarm = (farmId: string) => {
+    setInputFarmId(farmId);
+    const target = farmMap.get(farmId);
+    if (target?.farming_type === 'livestock') {
+      if (CROP_ONLY_INPUT_CATEGORIES.has(inputCat) || !LIVESTOCK_INPUT_CATEGORIES.includes(inputCat)) {
+        setInputCat('Animal Feed & Nutrition');
+      }
+    } else if (target?.farming_type === 'crops') {
+      if (LIVESTOCK_ONLY_INPUT_CATEGORIES.has(inputCat) || !CROPS_INPUT_CATEGORIES.includes(inputCat)) {
+        setInputCat('Seeds & Seedlings');
+      }
+    }
+  };
+
+  // When farmer selects a farm in the Expense form
+  const handleSelectExpenseFarm = (farmId: string) => {
+    setExpenseFarmId(farmId);
+    const target = farmMap.get(farmId);
+    if (target?.farming_type === 'livestock') {
+      if (CROP_ONLY_EXPENSE_CATEGORIES.has(expenseCat) || !LIVESTOCK_EXPENSE_CATEGORIES.includes(expenseCat)) {
+        setExpenseCat('Animal Feed & Care');
+      }
+    } else if (target?.farming_type === 'crops') {
+      if (LIVESTOCK_ONLY_EXPENSE_CATEGORIES.has(expenseCat) || !CROPS_EXPENSE_CATEGORIES.includes(expenseCat)) {
+        setExpenseCat('Labour & Wages');
+      }
     }
   };
 
@@ -179,24 +333,75 @@ export default function InputsExpensesScreen() {
     }
   };
 
-  // Filtered lists based on selected farm and year
+  // Selected farm details for the active input and expense forms
+  const activeInputFarm = farmMap.get(inputFarmId);
+  const activeExpenseFarm = farmMap.get(expenseFarmId);
+
+  // Dynamic Categories available based on selected farm's enterprise type
+  const availableInputCategories = useMemo(() => {
+    if (activeInputFarm?.farming_type === 'livestock') {
+      return LIVESTOCK_INPUT_CATEGORIES;
+    } else if (activeInputFarm?.farming_type === 'crops') {
+      return CROPS_INPUT_CATEGORIES;
+    }
+    return ALL_INPUT_CATEGORIES;
+  }, [activeInputFarm]);
+
+  const availableExpenseCategories = useMemo(() => {
+    if (activeExpenseFarm?.farming_type === 'livestock') {
+      return LIVESTOCK_EXPENSE_CATEGORIES;
+    } else if (activeExpenseFarm?.farming_type === 'crops') {
+      return CROPS_EXPENSE_CATEGORIES;
+    }
+    return ALL_EXPENSE_CATEGORIES;
+  }, [activeExpenseFarm]);
+
+  // Strict Enterprise-Filtered lists:
+  // When a livestock farm is selected -> NO crops data, only livestock data!
+  // When a crops farm is selected -> NO livestock data, only crops data!
   const filteredInputs = useMemo(() => {
     return inputs.filter((i) => {
       const matchFarm = selectedFarmFilter === 'all' || i.farm_id === selectedFarmFilter;
       const yr = i.purchase_date?.substring(0, 4);
       const matchYear = selectedYearFilter === 'all' || yr === selectedYearFilter;
-      return matchFarm && matchYear;
+      if (!matchFarm || !matchYear) return false;
+
+      // Strict Enterprise Isolation:
+      if (selectedFarmFilter !== 'all') {
+        const targetFarm = farmMap.get(selectedFarmFilter);
+        if (targetFarm?.farming_type === 'livestock') {
+          // Do not bring crops data
+          if (CROP_ONLY_INPUT_CATEGORIES.has(i.category)) return false;
+        } else if (targetFarm?.farming_type === 'crops') {
+          // Do not bring livestock data
+          if (LIVESTOCK_ONLY_INPUT_CATEGORIES.has(i.category)) return false;
+        }
+      }
+      return true;
     });
-  }, [inputs, selectedFarmFilter, selectedYearFilter]);
+  }, [inputs, selectedFarmFilter, selectedYearFilter, farmMap]);
 
   const filteredExpenses = useMemo(() => {
     return expenses.filter((e) => {
       const matchFarm = selectedFarmFilter === 'all' || e.farm_id === selectedFarmFilter;
       const yr = e.expense_date?.substring(0, 4);
       const matchYear = selectedYearFilter === 'all' || yr === selectedYearFilter;
-      return matchFarm && matchYear;
+      if (!matchFarm || !matchYear) return false;
+
+      // Strict Enterprise Isolation:
+      if (selectedFarmFilter !== 'all') {
+        const targetFarm = farmMap.get(selectedFarmFilter);
+        if (targetFarm?.farming_type === 'livestock') {
+          // Do not bring crops data
+          if (CROP_ONLY_EXPENSE_CATEGORIES.has(e.category)) return false;
+        } else if (targetFarm?.farming_type === 'crops') {
+          // Do not bring livestock data
+          if (LIVESTOCK_ONLY_EXPENSE_CATEGORIES.has(e.category)) return false;
+        }
+      }
+      return true;
     });
-  }, [expenses, selectedFarmFilter, selectedYearFilter]);
+  }, [expenses, selectedFarmFilter, selectedYearFilter, farmMap]);
 
   // Dual currency summaries
   const totalInputsUSD = filteredInputs
@@ -396,7 +601,11 @@ export default function InputsExpensesScreen() {
                   ? `${farms.length} Farms`
                   : farmMap.get(selectedFarmFilter)?.name || 'Parcel'
               }
-              variant="success"
+              variant={
+                farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                  ? 'warning'
+                  : 'success'
+              }
               size="sm"
             />
           </View>
@@ -430,23 +639,32 @@ export default function InputsExpensesScreen() {
 
             {farms.map((f) => {
               const isSelected = selectedFarmFilter === f.id;
-              const farmIcon =
-                f.farming_type === 'livestock'
-                  ? 'paw'
-                  : f.farming_type === 'both'
-                  ? 'layers'
-                  : 'leaf';
+              const isLivestock = f.farming_type === 'livestock';
+              const isBoth = f.farming_type === 'both';
+              const farmIcon = isLivestock ? 'paw' : isBoth ? 'layers' : 'leaf';
               return (
                 <TouchableOpacity
                   key={f.id}
-                  style={[styles.farmFilterChip, isSelected && styles.farmFilterChipActive]}
+                  style={[
+                    styles.farmFilterChip,
+                    isSelected &&
+                      (isLivestock
+                        ? styles.farmFilterChipActiveLivestock
+                        : styles.farmFilterChipActive),
+                  ]}
                   onPress={() => handleFarmFilterChange(f.id)}
                   activeOpacity={0.7}
                 >
                   <Ionicons
                     name={farmIcon as any}
                     size={13}
-                    color={isSelected ? '#FFFFFF' : Colors.primary}
+                    color={
+                      isSelected
+                        ? '#FFFFFF'
+                        : isLivestock
+                        ? '#D97706'
+                        : Colors.primary
+                    }
                   />
                   <Text
                     style={[
@@ -463,7 +681,7 @@ export default function InputsExpensesScreen() {
                       isSelected && styles.farmFilterChipSubActive,
                     ]}
                   >
-                    ({f.size} {f.size_unit})
+                    ({isLivestock ? 'Livestock' : isBoth ? 'Both' : 'Crops'})
                   </Text>
                 </TouchableOpacity>
               );
@@ -535,12 +753,22 @@ export default function InputsExpensesScreen() {
                     Parcel:{' '}
                     {selectedFarmFilter === 'all'
                       ? `Consolidated (${farms.length} Farms)`
-                      : farmMap.get(selectedFarmFilter)?.name || 'Selected Farm'}
+                      : `${farmMap.get(selectedFarmFilter)?.name} (${
+                          farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                            ? 'Livestock only'
+                            : farmMap.get(selectedFarmFilter)?.farming_type === 'both'
+                            ? 'Crops & Livestock'
+                            : 'Crops only'
+                        })`}
                   </Text>
                 </View>
                 <Badge
                   label={`${filteredInputs.length} Items in Inventory`}
-                  variant="success"
+                  variant={
+                    farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                      ? 'warning'
+                      : 'success'
+                  }
                 />
               </View>
             </Card>
@@ -548,13 +776,38 @@ export default function InputsExpensesScreen() {
             {/* Quick Add Input / Inventory Form */}
             <Card style={styles.formCard}>
               <View style={styles.formTitleRow}>
-                <View style={styles.formIconWrap}>
-                  <Ionicons name="cube-outline" size={18} color={Colors.primary} />
+                <View
+                  style={[
+                    styles.formIconWrap,
+                    activeInputFarm?.farming_type === 'livestock' && {
+                      backgroundColor: '#FEF3C7',
+                    },
+                  ]}
+                >
+                  <Ionicons
+                    name={
+                      activeInputFarm?.farming_type === 'livestock'
+                        ? 'paw'
+                        : 'cube-outline'
+                    }
+                    size={18}
+                    color={
+                      activeInputFarm?.farming_type === 'livestock'
+                        ? '#D97706'
+                        : Colors.primary
+                    }
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.formTitle}>+ Record Agricultural Input & Inventory</Text>
+                  <Text style={styles.formTitle}>
+                    {activeInputFarm?.farming_type === 'livestock'
+                      ? '+ Record Livestock Inventory & Materials'
+                      : '+ Record Agricultural Input & Inventory'}
+                  </Text>
                   <Text style={styles.formSubtitle}>
-                    Capture fertilizers, certified seeds, tools, feeds & inventory stock
+                    {activeInputFarm?.farming_type === 'livestock'
+                      ? 'Capture animal feed, veterinary medicines, housing & equipment'
+                      : 'Capture certified seeds, mineral fertilizers, crop protection & tools'}
                   </Text>
                 </View>
               </View>
@@ -562,7 +815,9 @@ export default function InputsExpensesScreen() {
               {/* FARM SELECTION FOR INPUT */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Farm Parcel *</Text>
-                <Text style={styles.helperText}>Select which farm this input inventory belongs to:</Text>
+                <Text style={styles.helperText}>
+                  Select farm parcel (enterprise filters categories automatically):
+                </Text>
                 {farms.length === 0 ? (
                   <View style={styles.noFarmBanner}>
                     <Text style={styles.noFarmText}>No registered farms found.</Text>
@@ -581,27 +836,32 @@ export default function InputsExpensesScreen() {
                   >
                     {farms.map((f) => {
                       const isSelected = inputFarmId === f.id;
-                      const farmType = f.farming_type || 'crops';
+                      const isLivestock = f.farming_type === 'livestock';
+                      const isBoth = f.farming_type === 'both';
+                      const farmIcon = isLivestock ? 'paw' : isBoth ? 'layers' : 'leaf';
                       return (
                         <TouchableOpacity
                           key={f.id}
                           style={[
                             styles.farmSelectChip,
-                            isSelected && styles.farmSelectChipActive,
+                            isSelected &&
+                              (isLivestock
+                                ? styles.farmSelectChipActiveLivestock
+                                : styles.farmSelectChipActive),
                           ]}
-                          onPress={() => setInputFarmId(f.id)}
+                          onPress={() => handleSelectInputFarm(f.id)}
                           activeOpacity={0.7}
                         >
                           <Ionicons
-                            name={
-                              farmType === 'livestock'
-                                ? 'paw'
-                                : farmType === 'both'
-                                ? 'layers'
-                                : 'leaf'
-                            }
+                            name={farmIcon as any}
                             size={14}
-                            color={isSelected ? '#FFFFFF' : Colors.primary}
+                            color={
+                              isSelected
+                                ? '#FFFFFF'
+                                : isLivestock
+                                ? '#D97706'
+                                : Colors.primary
+                            }
                           />
                           <View style={{ marginLeft: 6 }}>
                             <Text
@@ -618,7 +878,7 @@ export default function InputsExpensesScreen() {
                                 isSelected && styles.farmSelectChipSubActive,
                               ]}
                             >
-                              {f.size} {f.size_unit} • {farmType}
+                              {f.size} {f.size_unit} • {isLivestock ? 'Livestock' : isBoth ? 'Both' : 'Crops'}
                             </Text>
                           </View>
                         </TouchableOpacity>
@@ -628,11 +888,57 @@ export default function InputsExpensesScreen() {
                 )}
               </View>
 
+              {/* ENTERPRISE ADAPTIVE NOTICE BANNER */}
+              <View
+                style={[
+                  styles.enterpriseNoticeBanner,
+                  activeInputFarm?.farming_type === 'livestock' &&
+                    styles.enterpriseNoticeBannerLivestock,
+                ]}
+              >
+                <Ionicons
+                  name={
+                    activeInputFarm?.farming_type === 'livestock'
+                      ? 'paw'
+                      : activeInputFarm?.farming_type === 'both'
+                      ? 'layers'
+                      : 'leaf'
+                  }
+                  size={14}
+                  color={
+                    activeInputFarm?.farming_type === 'livestock'
+                      ? '#B45309'
+                      : Colors.primaryDark
+                  }
+                />
+                <Text
+                  style={[
+                    styles.enterpriseNoticeText,
+                    activeInputFarm?.farming_type === 'livestock' &&
+                      styles.enterpriseNoticeTextLivestock,
+                  ]}
+                >
+                  {activeInputFarm?.farming_type === 'livestock'
+                    ? 'LIVESTOCK FARM ACTIVE: Showing livestock inventory categories only. Crops data excluded.'
+                    : activeInputFarm?.farming_type === 'crops'
+                    ? 'CROPS FARM ACTIVE: Showing crops input categories only. Livestock data excluded.'
+                    : 'INTEGRATED FARM: Both crop and livestock categories available.'}
+                </Text>
+              </View>
+
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Input Item Name *</Text>
+                <Text style={styles.label}>
+                  {activeInputFarm?.farming_type === 'livestock'
+                    ? 'Livestock Item / Feed Name *'
+                    : 'Input Item Name *'}
+                </Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. NPK 15-15-15 Compound Fertilizer"
+                  placeholder={
+                    activeInputFarm?.farming_type === 'livestock'
+                      ? 'e.g. Broiler Finisher Mash / Mineral Salt Lick / Dewormer'
+                      : 'e.g. NPK 15-15-15 Compound Fertilizer / Rice Seed LAC 23'
+                  }
                   placeholderTextColor={Colors.textMuted}
                   value={inputName}
                   onChangeText={setInputName}
@@ -640,20 +946,31 @@ export default function InputsExpensesScreen() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Category</Text>
+                <Text style={styles.label}>Category *</Text>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   style={styles.chipRow}
                 >
-                  {INPUT_CATEGORIES.map((c) => (
+                  {availableInputCategories.map((c) => (
                     <TouchableOpacity
                       key={c}
-                      style={[styles.chip, inputCat === c && styles.chipActive]}
+                      style={[
+                        styles.chip,
+                        inputCat === c &&
+                          (activeInputFarm?.farming_type === 'livestock'
+                            ? styles.chipActiveLivestock
+                            : styles.chipActive),
+                      ]}
                       onPress={() => setInputCat(c)}
                       activeOpacity={0.7}
                     >
-                      <Text style={[styles.chipText, inputCat === c && styles.chipTextActive]}>
+                      <Text
+                        style={[
+                          styles.chipText,
+                          inputCat === c && styles.chipTextActive,
+                        ]}
+                      >
                         {c}
                       </Text>
                     </TouchableOpacity>
@@ -666,7 +983,7 @@ export default function InputsExpensesScreen() {
                   <Text style={styles.label}>Quantity *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. 5"
+                    placeholder="e.g. 10"
                     placeholderTextColor={Colors.textMuted}
                     keyboardType="numeric"
                     value={inputQty}
@@ -677,7 +994,11 @@ export default function InputsExpensesScreen() {
                   <Text style={styles.label}>Unit</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="bags / kg / doses"
+                    placeholder={
+                      activeInputFarm?.farming_type === 'livestock'
+                        ? 'bags / doses / kg'
+                        : 'bags / kg / litres'
+                    }
                     placeholderTextColor={Colors.textMuted}
                     value={inputUnit}
                     onChangeText={setInputUnit}
@@ -740,7 +1061,11 @@ export default function InputsExpensesScreen() {
                 <Text style={styles.label}>Supplier / Store</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. Central Gbarnga Agrovet Depot"
+                  placeholder={
+                    activeInputFarm?.farming_type === 'livestock'
+                      ? 'e.g. Monrovia Feed Mills / Central Agrovet'
+                      : 'e.g. Central Gbarnga Agrovet Depot'
+                  }
                   placeholderTextColor={Colors.textMuted}
                   value={inputSupplier}
                   onChangeText={setInputSupplier}
@@ -766,7 +1091,11 @@ export default function InputsExpensesScreen() {
               </View>
 
               <Button
-                title="Save to Farm Inventory"
+                title={
+                  activeInputFarm?.farming_type === 'livestock'
+                    ? 'Save to Livestock Inventory'
+                    : 'Save to Farm Inventory'
+                }
                 onPress={handleAddInput}
                 size="md"
                 loading={isSubmitting}
@@ -781,40 +1110,77 @@ export default function InputsExpensesScreen() {
               </Text>
               <Text style={styles.listSectionSubtitle}>
                 Filtered by {selectedYearFilter === 'all' ? 'All Years' : `Year ${selectedYearFilter}`}{' '}
-                • {selectedFarmFilter === 'all' ? 'All Farms' : farmMap.get(selectedFarmFilter)?.name}
+                •{' '}
+                {selectedFarmFilter === 'all'
+                  ? 'All Farms'
+                  : `${farmMap.get(selectedFarmFilter)?.name} (${
+                      farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                        ? 'Livestock only'
+                        : farmMap.get(selectedFarmFilter)?.farming_type === 'both'
+                        ? 'Both'
+                        : 'Crops only'
+                    })`}
               </Text>
             </View>
 
             {filteredInputs.length === 0 ? (
               <Card style={styles.emptyCard}>
-                <Ionicons name="cart-outline" size={36} color={Colors.textMuted} />
-                <Text style={styles.emptyTitle}>No Inventory Records Found</Text>
+                <Ionicons
+                  name={
+                    farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                      ? 'paw-outline'
+                      : 'cart-outline'
+                  }
+                  size={36}
+                  color={Colors.textMuted}
+                />
+                <Text style={styles.emptyTitle}>
+                  {farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                    ? 'No Livestock Inventory Found'
+                    : 'No Inventory Records Found'}
+                </Text>
                 <Text style={styles.emptySubtitle}>
-                  No agricultural materials recorded for this farm or year selection. Use the form above to log materials.
+                  {farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                    ? 'No livestock feed, veterinary medicines or materials recorded for this parcel.'
+                    : 'No agricultural materials recorded for this farm or year selection.'}
                 </Text>
               </Card>
             ) : (
               filteredInputs.map((i) => {
                 const farm = farmMap.get(i.farm_id);
+                const isLivestock = farm?.farming_type === 'livestock';
                 return (
                   <Card key={i.id} style={styles.itemCard}>
                     <View style={styles.itemHeader}>
                       <View style={{ flex: 1, marginRight: Spacing.xs }}>
                         <Text style={styles.itemName}>{i.name}</Text>
                         <View style={styles.itemMetaRow}>
-                          <View style={styles.itemFarmBadge}>
+                          <View
+                            style={[
+                              styles.itemFarmBadge,
+                              isLivestock && {
+                                backgroundColor: '#FEF3C7',
+                                borderColor: '#FDE68A',
+                              },
+                            ]}
+                          >
                             <Ionicons
                               name={
-                                farm?.farming_type === 'livestock'
+                                isLivestock
                                   ? 'paw'
                                   : farm?.farming_type === 'both'
                                   ? 'layers'
                                   : 'leaf'
                               }
                               size={11}
-                              color={Colors.primaryDark}
+                              color={isLivestock ? '#B45309' : Colors.primaryDark}
                             />
-                            <Text style={styles.itemFarmText}>
+                            <Text
+                              style={[
+                                styles.itemFarmText,
+                                isLivestock && { color: '#B45309' },
+                              ]}
+                            >
                               {farm?.name || 'Farm Parcel'}
                             </Text>
                           </View>
@@ -836,7 +1202,11 @@ export default function InputsExpensesScreen() {
                           <Text style={styles.itemSupplier}>Supplier: {i.supplier}</Text>
                         ) : null}
                       </View>
-                      <Badge label="In Inventory" variant="info" size="sm" />
+                      <Badge
+                        label={isLivestock ? 'Livestock Stock' : 'In Inventory'}
+                        variant={isLivestock ? 'warning' : 'info'}
+                        size="sm"
+                      />
                     </View>
                   </Card>
                 );
@@ -865,7 +1235,13 @@ export default function InputsExpensesScreen() {
                     Parcel:{' '}
                     {selectedFarmFilter === 'all'
                       ? `Consolidated (${farms.length} Farms)`
-                      : farmMap.get(selectedFarmFilter)?.name || 'Selected Farm'}
+                      : `${farmMap.get(selectedFarmFilter)?.name} (${
+                          farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                            ? 'Livestock only'
+                            : farmMap.get(selectedFarmFilter)?.farming_type === 'both'
+                            ? 'Crops & Livestock'
+                            : 'Crops only'
+                        })`}
                   </Text>
                 </View>
                 <Badge
@@ -882,9 +1258,15 @@ export default function InputsExpensesScreen() {
                   <Ionicons name="wallet-outline" size={18} color="#D97706" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.formTitle}>+ Log Farm Operating Expense</Text>
+                  <Text style={styles.formTitle}>
+                    {activeExpenseFarm?.farming_type === 'livestock'
+                      ? '+ Log Livestock Operating Expense'
+                      : '+ Log Farm Operating Expense'}
+                  </Text>
                   <Text style={styles.formSubtitle}>
-                    Record labor wages, machinery hire, transport & operational costs
+                    {activeExpenseFarm?.farming_type === 'livestock'
+                      ? 'Record veterinary fees, animal care, herd wages & pen maintenance'
+                      : 'Record labor wages, land prep, machinery hire, transport & operational costs'}
                   </Text>
                 </View>
               </View>
@@ -892,7 +1274,9 @@ export default function InputsExpensesScreen() {
               {/* FARM SELECTION FOR EXPENSE */}
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Farm Parcel *</Text>
-                <Text style={styles.helperText}>Select which farm parcel incurred this expense:</Text>
+                <Text style={styles.helperText}>
+                  Select farm parcel (enterprise filters categories automatically):
+                </Text>
                 {farms.length === 0 ? (
                   <View style={styles.noFarmBanner}>
                     <Text style={styles.noFarmText}>No registered farms found.</Text>
@@ -911,27 +1295,32 @@ export default function InputsExpensesScreen() {
                   >
                     {farms.map((f) => {
                       const isSelected = expenseFarmId === f.id;
-                      const farmType = f.farming_type || 'crops';
+                      const isLivestock = f.farming_type === 'livestock';
+                      const isBoth = f.farming_type === 'both';
+                      const farmIcon = isLivestock ? 'paw' : isBoth ? 'layers' : 'leaf';
                       return (
                         <TouchableOpacity
                           key={f.id}
                           style={[
                             styles.farmSelectChip,
-                            isSelected && styles.farmSelectChipActive,
+                            isSelected &&
+                              (isLivestock
+                                ? styles.farmSelectChipActiveLivestock
+                                : styles.farmSelectChipActive),
                           ]}
-                          onPress={() => setExpenseFarmId(f.id)}
+                          onPress={() => handleSelectExpenseFarm(f.id)}
                           activeOpacity={0.7}
                         >
                           <Ionicons
-                            name={
-                              farmType === 'livestock'
-                                ? 'paw'
-                                : farmType === 'both'
-                                ? 'layers'
-                                : 'leaf'
-                            }
+                            name={farmIcon as any}
                             size={14}
-                            color={isSelected ? '#FFFFFF' : Colors.primary}
+                            color={
+                              isSelected
+                                ? '#FFFFFF'
+                                : isLivestock
+                                ? '#D97706'
+                                : Colors.primary
+                            }
                           />
                           <View style={{ marginLeft: 6 }}>
                             <Text
@@ -948,7 +1337,7 @@ export default function InputsExpensesScreen() {
                                 isSelected && styles.farmSelectChipSubActive,
                               ]}
                             >
-                              {f.size} {f.size_unit} • {farmType}
+                              {f.size} {f.size_unit} • {isLivestock ? 'Livestock' : isBoth ? 'Both' : 'Crops'}
                             </Text>
                           </View>
                         </TouchableOpacity>
@@ -958,6 +1347,44 @@ export default function InputsExpensesScreen() {
                 )}
               </View>
 
+              {/* ENTERPRISE ADAPTIVE NOTICE BANNER */}
+              <View
+                style={[
+                  styles.enterpriseNoticeBanner,
+                  activeExpenseFarm?.farming_type === 'livestock' &&
+                    styles.enterpriseNoticeBannerLivestock,
+                ]}
+              >
+                <Ionicons
+                  name={
+                    activeExpenseFarm?.farming_type === 'livestock'
+                      ? 'paw'
+                      : activeExpenseFarm?.farming_type === 'both'
+                      ? 'layers'
+                      : 'leaf'
+                  }
+                  size={14}
+                  color={
+                    activeExpenseFarm?.farming_type === 'livestock'
+                      ? '#B45309'
+                      : Colors.primaryDark
+                  }
+                />
+                <Text
+                  style={[
+                    styles.enterpriseNoticeText,
+                    activeExpenseFarm?.farming_type === 'livestock' &&
+                      styles.enterpriseNoticeTextLivestock,
+                  ]}
+                >
+                  {activeExpenseFarm?.farming_type === 'livestock'
+                    ? 'LIVESTOCK FARM ACTIVE: Showing livestock expense categories only. Crops operations excluded.'
+                    : activeExpenseFarm?.farming_type === 'crops'
+                    ? 'CROPS FARM ACTIVE: Showing crops operational expense categories only. Livestock operations excluded.'
+                    : 'INTEGRATED FARM: Both crop and livestock expense categories available.'}
+                </Text>
+              </View>
+
               <View style={styles.inputGroup}>
                 <Text style={styles.label}>Expense Category *</Text>
                 <ScrollView
@@ -965,10 +1392,16 @@ export default function InputsExpensesScreen() {
                   showsHorizontalScrollIndicator={false}
                   style={styles.chipRow}
                 >
-                  {EXPENSE_CATEGORIES.map((cat) => (
+                  {availableExpenseCategories.map((cat) => (
                     <TouchableOpacity
                       key={cat}
-                      style={[styles.chip, expenseCat === cat && styles.chipActive]}
+                      style={[
+                        styles.chip,
+                        expenseCat === cat &&
+                          (activeExpenseFarm?.farming_type === 'livestock'
+                            ? styles.chipActiveLivestock
+                            : styles.chipActive),
+                      ]}
                       onPress={() => setExpenseCat(cat)}
                       activeOpacity={0.7}
                     >
@@ -1037,7 +1470,11 @@ export default function InputsExpensesScreen() {
                 <Text style={styles.label}>Description / Operational Purpose</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. Wages for 4 casual laborers during weeding..."
+                  placeholder={
+                    activeExpenseFarm?.farming_type === 'livestock'
+                      ? 'e.g. Routine vaccination and herd deworming by extension veterinarian...'
+                      : 'e.g. Wages for 4 casual laborers during swamp weeding & bund repair...'
+                  }
                   placeholderTextColor={Colors.textMuted}
                   value={expenseDesc}
                   onChangeText={setExpenseDesc}
@@ -1052,7 +1489,11 @@ export default function InputsExpensesScreen() {
               />
 
               <Button
-                title="Log Farm Expense"
+                title={
+                  activeExpenseFarm?.farming_type === 'livestock'
+                    ? 'Log Livestock Expense'
+                    : 'Log Farm Expense'
+                }
                 onPress={handleAddExpense}
                 size="md"
                 loading={isSubmitting}
@@ -1067,40 +1508,77 @@ export default function InputsExpensesScreen() {
               </Text>
               <Text style={styles.listSectionSubtitle}>
                 Filtered by {selectedYearFilter === 'all' ? 'All Years' : `Year ${selectedYearFilter}`}{' '}
-                • {selectedFarmFilter === 'all' ? 'All Farms' : farmMap.get(selectedFarmFilter)?.name}
+                •{' '}
+                {selectedFarmFilter === 'all'
+                  ? 'All Farms'
+                  : `${farmMap.get(selectedFarmFilter)?.name} (${
+                      farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                        ? 'Livestock only'
+                        : farmMap.get(selectedFarmFilter)?.farming_type === 'both'
+                        ? 'Both'
+                        : 'Crops only'
+                    })`}
               </Text>
             </View>
 
             {filteredExpenses.length === 0 ? (
               <Card style={styles.emptyCard}>
-                <Ionicons name="cash-outline" size={36} color={Colors.textMuted} />
-                <Text style={styles.emptyTitle}>No Expenses Recorded</Text>
+                <Ionicons
+                  name={
+                    farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                      ? 'paw-outline'
+                      : 'cash-outline'
+                  }
+                  size={36}
+                  color={Colors.textMuted}
+                />
+                <Text style={styles.emptyTitle}>
+                  {farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                    ? 'No Livestock Expenses Recorded'
+                    : 'No Expenses Recorded'}
+                </Text>
                 <Text style={styles.emptySubtitle}>
-                  No operating costs logged for this farm parcel and year selection.
+                  {farmMap.get(selectedFarmFilter)?.farming_type === 'livestock'
+                    ? 'No livestock operational costs logged for this parcel.'
+                    : 'No operating costs logged for this farm parcel and year selection.'}
                 </Text>
               </Card>
             ) : (
               filteredExpenses.map((e) => {
                 const farm = farmMap.get(e.farm_id);
+                const isLivestock = farm?.farming_type === 'livestock';
                 return (
                   <Card key={e.id} style={styles.itemCard}>
                     <View style={styles.itemHeader}>
                       <View style={{ flex: 1, marginRight: Spacing.xs }}>
                         <Text style={styles.itemName}>{e.category}</Text>
                         <View style={styles.itemMetaRow}>
-                          <View style={styles.itemFarmBadge}>
+                          <View
+                            style={[
+                              styles.itemFarmBadge,
+                              isLivestock && {
+                                backgroundColor: '#FEF3C7',
+                                borderColor: '#FDE68A',
+                              },
+                            ]}
+                          >
                             <Ionicons
                               name={
-                                farm?.farming_type === 'livestock'
+                                isLivestock
                                   ? 'paw'
                                   : farm?.farming_type === 'both'
                                   ? 'layers'
                                   : 'leaf'
                               }
                               size={11}
-                              color={Colors.primaryDark}
+                              color={isLivestock ? '#B45309' : Colors.primaryDark}
                             />
-                            <Text style={styles.itemFarmText}>
+                            <Text
+                              style={[
+                                styles.itemFarmText,
+                                isLivestock && { color: '#B45309' },
+                              ]}
+                            >
                               {farm?.name || 'Farm Parcel'}
                             </Text>
                           </View>
@@ -1114,7 +1592,11 @@ export default function InputsExpensesScreen() {
                     </View>
                     <View style={styles.itemFooter}>
                       <Text style={styles.itemDate}>📅 {e.expense_date}</Text>
-                      <Badge label="Operational" variant="default" size="sm" />
+                      <Badge
+                        label={isLivestock ? 'Livestock Operation' : 'Operational'}
+                        variant={isLivestock ? 'warning' : 'default'}
+                        size="sm"
+                      />
                     </View>
                   </Card>
                 );
@@ -1204,6 +1686,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
   },
+  farmFilterChipActiveLivestock: {
+    backgroundColor: '#D97706',
+    borderColor: '#B45309',
+  },
   farmFilterChipText: {
     fontSize: 11,
     fontWeight: '700',
@@ -1218,7 +1704,33 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
   },
   farmFilterChipSubActive: {
-    color: '#E0F2FE',
+    color: '#FEF3C7',
+  },
+  // Enterprise Notice Banner
+  enterpriseNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: Radius.md,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: Spacing.sm,
+  },
+  enterpriseNoticeBannerLivestock: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  enterpriseNoticeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    flex: 1,
+  },
+  enterpriseNoticeTextLivestock: {
+    color: '#B45309',
   },
   // Tabs
   tabBar: {
@@ -1361,6 +1873,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0FDF4',
     borderColor: Colors.primary,
   },
+  farmSelectChipActiveLivestock: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#D97706',
+  },
   farmSelectChipTitle: {
     fontSize: Typography.sizes.xs,
     fontWeight: '700',
@@ -1416,6 +1932,10 @@ const styles = StyleSheet.create({
   chipActive: {
     backgroundColor: Colors.primary,
     borderColor: Colors.primary,
+  },
+  chipActiveLivestock: {
+    backgroundColor: '#D97706',
+    borderColor: '#B45309',
   },
   chipText: {
     fontSize: Typography.sizes.xs,
