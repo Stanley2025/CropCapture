@@ -52,34 +52,37 @@ const TENURE_TYPES = [
 
 // Livestock Constants (Species, Production Purposes, Management Systems, Housing, Water Sources)
 const LIVESTOCK_ANIMAL_TYPES = [
-  { label: 'Goats', emoji: '🐐', defaultBreed: 'West African Dwarf' },
-  { label: 'Pigs', emoji: '🐖', defaultBreed: 'Large White / Landrace' },
-  { label: 'Sheep', emoji: '🐑', defaultBreed: 'Djallonke (West African Dwarf)' },
-  { label: 'Chickens', emoji: '🐔', defaultBreed: 'Local / Broiler / Layer' },
-  { label: 'Cow', emoji: '🐄', defaultBreed: 'Ndama / Muturu' },
+  { label: 'Goats', emoji: '🐐', sub: 'Caprine', defaultBreed: 'West African Dwarf' },
+  { label: 'Pigs', emoji: '🐖', sub: 'Swine', defaultBreed: 'Large White / Landrace' },
+  { label: 'Sheep', emoji: '🐑', sub: 'Ovine', defaultBreed: 'Djallonke (West African Dwarf)' },
+  { label: 'Chickens', emoji: '🐔', sub: 'Poultry', defaultBreed: 'Local / Broiler / Layer' },
+  { label: 'Cow', emoji: '🐄', sub: 'Cattle', defaultBreed: 'Ndama / Muturu' },
 ];
 
 const PRODUCTION_PURPOSES = [
-  { id: 'Meat production', label: 'Meat production' },
-  { id: 'Egg production', label: 'Egg production' },
-  { id: 'Milk production', label: 'Milk production' },
-  { id: 'Breeding', label: 'Breeding' },
+  { id: 'Meat production', label: 'Meat production', icon: 'restaurant-outline' },
+  { id: 'Egg production', label: 'Egg production', icon: 'egg-outline' },
+  { id: 'Milk production', label: 'Milk production', icon: 'water-outline' },
+  { id: 'Breeding', label: 'Breeding', icon: 'git-network-outline' },
 ];
 
 const MANAGEMENT_SYSTEMS = [
   {
     id: 'Free-range',
     title: 'Free-range',
+    badge: 'Open Roaming',
     desc: 'Animals roam openly across pasture and scavenge freely with minimal confinement.',
   },
   {
     id: 'Semi-intensive',
     title: 'Semi-intensive',
+    badge: 'Shelter & Pasture',
     desc: 'Combination of grazing pasture with supplemental shelter, penning, and feeding.',
   },
   {
     id: 'Intensive',
     title: 'Intensive',
+    badge: 'Enclosed Pen',
     desc: 'Continuously housed in enclosed pens or coops with controlled feeding and watering.',
   },
 ];
@@ -736,46 +739,94 @@ export default function RegisterFarmScreen() {
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Animal Type *</Text>
               <Text style={styles.helperText}>Select the primary animal species reared on this farm</Text>
-              <View style={styles.animalTypeGrid}>
-                {LIVESTOCK_ANIMAL_TYPES.map((a) => {
-                  const isSelected = animalType === a.label;
-                  return (
-                    <TouchableOpacity
-                      key={a.label}
-                      style={[styles.animalTypeCard, isSelected && styles.animalTypeCardActive]}
-                      onPress={() => {
-                        setAnimalType(a.label as any);
-                        if (
-                          !breed ||
-                          breed === 'West African Dwarf' ||
-                          breed === 'Large White / Landrace' ||
-                          breed === 'Djallonke (West African Dwarf)' ||
-                          breed === 'Local / Broiler / Layer' ||
-                          breed === 'Ndama / Muturu'
-                        ) {
-                          setBreed(a.defaultBreed);
-                        }
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Text style={styles.animalTypeEmoji}>{a.emoji}</Text>
-                      <Text style={[styles.animalTypeTitle, isSelected && styles.animalTypeTitleActive]}>
-                        {a.label}
-                      </Text>
-                      {isSelected && (
-                        <View style={styles.animalCheckBadge}>
-                          <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+              <View style={styles.animalSelectorContainer}>
+                <View style={styles.animalRow}>
+                  {LIVESTOCK_ANIMAL_TYPES.slice(0, 3).map((a) => {
+                    const isSelected = animalType === a.label;
+                    return (
+                      <TouchableOpacity
+                        key={a.label}
+                        style={[styles.animalCard, isSelected && styles.animalCardActive]}
+                        onPress={() => {
+                          setAnimalType(a.label as any);
+                          if (
+                            !breed ||
+                            breed === 'West African Dwarf' ||
+                            breed === 'Large White / Landrace' ||
+                            breed === 'Djallonke (West African Dwarf)' ||
+                            breed === 'Local / Broiler / Layer' ||
+                            breed === 'Ndama / Muturu'
+                          ) {
+                            setBreed(a.defaultBreed);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        {isSelected && (
+                          <View style={styles.animalCheckBadge}>
+                            <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                          </View>
+                        )}
+                        <View style={[styles.animalEmojiWrap, isSelected && styles.animalEmojiWrapActive]}>
+                          <Text style={styles.animalEmoji}>{a.emoji}</Text>
                         </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Text style={[styles.animalTitle, isSelected && styles.animalTitleActive]}>
+                          {a.label}
+                        </Text>
+                        <Text style={[styles.animalSub, isSelected && styles.animalSubActive]}>
+                          {a.sub}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                <View style={[styles.animalRow, { marginTop: Spacing.xs }]}>
+                  {LIVESTOCK_ANIMAL_TYPES.slice(3).map((a) => {
+                    const isSelected = animalType === a.label;
+                    return (
+                      <TouchableOpacity
+                        key={a.label}
+                        style={[styles.animalCard, isSelected && styles.animalCardActive]}
+                        onPress={() => {
+                          setAnimalType(a.label as any);
+                          if (
+                            !breed ||
+                            breed === 'West African Dwarf' ||
+                            breed === 'Large White / Landrace' ||
+                            breed === 'Djallonke (West African Dwarf)' ||
+                            breed === 'Local / Broiler / Layer' ||
+                            breed === 'Ndama / Muturu'
+                          ) {
+                            setBreed(a.defaultBreed);
+                          }
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        {isSelected && (
+                          <View style={styles.animalCheckBadge}>
+                            <Ionicons name="checkmark-circle" size={16} color={Colors.primary} />
+                          </View>
+                        )}
+                        <View style={[styles.animalEmojiWrap, isSelected && styles.animalEmojiWrapActive]}>
+                          <Text style={styles.animalEmoji}>{a.emoji}</Text>
+                        </View>
+                        <Text style={[styles.animalTitle, isSelected && styles.animalTitleActive]}>
+                          {a.label}
+                        </Text>
+                        <Text style={[styles.animalSub, isSelected && styles.animalSubActive]}>
+                          {a.sub}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
               </View>
             </View>
 
             {/* Breed and Number of Animals */}
-            <View style={styles.inputRow}>
-              <View style={[styles.inputGroup, { flex: 1.2, marginRight: Spacing.xs }]}>
+            <View style={[styles.inputRow, { marginTop: Spacing.sm }]}>
+              <View style={[styles.inputGroup, { flex: 1.25, marginRight: Spacing.xs }]}>
                 <Text style={styles.label}>Breed</Text>
                 <TextInput
                   style={styles.input}
@@ -785,7 +836,7 @@ export default function RegisterFarmScreen() {
                   onChangeText={setBreed}
                 />
               </View>
-              <View style={[styles.inputGroup, { flex: 0.8, marginLeft: Spacing.xs }]}>
+              <View style={[styles.inputGroup, { flex: 0.85, marginLeft: Spacing.xs }]}>
                 <Text style={styles.label}>Number of Animals *</Text>
                 <TextInput
                   style={styles.input}
@@ -817,6 +868,12 @@ export default function RegisterFarmScreen() {
                       <View style={[styles.purposeCheckbox, isSelected && styles.purposeCheckboxActive]}>
                         {isSelected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
                       </View>
+                      <Ionicons
+                        name={p.icon as any}
+                        size={15}
+                        color={isSelected ? Colors.primary : Colors.textMuted}
+                        style={{ marginRight: 6 }}
+                      />
                       <Text style={[styles.purposeLabel, isSelected && styles.purposeLabelActive]}>
                         {p.label}
                       </Text>
@@ -845,9 +902,16 @@ export default function RegisterFarmScreen() {
                           {isSelected && <View style={styles.mgmtRadioInner} />}
                         </View>
                         <View style={{ flex: 1, marginLeft: Spacing.sm }}>
-                          <Text style={[styles.mgmtTitle, isSelected && styles.mgmtTitleActive]}>
-                            {m.title}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={[styles.mgmtTitle, isSelected && styles.mgmtTitleActive]}>
+                              {m.title}
+                            </Text>
+                            <View style={[styles.mgmtBadge, isSelected && styles.mgmtBadgeActive]}>
+                              <Text style={[styles.mgmtBadgeText, isSelected && styles.mgmtBadgeTextActive]}>
+                                {m.badge}
+                              </Text>
+                            </View>
+                          </View>
                           <Text style={styles.mgmtDesc}>{m.desc}</Text>
                         </View>
                       </View>
@@ -1674,41 +1738,68 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  // Animal Type Grid
-  animalTypeGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-    marginTop: 4,
+  // Animal Type Selector
+  animalSelectorContainer: {
+    marginTop: 6,
   },
-  animalTypeCard: {
+  animalRow: {
+    flexDirection: 'row',
+    gap: Spacing.xs,
+  },
+  animalCard: {
     flex: 1,
-    minWidth: '28%',
     backgroundColor: Colors.surfaceAlt,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: Radius.md,
-    paddingVertical: 12,
-    paddingHorizontal: 8,
+    borderRadius: Radius.lg,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    minHeight: 96,
   },
-  animalTypeCardActive: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#D97706',
+  animalCardActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: Colors.primary,
+    borderWidth: 2,
   },
-  animalTypeEmoji: {
-    fontSize: 24,
+  animalEmojiWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  animalTypeTitle: {
+  animalEmojiWrapActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  animalEmoji: {
+    fontSize: 22,
+  },
+  animalTitle: {
     fontSize: Typography.sizes.xs,
     fontWeight: '700',
     color: Colors.text,
+    textAlign: 'center',
   },
-  animalTypeTitleActive: {
-    color: '#92400E',
+  animalTitleActive: {
+    color: Colors.primaryDark,
+  },
+  animalSub: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Colors.textMuted,
+    marginTop: 1,
+    textAlign: 'center',
+  },
+  animalSubActive: {
+    color: Colors.primary,
   },
   animalCheckBadge: {
     position: 'absolute',
@@ -1730,7 +1821,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: Radius.md,
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     width: '48%',
   },
   purposeCardActive: {
@@ -1746,7 +1837,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 8,
+    marginRight: 6,
   },
   purposeCheckboxActive: {
     backgroundColor: Colors.primary,
@@ -1771,7 +1862,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceAlt,
     borderWidth: 1.5,
     borderColor: Colors.border,
-    borderRadius: Radius.md,
+    borderRadius: Radius.lg,
     padding: Spacing.sm,
   },
   mgmtCardActive: {
@@ -1791,6 +1882,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
+    backgroundColor: '#FFFFFF',
   },
   mgmtRadioActive: {
     borderColor: Colors.primary,
@@ -1809,10 +1901,28 @@ const styles = StyleSheet.create({
   mgmtTitleActive: {
     color: Colors.primaryDark,
   },
+  mgmtBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.border,
+  },
+  mgmtBadgeActive: {
+    backgroundColor: '#DCFCE7',
+  },
+  mgmtBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+  },
+  mgmtBadgeTextActive: {
+    color: Colors.primaryDark,
+  },
   mgmtDesc: {
     fontSize: 11,
     color: Colors.textMuted,
-    marginTop: 2,
+    marginTop: 3,
     lineHeight: 15,
   },
   // Water Grid
@@ -1827,10 +1937,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.border,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
     borderRadius: Radius.full,
   },
   waterChipActive: {
