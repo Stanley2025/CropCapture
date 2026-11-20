@@ -22,8 +22,8 @@ export default function LoginPage() {
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Helper: Full digits Farm ID (8 numeric digits)
-  const generateFullDigitsFarmId = () => Math.floor(10000000 + Math.random() * 90000000).toString();
+  // Helper: 6-digit Farm ID (100000 - 999999)
+  const generateFullDigitsFarmId = () => Math.floor(100000 + Math.random() * 900000).toString();
 
   // Create Account State (all optional per user specification)
   const [farmId, setFarmId] = useState(generateFullDigitsFarmId());
@@ -371,7 +371,7 @@ export default function LoginPage() {
                   <div className="flex items-center gap-2">
                     <span className="text-[11px] font-bold tracking-wider text-[#2A4A2F]">FARM ID</span>
                     <span className="rounded bg-[#D1E8C5] px-1.5 py-0.5 text-[10px] font-semibold text-[#1E4023]">
-                      Auto-generated Full Digits
+                      Auto-generated 6 Digits
                     </span>
                   </div>
                   <div className="text-2xl font-extrabold tracking-widest text-[#133319]">{farmId}</div>

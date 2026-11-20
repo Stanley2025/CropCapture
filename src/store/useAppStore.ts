@@ -323,7 +323,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     const newFarmer: Farmer = {
       id,
       profile_id: null,
-      farmer_id_code: farmerData.farm_id_code,
+      farmer_id_code:
+        farmerData.farm_id_code || Math.floor(100000 + Math.random() * 900000).toString(),
       full_name: farmerData.full_name?.trim() || `Farmer ${farmerData.farm_id_code}`,
       gender: farmerData.gender || null,
       date_of_birth: farmerData.date_of_birth || null,

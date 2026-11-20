@@ -74,9 +74,9 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Helper: Generate full-digits Farm ID (e.g. 8 full numeric digits)
+  // Helper: Generate 6-digit Farm ID (100000 - 999999)
   const generateFullDigitsFarmId = () => {
-    return Math.floor(10000000 + Math.random() * 90000000).toString();
+    return Math.floor(100000 + Math.random() * 900000).toString();
   };
 
   // Create Account State (all fields optional per user instruction)
@@ -425,7 +425,7 @@ export default function LoginScreen() {
                     <View style={styles.farmIdHeaderRow}>
                       <Text style={styles.farmIdLabel}>FARM ID</Text>
                       <View style={styles.autoTag}>
-                        <Text style={styles.autoTagText}>Auto-generated Full Digits</Text>
+                        <Text style={styles.autoTagText}>Auto-generated 6 Digits</Text>
                       </View>
                     </View>
                     <Text style={styles.farmIdDigits}>{farmId}</Text>
