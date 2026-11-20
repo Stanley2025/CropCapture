@@ -54,7 +54,7 @@ const getActivityTheme = (type: string) => {
 
 export default function ActivitiesScreen() {
   const router = useRouter();
-  const { currentRole } = useAppStore();
+  const { currentRole, currentFarmer } = useAppStore();
   const [activities, setActivities] = useState<FarmActivity[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -63,16 +63,25 @@ export default function ActivitiesScreen() {
 
   const loadActivities = useCallback(async () => {
     try {
-      const [acts, fms] = await Promise.all([
+      let [acts, fms] = await Promise.all([
         localDb.getActivities(),
         localDb.getFarms(),
       ]);
+
+      if (currentRole === 'farmer' && currentFarmer?.id) {
+        fms = fms.filter((f) => f.farmer_id === currentFarmer.id);
+        const myFarmIds = new Set(fms.map((f) => f.id));
+        acts = acts.filter(
+          (a) => a.farmer_id === currentFarmer.id || myFarmIds.has(a.farm_id)
+        );
+      }
+
       setActivities(acts);
       setFarms(fms);
     } catch (e) {
       console.error('Error loading activities:', e);
     }
-  }, []);
+  }, [currentRole, currentFarmer?.id]);
 
   useEffect(() => {
     loadActivities();

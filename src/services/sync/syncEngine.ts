@@ -226,9 +226,20 @@ export class SyncEngine {
         }
       }
 
-      const { error } = await supabase.from(tableName).upsert(sanitized, {
+      let { error } = await supabase.from(tableName).upsert(sanitized, {
         onConflict: 'id',
       });
+
+      // Gracefully retry without farming_type if remote Supabase schema has not run migration yet
+      if (error && item.entity_type === 'farm' && error.message.includes('farming_type')) {
+        const withoutFarmingType = { ...sanitized };
+        delete withoutFarmingType.farming_type;
+        const retryResult = await supabase.from(tableName).upsert(withoutFarmingType, {
+          onConflict: 'id',
+        });
+        error = retryResult.error;
+      }
+
       if (error) return { success: false, error: error.message };
     } else if (item.action === 'delete') {
       const { error } = await supabase.from(tableName).delete().eq('id', item.payload.id);

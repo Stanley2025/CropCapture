@@ -23,19 +23,22 @@ import { useAppStore } from '../../src/store/useAppStore';
 
 export default function HarvestsScreen() {
   const router = useRouter();
-  const { currentRole } = useAppStore();
+  const { currentRole, currentFarmer } = useAppStore();
   const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
   const [selectedFilter, setSelectedFilter] = useState<'all' | 'approved' | 'pending'>('all');
   const [refreshing, setRefreshing] = useState(false);
 
   const loadHarvests = useCallback(async () => {
     try {
-      const data = await localDb.getHarvests();
+      let data = await localDb.getHarvests();
+      if (currentRole === 'farmer' && currentFarmer?.id) {
+        data = data.filter((h) => h.farmer_id === currentFarmer.id);
+      }
       setHarvests(data);
     } catch (e) {
       console.error('Failed to load harvests:', e);
     }
-  }, []);
+  }, [currentRole, currentFarmer?.id]);
 
   useEffect(() => {
     loadHarvests();

@@ -45,12 +45,21 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [f, s, a, h] = await Promise.all([
+      let [f, s, a, h] = await Promise.all([
         localDb.getFarms(),
         localDb.getSeasons(),
         localDb.getActivities(),
         localDb.getHarvests(),
       ]);
+
+      if (currentRole === 'farmer' && currentFarmer?.id) {
+        f = f.filter((farm) => farm.farmer_id === currentFarmer.id);
+        const myFarmIds = new Set(f.map((farm) => farm.id));
+        s = s.filter((season) => myFarmIds.has(season.farm_id));
+        a = a.filter((act) => act.farmer_id === currentFarmer.id || myFarmIds.has(act.farm_id));
+        h = h.filter((harv) => harv.farmer_id === currentFarmer.id || myFarmIds.has(harv.farm_id));
+      }
+
       setFarms(f);
       setSeasons(s);
       setActivities(a);
@@ -59,11 +68,11 @@ export default function HomeScreen() {
     } catch (e) {
       console.error('Failed to load dashboard data:', e);
     }
-  }, [refreshPendingSyncCount]);
+  }, [refreshPendingSyncCount, currentRole, currentFarmer?.id]);
 
   useEffect(() => {
     loadData();
-  }, [loadData, currentRole]);
+  }, [loadData, currentRole, currentFarmer?.id]);
 
   const onRefresh = async () => {
     setRefreshing(true);

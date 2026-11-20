@@ -48,7 +48,7 @@ const EXPENSE_CATEGORIES = [
 
 export default function InputsExpensesScreen() {
   const router = useRouter();
-  const { refreshPendingSyncCount } = useAppStore();
+  const { currentRole, currentFarmer, refreshPendingSyncCount } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<'inputs' | 'expenses'>('inputs');
   const [inputs, setInputs] = useState<InputRecord[]>([]);
@@ -76,11 +76,19 @@ export default function InputsExpensesScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [inp, exp, f] = await Promise.all([
+      let [inp, exp, f] = await Promise.all([
         localDb.getInputs(),
         localDb.getExpenses(),
         localDb.getFarms(),
       ]);
+
+      if (currentRole === 'farmer' && currentFarmer?.id) {
+        f = f.filter((farm) => farm.farmer_id === currentFarmer.id);
+        const myFarmIds = new Set(f.map((farm) => farm.id));
+        inp = inp.filter((item) => myFarmIds.has(item.farm_id));
+        exp = exp.filter((item) => myFarmIds.has(item.farm_id));
+      }
+
       setInputs(inp);
       setExpenses(exp);
       setFarms(f);
@@ -88,7 +96,7 @@ export default function InputsExpensesScreen() {
     } catch (e) {
       console.error('Failed to load inputs and expenses:', e);
     }
-  }, [selectedFarmId]);
+  }, [selectedFarmId, currentRole, currentFarmer?.id]);
 
   useEffect(() => {
     loadData();

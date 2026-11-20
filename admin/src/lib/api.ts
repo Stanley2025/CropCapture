@@ -88,7 +88,7 @@ export async function getDashboardMetrics() {
 
     const [farmersRes, farmsRes, harvestsRes, coopsRes] = (await withTimeout(query, 1800)) as any[];
 
-    if (!farmersRes.error && farmersRes.count !== null && farmersRes.count > 0) {
+    if (!farmersRes.error && farmersRes.count !== null) {
       const farms: any[] = farmsRes.data || [];
       const harvests: any[] = harvestsRes.data || [];
       const totalAcreage = farms.reduce((acc: number, f: any) => acc + (Number(f.size) || 0), 0);
@@ -164,7 +164,7 @@ export async function getFarmers(limit?: number): Promise<Farmer[]> {
     if (limit) query = query.limit(limit);
 
     const { data, error } = (await withTimeout(query, 1800)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Farmer[]);
       return data as Farmer[];
     }
@@ -256,7 +256,7 @@ export async function getFarms(limit?: number): Promise<Farm[]> {
     if (limit) query = query.limit(limit);
 
     const { data, error } = (await withTimeout(query, 1800)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Farm[]);
       return data as Farm[];
     }
@@ -283,7 +283,7 @@ export async function getFarmsByFarmerId(farmerId: string): Promise<Farm[]> {
       .order('created_at', { ascending: false });
 
     const { data, error } = (await withTimeout(query, 1500)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Farm[]);
       return data as Farm[];
     }
@@ -337,7 +337,7 @@ export async function getCrops(): Promise<Crop[]> {
     const supabase = createClient();
     const query = supabase.from('crops').select(CROP_SELECT_FIELDS).order('name');
     const { data, error } = (await withTimeout(query, 1500)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Crop[]);
       return data as Crop[];
     }
@@ -367,7 +367,7 @@ export async function getSeasons(limit?: number): Promise<FarmSeason[]> {
     if (limit) query = query.limit(limit);
 
     const { data, error } = (await withTimeout(query, 1800)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as FarmSeason[]);
       return data as FarmSeason[];
     }
@@ -401,7 +401,7 @@ export async function getFarmActivities(limit?: number): Promise<FarmActivity[]>
     if (limit) query = query.limit(limit);
 
     const { data, error } = (await withTimeout(query, 1800)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as FarmActivity[]);
       return data as FarmActivity[];
     }
@@ -428,7 +428,7 @@ export async function getFarmActivitiesByFarmerId(farmerId: string): Promise<Far
       .order('activity_date', { ascending: false });
 
     const { data, error } = (await withTimeout(query, 1500)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as FarmActivity[]);
       return data as FarmActivity[];
     }
@@ -455,7 +455,7 @@ export async function getFarmActivitiesByFarmId(farmId: string): Promise<FarmAct
       .order('activity_date', { ascending: false });
 
     const { data, error } = (await withTimeout(query, 1500)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as FarmActivity[]);
       return data as FarmActivity[];
     }
@@ -489,7 +489,7 @@ export async function getHarvestBatches(limit?: number): Promise<HarvestBatch[]>
     if (limit) query = query.limit(limit);
 
     const { data, error } = (await withTimeout(query, 1800)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as HarvestBatch[]);
       return data as HarvestBatch[];
     }
@@ -516,7 +516,7 @@ export async function getHarvestBatchesByFarmerId(farmerId: string): Promise<Har
       .order('created_at', { ascending: false });
 
     const { data, error } = (await withTimeout(query, 1500)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as HarvestBatch[]);
       return data as HarvestBatch[];
     }
@@ -543,7 +543,7 @@ export async function getHarvestBatchesByFarmId(farmId: string): Promise<Harvest
       .order('created_at', { ascending: false });
 
     const { data, error } = (await withTimeout(query, 1500)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as HarvestBatch[]);
       return data as HarvestBatch[];
     }
@@ -604,7 +604,7 @@ export async function getQualityInspections(limit?: number): Promise<QualityInsp
     if (limit) query = query.limit(limit);
 
     const { data, error } = (await withTimeout(query, 1800)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as QualityInspection[]);
       return data as QualityInspection[];
     }
@@ -659,7 +659,7 @@ export async function getCooperatives(): Promise<Cooperative[]> {
     const supabase = createClient();
     const query = supabase.from('cooperatives').select(COOP_SELECT_FIELDS).order('name');
     const { data, error } = (await withTimeout(query, 1500)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Cooperative[]);
       return data as Cooperative[];
     }
@@ -719,7 +719,7 @@ export async function getInputs(limit?: number): Promise<InputRecord[]> {
     if (limit) query = query.limit(limit);
 
     const { data, error } = (await withTimeout(query, 1800)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as InputRecord[]);
       return data as InputRecord[];
     }
@@ -749,7 +749,7 @@ export async function getAuditLogs(limit?: number): Promise<AuditLog[]> {
     if (limit) query = query.limit(limit);
 
     const { data, error } = (await withTimeout(query, 1800)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as AuditLog[]);
       return data as AuditLog[];
     }
@@ -778,7 +778,7 @@ export async function getProfiles(): Promise<Profile[]> {
       .order('created_at', { ascending: false });
 
     const { data, error } = (await withTimeout(query, 1800)) as any;
-    if (!error && data && data.length > 0) {
+    if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Profile[]);
       return data as Profile[];
     }

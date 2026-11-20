@@ -142,35 +142,7 @@ interface AppState {
   }) => Promise<Farmer>;
 }
 
-const DEMO_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'n1',
-    user_id: PERSONAS.farmer.profile.id,
-    title: 'Harvest Batch Approved',
-    message: 'Batch CRP-2026-RICE-000001 has been inspected and received Grade A verification.',
-    type: 'inspection',
-    is_read: false,
-    created_at: new Date(Date.now() - 2 * 86400000).toISOString(),
-  },
-  {
-    id: 'n2',
-    user_id: PERSONAS.farmer.profile.id,
-    title: 'Extension Visit Scheduled',
-    message: 'Extension Officer Kebbeh Flomo has scheduled a field visit for Gbehley Swamp Farm.',
-    type: 'visit',
-    is_read: false,
-    created_at: new Date(Date.now() - 5 * 86400000).toISOString(),
-  },
-  {
-    id: 'n3',
-    user_id: PERSONAS.farmer.profile.id,
-    title: 'Weather & Planting Alert',
-    message: 'Favorable rainfall forecast across Nimba County. Recommended time for weeding & fertilizer application.',
-    type: 'system',
-    is_read: true,
-    created_at: new Date(Date.now() - 8 * 86400000).toISOString(),
-  },
-];
+const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 
 export const useAppStore = create<AppState>((set, get) => ({
   isAuthenticated: false,
@@ -181,11 +153,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   lastSyncTime: null,
   currentFarmer: PERSONAS.farmer.farmer!,
   currentUserProfile: PERSONAS.farmer.profile,
-  notifications: DEMO_NOTIFICATIONS,
+  notifications: INITIAL_NOTIFICATIONS,
   isInitialized: false,
 
   initialize: async () => {
     try {
+      await localDb.purgeMockData();
       await localDb.seedDefaultDataIfEmpty();
       const lastSync = await localDb.getLastSyncTimestamp();
       const queue = await localDb.getSyncQueue();
@@ -203,12 +176,33 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (savedAuth) {
         try {
           const parsed = JSON.parse(savedAuth);
-          if (parsed && parsed.role && PERSONAS[parsed.role]) {
+          if (parsed && parsed.role) {
             isAuth = true;
             activeRole = parsed.role;
-            activeProfile = PERSONAS[parsed.role].profile;
-            if (PERSONAS[parsed.role].farmer) {
-              activeFarmer = PERSONAS[parsed.role].farmer!;
+            if (parsed.role === 'farmer' && (parsed.farmId || parsed.email)) {
+              const allFarmers = await localDb.getFarmers();
+              const matchedFarmer = allFarmers.find(
+                (f) =>
+                  (parsed.farmId && f.farmer_id_code === parsed.farmId) ||
+                  (parsed.email && f.email === parsed.email)
+              );
+              if (matchedFarmer) {
+                activeFarmer = matchedFarmer;
+                activeProfile = {
+                  id: matchedFarmer.id,
+                  full_name: matchedFarmer.full_name,
+                  role: 'farmer',
+                  county: matchedFarmer.county,
+                  district: matchedFarmer.district,
+                  community: matchedFarmer.community,
+                  created_at: matchedFarmer.created_at,
+                };
+              }
+            } else if (PERSONAS[parsed.role]) {
+              activeProfile = PERSONAS[parsed.role].profile;
+              if (PERSONAS[parsed.role].farmer) {
+                activeFarmer = PERSONAS[parsed.role].farmer!;
+              }
             }
           }
         } catch (e) {
@@ -258,29 +252,55 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const persona = PERSONAS[targetRole] || PERSONAS.farmer;
+    let activeFarmer = persona.farmer || get().currentFarmer;
+    let activeProfile = persona.profile;
+
+    if (targetRole === 'farmer') {
+      const cleanInput = (email || '').trim().toLowerCase();
+      const allFarmers = await localDb.getFarmers();
+      const matched = allFarmers.find(
+        (f) =>
+          f.farmer_id_code?.toLowerCase() === cleanInput ||
+          f.email?.toLowerCase() === cleanInput ||
+          (cleanInput.length === 6 && f.farmer_id_code === cleanInput)
+      );
+      if (matched) {
+        activeFarmer = matched;
+        activeProfile = {
+          id: matched.id,
+          full_name: matched.full_name,
+          role: 'farmer',
+          county: matched.county,
+          district: matched.district,
+          community: matched.community,
+          created_at: matched.created_at,
+        };
+      }
+    }
 
     await AsyncStorage.setItem(
       '@cropcapture_auth_session',
       JSON.stringify({
-        role: persona.profile.role,
-        email: email || persona.profile.email,
+        role: targetRole,
+        email: email || activeProfile.email,
+        farmId: activeFarmer?.farmer_id_code,
         loggedInAt: new Date().toISOString(),
       })
     );
 
-    const savedPhoto = await AsyncStorage.getItem(`@cropcapture_user_photo_${persona.profile.role}`);
+    const savedPhoto = await AsyncStorage.getItem(`@cropcapture_user_photo_${targetRole}`);
 
     set({
       isAuthenticated: true,
-      currentRole: persona.profile.role,
+      currentRole: targetRole as UserRole,
       currentUserProfile: {
-        ...persona.profile,
-        email: email ? email.trim() : persona.profile.email,
-        avatar_url: savedPhoto || persona.profile.avatar_url,
+        ...activeProfile,
+        email: email ? email.trim() : activeProfile.email,
+        avatar_url: savedPhoto || activeProfile.avatar_url,
       },
       currentFarmer: {
-        ...(persona.farmer || get().currentFarmer),
-        photo_url: savedPhoto || (persona.farmer ? persona.farmer.photo_url : null),
+        ...activeFarmer,
+        photo_url: savedPhoto || activeFarmer?.photo_url || null,
       },
     });
 
@@ -354,9 +374,20 @@ export const useAppStore = create<AppState>((set, get) => ({
       })
     );
 
+    const welcomeNotification: AppNotification = {
+      id: generateUUID(),
+      user_id: newFarmer.id,
+      title: 'Welcome to CropCapture!',
+      message: `Your account has been registered with Farm ID: ${newFarmer.farmer_id_code}. Register your farm parcel to begin recording crop and livestock activities.`,
+      type: 'system',
+      is_read: false,
+      created_at: new Date().toISOString(),
+    };
+
     set({
       isAuthenticated: true,
       currentRole: 'farmer',
+      notifications: [welcomeNotification],
       currentUserProfile: {
         id: newFarmer.id,
         full_name: newFarmer.full_name,
