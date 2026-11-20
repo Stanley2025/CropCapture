@@ -17,16 +17,85 @@ import {
   Plus,
   X,
   PawPrint,
+  Home,
+  Waves,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
 import { getFarms, getFarmers, createFarm } from '@/lib/api';
-import { Farm, Farmer } from '@/types/database';
+import { Farm, Farmer, LivestockDetails } from '@/types/database';
 import {
   getCounties,
   getDistrictsByCounty,
   County,
   District,
 } from '@/lib/liberiaGeographicData';
+
+const LIVESTOCK_SPECIES = [
+  { label: 'Goats', emoji: '🐐', defaultBreed: 'West African Dwarf' },
+  { label: 'Pigs', emoji: '🐖', defaultBreed: 'Large White / Landrace' },
+  { label: 'Sheep', emoji: '🐑', defaultBreed: 'Djallonke (West African Dwarf)' },
+  { label: 'Chickens', emoji: '🐔', defaultBreed: 'Local / Broiler / Layer' },
+  { label: 'Cow', emoji: '🐄', defaultBreed: 'Ndama / Muturu' },
+];
+
+const PRODUCTION_PURPOSES = [
+  { id: 'Meat production', label: 'Meat production' },
+  { id: 'Egg production', label: 'Egg production' },
+  { id: 'Milk production', label: 'Milk production' },
+  { id: 'Breeding', label: 'Breeding' },
+];
+
+const MANAGEMENT_SYSTEMS = [
+  {
+    id: 'Free-range',
+    title: 'Free-range',
+    desc: 'Animals roam openly across pasture and scavenge freely with minimal confinement.',
+  },
+  {
+    id: 'Semi-intensive',
+    title: 'Semi-intensive',
+    desc: 'Combination of grazing pasture with supplemental shelter, penning, and feeding.',
+  },
+  {
+    id: 'Intensive',
+    title: 'Intensive',
+    desc: 'Continuously housed in enclosed pens or coops with controlled feeding and watering.',
+  },
+];
+
+const WATER_SOURCES = [
+  'Well',
+  'Hand pump',
+  'River or stream',
+  'Borehole',
+  'Rainwater',
+  'Pipe-borne water',
+];
+
+const HOUSING_TYPES = [
+  'Raised Slatted Wooden Pen',
+  'Concrete Block Shed',
+  'Open Kraal / Fenced Paddock',
+  'Poultry Coop / Run',
+  'Thatched Enclosure',
+  'Deep Litter House',
+];
+
+const GRAZING_ARRANGEMENTS = [
+  'Communal Village Pasture',
+  'Private Fenced Pasture',
+  'Rotational Grazing Paddock',
+  'Roadside / Bush Tethering',
+  'Zero-Grazing (Cut-and-Carry)',
+];
+
+const FEEDING_SYSTEMS = [
+  'Commercial Formulated Feed',
+  'Cut Forage, Napier Grass & Legumes',
+  'Natural Pasture Grazing Only',
+  'Mixed Feeding (Pasture + Concentrates)',
+  'Cassava Peels, Rice Bran & Farm Waste',
+];
 
 export default function FarmsPage() {
   const [farms, setFarms] = useState<Farm[]>([]);
@@ -42,7 +111,7 @@ export default function FarmsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
 
-  // Form State
+  // Form Basic & Location State
   const [formName, setFormName] = useState('');
   const [formFarmerId, setFormFarmerId] = useState('');
   const [formFarmingType, setFormFarmingType] = useState<'crops' | 'livestock' | 'both'>('crops');
@@ -55,6 +124,21 @@ export default function FarmsPage() {
   const [formIrrigation, setFormIrrigation] = useState(false);
   const [formSoilType, setFormSoilType] = useState('Clay Loam (Swamp Basin)');
   const [formDescription, setFormDescription] = useState('');
+
+  // Livestock Specific State
+  const [formAnimalType, setFormAnimalType] = useState<'Goats' | 'Pigs' | 'Sheep' | 'Chickens' | 'Cow'>('Goats');
+  const [formBreed, setFormBreed] = useState('West African Dwarf');
+  const [formHeadCount, setFormHeadCount] = useState('');
+  const [formProductionPurposes, setFormProductionPurposes] = useState<string[]>(['Meat production']);
+  const [formManagementSystem, setFormManagementSystem] = useState<'Free-range' | 'Semi-intensive' | 'Intensive'>('Semi-intensive');
+  const [formHousingType, setFormHousingType] = useState('Raised Slatted Wooden Pen');
+  const [formHousingSize, setFormHousingSize] = useState('');
+  const [formHousingCapacity, setFormHousingCapacity] = useState('');
+  const [formGrazingAvailable, setFormGrazingAvailable] = useState(true);
+  const [formGrazingArrangement, setFormGrazingArrangement] = useState('Communal Village Pasture');
+  const [formGrazingArea, setFormGrazingArea] = useState('');
+  const [formWaterSource, setFormWaterSource] = useState('Well');
+  const [formFeedingSystem, setFormFeedingSystem] = useState('Mixed Feeding (Pasture + Concentrates)');
 
   // Form Inline Errors
   const [countyError, setCountyError] = useState<string | null>(null);
@@ -76,6 +160,16 @@ export default function FarmsPage() {
     }
     load();
   }, []);
+
+  const toggleProductionPurpose = (purposeId: string) => {
+    setFormProductionPurposes((prev) =>
+      prev.includes(purposeId)
+        ? prev.length > 1
+          ? prev.filter((p) => p !== purposeId)
+          : prev
+        : [...prev, purposeId]
+    );
+  };
 
   // Handle County Filter Change -> Clear District Filter
   const handleCountyFilterChange = (val: string) => {
@@ -149,6 +243,18 @@ export default function FarmsPage() {
       return;
     }
 
+    const isLivestockActive = formFarmingType === 'livestock' || formFarmingType === 'both';
+    if (isLivestockActive) {
+      if (!formHeadCount || isNaN(Number(formHeadCount)) || Number(formHeadCount) <= 0) {
+        setGeneralError('Please enter the number of livestock animals (head count).');
+        return;
+      }
+      if (formProductionPurposes.length === 0) {
+        setGeneralError('Please select at least one production purpose.');
+        return;
+      }
+    }
+
     setSubmitting(true);
     try {
       const selectedCountyObj = countiesList.find(
@@ -158,10 +264,29 @@ export default function FarmsPage() {
         (d) => d.name.toLowerCase() === formDistrict.toLowerCase()
       );
 
+      const livestockDetails: LivestockDetails | null = isLivestockActive
+        ? {
+            animal_type: formAnimalType,
+            breed: formBreed.trim() || undefined,
+            head_count: parseInt(formHeadCount, 10),
+            production_purpose: formProductionPurposes,
+            management_system: formManagementSystem,
+            housing_type: formHousingType,
+            housing_size: formHousingSize.trim() || undefined,
+            housing_capacity: formHousingCapacity ? parseInt(formHousingCapacity, 10) : undefined,
+            grazing_availability: formGrazingAvailable,
+            grazing_arrangement: formGrazingAvailable ? formGrazingArrangement : undefined,
+            grazing_area: formGrazingAvailable ? formGrazingArea.trim() || undefined : undefined,
+            water_source: formWaterSource,
+            feeding_system: formFeedingSystem,
+          }
+        : null;
+
       const newFarmPayload: Partial<Farm> = {
         name: formName.trim(),
         farmer_id: formFarmerId,
         farming_type: formFarmingType,
+        livestock_details: livestockDetails,
         county: selectedCountyObj?.name || formCounty,
         district: selectedDistrictObj?.name || formDistrict,
         county_id: selectedCountyObj?.id || null,
@@ -172,13 +297,18 @@ export default function FarmsPage() {
         ownership_type: formOwnershipType,
         irrigation: formIrrigation,
         soil_type: formSoilType,
-        description: formDescription.trim() || undefined,
+        description:
+          formDescription.trim() ||
+          (formFarmingType === 'livestock'
+            ? `${formAnimalType} holding (${formHeadCount} head) raised for ${formProductionPurposes.join(', ')} under ${formManagementSystem} management.`
+            : formFarmingType === 'both'
+            ? `Integrated crop & ${formAnimalType} (${formHeadCount} head) farm parcel.`
+            : undefined),
         is_active: true,
       };
 
       const created = await createFarm(newFarmPayload);
       if (created) {
-        // Find associated farmer object to attach for table rendering
         const assocFarmer = farmers.find((f) => f.id === formFarmerId);
         const fullFarm: Farm = {
           ...created,
@@ -197,6 +327,7 @@ export default function FarmsPage() {
         setFormDistrict('');
         setFormCommunity('');
         setFormSize('');
+        setFormHeadCount('');
         setFormDescription('');
       } else {
         setGeneralError('Failed to create farm in cloud database. Please verify inputs and try again.');
@@ -219,7 +350,7 @@ export default function FarmsPage() {
               Farm Parcel Management & Cartography
             </h1>
             <p className="text-sm text-slate-500">
-              Verified agricultural parcels, customary land tenure, and GPS geographic coordinates.
+              Verified agricultural parcels, customary land tenure, crop & livestock enterprises, and GPS coordinates.
             </p>
           </div>
 
@@ -360,10 +491,17 @@ export default function FarmsPage() {
                     <tr key={farm.id} className="hover:bg-slate-50/80 transition-colors">
                       <td className="py-3.5 px-4">
                         <div className="font-bold text-slate-900">{farm.name}</div>
-                        <div className="flex items-center gap-1.5 mt-0.5">
-                          <span className="text-[11px] text-slate-400">{farm.soil_type || 'Loam'}</span>
+                        <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                           {farm.farming_type && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-100">
+                            <span
+                              className={`inline-flex items-center gap-0.5 text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.2 rounded border ${
+                                farm.farming_type === 'livestock'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : farm.farming_type === 'both'
+                                  ? 'bg-teal-50 text-teal-700 border-teal-200'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}
+                            >
                               {farm.farming_type === 'both'
                                 ? 'Crops & Livestock'
                                 : farm.farming_type === 'livestock'
@@ -371,14 +509,35 @@ export default function FarmsPage() {
                                 : 'Crops'}
                             </span>
                           )}
+                          <span className="text-[11px] text-slate-400">
+                            {farm.soil_type || 'Loam'}
+                          </span>
+                        </div>
+                        {farm.livestock_details && (
+                          <div className="text-[11px] text-amber-800 font-medium mt-1 flex items-center gap-1">
+                            <PawPrint className="h-3 w-3 text-amber-600 inline" />
+                            <span>
+                              {farm.livestock_details.head_count} {farm.livestock_details.animal_type}
+                              {farm.livestock_details.breed ? ` (${farm.livestock_details.breed})` : ''} •{' '}
+                              {Array.isArray(farm.livestock_details.production_purpose)
+                                ? farm.livestock_details.production_purpose.join(', ')
+                                : farm.livestock_details.production_purpose}
+                            </span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <div className="font-semibold text-slate-800">
+                          {farm.farmer?.full_name || 'Unassigned'}
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-mono">
+                          {farm.farmer?.farmer_id_code}
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="font-semibold text-slate-800">{farm.farmer?.full_name || 'Unassigned'}</div>
-                        <div className="text-[11px] text-slate-400 font-mono">{farm.farmer?.farmer_id_code}</div>
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <div className="text-slate-800">{farm.community}, {farm.district}</div>
+                        <div className="text-slate-800">
+                          {farm.community}, {farm.district}
+                        </div>
                         <div className="text-[11px] text-slate-400">{farm.county} County</div>
                       </td>
                       <td className="py-3.5 px-4">
@@ -423,15 +582,15 @@ export default function FarmsPage() {
         </div>
       </div>
 
-      {/* Register Farm Modal with Dependent County to District Selector */}
+      {/* Register Farm Modal with Dependent County to District Selector & Livestock Interface */}
       {showRegisterModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 p-4 backdrop-blur-xs overflow-y-auto">
-          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 my-8">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+          <div className="relative w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl border border-slate-200 my-8 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 sticky top-0 bg-white z-10">
               <div>
                 <h2 className="text-lg font-bold text-slate-900">Register Farm Parcel</h2>
                 <p className="text-xs text-slate-500">
-                  Record new verified parcel boundary, farmer owner, county, and district.
+                  Record new verified parcel, farmer owner, county, and livestock/crop details.
                 </p>
               </div>
               <button
@@ -635,58 +794,334 @@ export default function FarmsPage() {
                 </div>
               </div>
 
-              {/* Tenure and Soil */}
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Land Tenure
-                  </label>
-                  <select
-                    value={formOwnershipType}
-                    onChange={(e) => setFormOwnershipType(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-800 focus:border-[#15803D] focus:outline-none"
-                  >
-                    <option value="Family Customary Land">Family Customary Land</option>
-                    <option value="Freehold / Titled Deed">Freehold / Titled Deed</option>
-                    <option value="Leasehold Agreement">Leasehold Agreement</option>
-                    <option value="Community Communal Land">Community Communal Land</option>
-                    <option value="Sharecropping / Tenant">Sharecropping / Tenant</option>
-                  </select>
-                </div>
+              {/* LIVESTOCK DETAILS INTERFACE (Shown when livestock or both is selected) */}
+              {(formFarmingType === 'livestock' || formFarmingType === 'both') && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4 space-y-4">
+                  <div className="flex items-center gap-2 border-b border-amber-200/60 pb-2">
+                    <PawPrint className="h-4 w-4 text-amber-700" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                      Livestock Production & Management
+                    </h3>
+                  </div>
 
-                <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
-                    Predominant Soil Type
-                  </label>
-                  <select
-                    value={formSoilType}
-                    onChange={(e) => setFormSoilType(e.target.value)}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-800 focus:border-[#15803D] focus:outline-none"
-                  >
-                    <option value="Clay Loam (Swamp Basin)">Clay Loam (Swamp Basin)</option>
-                    <option value="Sandy Clay Loam">Sandy Clay Loam</option>
-                    <option value="Alluvial Deposit">Alluvial Deposit</option>
-                    <option value="Red Lateritic Soil">Red Lateritic Soil</option>
-                    <option value="Sandy Loam">Sandy Loam</option>
-                    <option value="Gravelly Loam">Gravelly Loam</option>
-                    <option value="Peat / Organic Muck">Peat / Organic Muck</option>
-                  </select>
-                </div>
-              </div>
+                  {/* Animal Type */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                      Animal Type *
+                    </label>
+                    <div className="grid grid-cols-5 gap-1.5">
+                      {LIVESTOCK_SPECIES.map((s) => {
+                        const isSelected = formAnimalType === s.label;
+                        return (
+                          <button
+                            key={s.label}
+                            type="button"
+                            onClick={() => {
+                              setFormAnimalType(s.label as any);
+                              setFormBreed(s.defaultBreed);
+                            }}
+                            className={`flex flex-col items-center justify-center p-2 rounded-lg border text-xs font-semibold transition ${
+                              isSelected
+                                ? 'border-amber-600 bg-amber-100 text-amber-900 shadow-2xs font-bold'
+                                : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <span className="text-lg">{s.emoji}</span>
+                            <span className="mt-1 text-[11px]">{s.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
 
-              {/* Irrigation Toggle */}
-              <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <input
-                  type="checkbox"
-                  id="admin_farm_irrigation"
-                  checked={formIrrigation}
-                  onChange={(e) => setFormIrrigation(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300 text-[#15803D] focus:ring-[#15803D]"
-                />
-                <label htmlFor="admin_farm_irrigation" className="text-xs font-semibold text-slate-700 cursor-pointer">
-                  Irrigation system available (bunds, canals or pump channel)
-                </label>
-              </div>
+                  {/* Breed & Number of Animals */}
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Breed
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. West African Dwarf"
+                        value={formBreed}
+                        onChange={(e) => setFormBreed(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-[#15803D] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Number of Animals (Head Count) *
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        required
+                        placeholder="e.g. 25"
+                        value={formHeadCount}
+                        onChange={(e) => setFormHeadCount(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-[#15803D] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Production Purpose */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                      Production Purpose *
+                    </label>
+                    <p className="text-[11px] text-slate-500 mb-1.5">
+                      Ask the farmer what they raise the animals for:
+                    </p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                      {PRODUCTION_PURPOSES.map((p) => {
+                        const isSelected = formProductionPurposes.includes(p.id);
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => toggleProductionPurpose(p.id)}
+                            className={`flex items-center gap-2 rounded-lg border p-2 text-xs font-semibold transition ${
+                              isSelected
+                                ? 'border-[#15803D] bg-emerald-50 text-[#15803D]'
+                                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              readOnly
+                              className="h-3.5 w-3.5 rounded text-[#15803D] pointer-events-none"
+                            />
+                            <span>{p.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Management System */}
+                  <div>
+                    <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1.5">
+                      Management System *
+                    </label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      {MANAGEMENT_SYSTEMS.map((m) => {
+                        const isSelected = formManagementSystem === m.id;
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => setFormManagementSystem(m.id as any)}
+                            className={`text-left rounded-lg border p-2.5 transition ${
+                              isSelected
+                                ? 'border-[#15803D] bg-white ring-1 ring-[#15803D]'
+                                : 'border-slate-200 bg-white hover:bg-slate-50'
+                            }`}
+                          >
+                            <div className="text-xs font-bold text-slate-900">{m.title}</div>
+                            <div className="text-[10px] text-slate-500 mt-0.5 leading-snug">
+                              {m.desc}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Housing Information */}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-1">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Housing Type
+                      </label>
+                      <select
+                        value={formHousingType}
+                        onChange={(e) => setFormHousingType(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-[#15803D] focus:outline-none"
+                      >
+                        {HOUSING_TYPES.map((h) => (
+                          <option key={h} value={h}>
+                            {h}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Housing Dimensions
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. 20x40 ft"
+                        value={formHousingSize}
+                        onChange={(e) => setFormHousingSize(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-[#15803D] focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Holding Capacity
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="e.g. 50"
+                        value={formHousingCapacity}
+                        onChange={(e) => setFormHousingCapacity(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-[#15803D] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Land & Grazing */}
+                  <div className="rounded-lg border border-slate-200 bg-white p-3 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800">
+                        Grazing Land Available
+                      </span>
+                      <input
+                        type="checkbox"
+                        checked={formGrazingAvailable}
+                        onChange={(e) => setFormGrazingAvailable(e.target.checked)}
+                        className="h-4 w-4 rounded text-[#15803D] focus:ring-[#15803D]"
+                      />
+                    </div>
+
+                    {formGrazingAvailable && (
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 pt-1 border-t border-slate-100">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Grazing Arrangement
+                          </label>
+                          <select
+                            value={formGrazingArrangement}
+                            onChange={(e) => setFormGrazingArrangement(e.target.value)}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 focus:border-[#15803D] focus:outline-none"
+                          >
+                            {GRAZING_ARRANGEMENTS.map((g) => (
+                              <option key={g} value={g}>
+                                {g}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                            Grazing Area
+                          </label>
+                          <input
+                            type="text"
+                            placeholder="e.g. 5 Acres"
+                            value={formGrazingArea}
+                            onChange={(e) => setFormGrazingArea(e.target.value)}
+                            className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-medium text-slate-800 placeholder-slate-400 focus:border-[#15803D] focus:outline-none"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Water Source and Feeding System */}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Water Source *
+                      </label>
+                      <select
+                        value={formWaterSource}
+                        onChange={(e) => setFormWaterSource(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800 focus:border-[#15803D] focus:outline-none"
+                      >
+                        {WATER_SOURCES.map((w) => (
+                          <option key={w} value={w}>
+                            {w}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Feeding System
+                      </label>
+                      <select
+                        value={formFeedingSystem}
+                        onChange={(e) => setFormFeedingSystem(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-800 focus:border-[#15803D] focus:outline-none"
+                      >
+                        {FEEDING_SYSTEMS.map((f) => (
+                          <option key={f} value={f}>
+                            {f}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Crop Characteristics (Shown for Crops or Both) */}
+              {(formFarmingType === 'crops' || formFarmingType === 'both') && (
+                <>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Land Tenure
+                      </label>
+                      <select
+                        value={formOwnershipType}
+                        onChange={(e) => setFormOwnershipType(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-800 focus:border-[#15803D] focus:outline-none"
+                      >
+                        <option value="Family Customary Land">Family Customary Land</option>
+                        <option value="Freehold / Titled Deed">Freehold / Titled Deed</option>
+                        <option value="Leasehold Agreement">Leasehold Agreement</option>
+                        <option value="Community Communal Land">Community Communal Land</option>
+                        <option value="Sharecropping / Tenant">Sharecropping / Tenant</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold uppercase tracking-wider text-slate-700 mb-1">
+                        Predominant Soil Type
+                      </label>
+                      <select
+                        value={formSoilType}
+                        onChange={(e) => setFormSoilType(e.target.value)}
+                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-xs font-medium text-slate-800 focus:border-[#15803D] focus:outline-none"
+                      >
+                        <option value="Clay Loam (Swamp Basin)">Clay Loam (Swamp Basin)</option>
+                        <option value="Sandy Clay Loam">Sandy Clay Loam</option>
+                        <option value="Alluvial Deposit">Alluvial Deposit</option>
+                        <option value="Red Lateritic Soil">Red Lateritic Soil</option>
+                        <option value="Sandy Loam">Sandy Loam</option>
+                        <option value="Gravelly Loam">Gravelly Loam</option>
+                        <option value="Peat / Organic Muck">Peat / Organic Muck</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* Irrigation Toggle */}
+                  <div className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 p-3">
+                    <input
+                      type="checkbox"
+                      id="admin_farm_irrigation"
+                      checked={formIrrigation}
+                      onChange={(e) => setFormIrrigation(e.target.checked)}
+                      className="h-4 w-4 rounded border-slate-300 text-[#15803D] focus:ring-[#15803D]"
+                    />
+                    <label
+                      htmlFor="admin_farm_irrigation"
+                      className="text-xs font-semibold text-slate-700 cursor-pointer"
+                    >
+                      Irrigation system available (bunds, canals or pump channel)
+                    </label>
+                  </div>
+                </>
+              )}
 
               {/* Description */}
               <div>

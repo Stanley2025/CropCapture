@@ -208,7 +208,7 @@ export async function updateFarmerStatus(id: string, status: 'active' | 'disable
 // 3. FARMS
 // ============================================================================
 const FARM_SELECT_FIELDS =
-  'id, farmer_id, name, county, district, community, size, size_unit, latitude, longitude, gps_lat, gps_lng, ownership_type, irrigation, soil_type, photo_url, description, is_active, created_at, updated_at, farmer:farmers(id, full_name, farmer_id_code, phone_number)';
+  'id, farmer_id, name, county, district, county_id, district_id, community, size, size_unit, farming_type, livestock_details, latitude, longitude, gps_lat, gps_lng, ownership_type, irrigation, soil_type, photo_url, description, is_active, created_at, updated_at, farmer:farmers(id, full_name, farmer_id_code, phone_number)';
 
 export async function getFarms(limit?: number): Promise<Farm[]> {
   const cacheKey = `farms_${limit || 'all'}`;

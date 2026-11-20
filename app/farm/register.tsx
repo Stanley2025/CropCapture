@@ -50,12 +50,105 @@ const TENURE_TYPES = [
   'Sharecropping / Tenant',
 ];
 
+// Livestock Constants (Species, Production Purposes, Management Systems, Housing, Water Sources)
+const LIVESTOCK_ANIMAL_TYPES = [
+  { label: 'Goats', emoji: '🐐', defaultBreed: 'West African Dwarf' },
+  { label: 'Pigs', emoji: '🐖', defaultBreed: 'Large White / Landrace' },
+  { label: 'Sheep', emoji: '🐑', defaultBreed: 'Djallonke (West African Dwarf)' },
+  { label: 'Chickens', emoji: '🐔', defaultBreed: 'Local / Broiler / Layer' },
+  { label: 'Cow', emoji: '🐄', defaultBreed: 'Ndama / Muturu' },
+];
+
+const PRODUCTION_PURPOSES = [
+  { id: 'Meat production', label: 'Meat production' },
+  { id: 'Egg production', label: 'Egg production' },
+  { id: 'Milk production', label: 'Milk production' },
+  { id: 'Breeding', label: 'Breeding' },
+];
+
+const MANAGEMENT_SYSTEMS = [
+  {
+    id: 'Free-range',
+    title: 'Free-range',
+    desc: 'Animals roam openly across pasture and scavenge freely with minimal confinement.',
+  },
+  {
+    id: 'Semi-intensive',
+    title: 'Semi-intensive',
+    desc: 'Combination of grazing pasture with supplemental shelter, penning, and feeding.',
+  },
+  {
+    id: 'Intensive',
+    title: 'Intensive',
+    desc: 'Continuously housed in enclosed pens or coops with controlled feeding and watering.',
+  },
+];
+
+const WATER_SOURCES = [
+  'Well',
+  'Hand pump',
+  'River or stream',
+  'Borehole',
+  'Rainwater',
+  'Pipe-borne water',
+];
+
+const HOUSING_TYPES = [
+  'Raised Slatted Wooden Pen',
+  'Concrete Block Shed',
+  'Open Kraal / Fenced Paddock',
+  'Poultry Coop / Run',
+  'Thatched Enclosure',
+  'Deep Litter House',
+];
+
+const GRAZING_ARRANGEMENTS = [
+  'Communal Village Pasture',
+  'Private Fenced Pasture',
+  'Rotational Grazing Paddock',
+  'Roadside / Bush Tethering',
+  'Zero-Grazing (Cut-and-Carry)',
+];
+
+const FEEDING_SYSTEMS = [
+  'Commercial Formulated Feed',
+  'Cut Forage, Napier Grass & Legumes',
+  'Natural Pasture Grazing Only',
+  'Mixed Feeding (Pasture + Concentrates)',
+  'Cassava Peels, Rice Bran & Farm Waste',
+];
+
 export default function RegisterFarmScreen() {
   const router = useRouter();
   const { currentFarmer, refreshPendingSyncCount } = useAppStore();
 
   const [name, setName] = useState('');
   const [farmingType, setFarmingType] = useState<'crops' | 'livestock' | 'both'>('crops');
+
+  // Livestock Specific State
+  const [animalType, setAnimalType] = useState<'Goats' | 'Pigs' | 'Sheep' | 'Chickens' | 'Cow'>('Goats');
+  const [breed, setBreed] = useState('West African Dwarf');
+  const [headCount, setHeadCount] = useState('');
+  const [productionPurposes, setProductionPurposes] = useState<string[]>(['Meat production']);
+  const [managementSystem, setManagementSystem] = useState<'Free-range' | 'Semi-intensive' | 'Intensive'>('Semi-intensive');
+  const [housingType, setHousingType] = useState('Raised Slatted Wooden Pen');
+  const [housingSize, setHousingSize] = useState('');
+  const [housingCapacity, setHousingCapacity] = useState('');
+  const [grazingAvailable, setGrazingAvailable] = useState(true);
+  const [grazingArrangement, setGrazingArrangement] = useState('Communal Village Pasture');
+  const [grazingArea, setGrazingArea] = useState('');
+  const [waterSource, setWaterSource] = useState('Well');
+  const [feedingSystem, setFeedingSystem] = useState('Mixed Feeding (Pasture + Concentrates)');
+
+  const togglePurpose = (purposeId: string) => {
+    setProductionPurposes((prev) =>
+      prev.includes(purposeId)
+        ? prev.length > 1
+          ? prev.filter((p) => p !== purposeId)
+          : prev
+        : [...prev, purposeId]
+    );
+  };
 
   // Dependent County & District State (Offline-first)
   const [countiesList, setCountiesList] = useState<County[]>(COUNTIES);
@@ -194,6 +287,21 @@ export default function RegisterFarmScreen() {
       return;
     }
 
+    const isLivestockActive = farmingType === 'livestock' || farmingType === 'both';
+    if (isLivestockActive) {
+      if (!headCount.trim() || isNaN(Number(headCount)) || Number(headCount) <= 0) {
+        Alert.alert('Required Field', 'Please enter the number of livestock animals (head count).');
+        return;
+      }
+      if (productionPurposes.length === 0) {
+        Alert.alert(
+          'Production Purpose',
+          'Please select at least one production purpose (e.g. Meat production, Egg production, Milk production, Breeding).'
+        );
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const resolvedCounty =
@@ -203,11 +311,30 @@ export default function RegisterFarmScreen() {
         (d) => d.name.toLowerCase() === district.toLowerCase()
       );
 
+      const livestockDetails = isLivestockActive
+        ? {
+            animal_type: animalType,
+            breed: breed.trim() || undefined,
+            head_count: parseInt(headCount, 10),
+            production_purpose: productionPurposes,
+            management_system: managementSystem,
+            housing_type: housingType,
+            housing_size: housingSize.trim() || undefined,
+            housing_capacity: housingCapacity ? parseInt(housingCapacity, 10) : undefined,
+            grazing_availability: grazingAvailable,
+            grazing_arrangement: grazingAvailable ? grazingArrangement : undefined,
+            grazing_area: grazingAvailable ? grazingArea.trim() || undefined : undefined,
+            water_source: waterSource,
+            feeding_system: feedingSystem,
+          }
+        : null;
+
       const newFarm = {
         id: generateUUID(),
         farmer_id: currentFarmer?.id || '00000000-0000-0000-0000-000000000001',
         name: name.trim(),
         farming_type: farmingType,
+        livestock_details: livestockDetails,
         county: resolvedCounty?.name || county.trim(),
         district: resolvedDistrict?.name || district.trim(),
         county_id: countyId || resolvedCounty?.id || null,
@@ -221,7 +348,13 @@ export default function RegisterFarmScreen() {
         irrigation,
         soil_type: soilType,
         photo_url: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=600&q=80',
-        description: description.trim() || `${farmingType === 'crops' ? 'Crops' : farmingType === 'livestock' ? 'Livestock' : 'Mixed crop & livestock'} farm parcel.`,
+        description:
+          description.trim() ||
+          (farmingType === 'livestock'
+            ? `${animalType} holding (${headCount || '0'} head) raised for ${productionPurposes.join(', ')} under ${managementSystem} management.`
+            : farmingType === 'both'
+            ? `Integrated crop & ${animalType} (${headCount || '0'} head) parcel.`
+            : 'Crops farm parcel.'),
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -253,9 +386,30 @@ export default function RegisterFarmScreen() {
       <Header title="Register Farm" subtitle="Capture parcel boundary & details" showBack />
 
       <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Basic Parcel Information */}
+        {/* Basic Parcel & Farmer Information */}
         <Card style={styles.formCard}>
-          <Text style={styles.sectionTitle}>1. Parcel Information</Text>
+          <Text style={styles.sectionTitle}>1. Farmer & Parcel Identity</Text>
+
+          {/* Farmer Contact Info Badge */}
+          <View style={styles.farmerIdentityCard}>
+            <View style={styles.farmerAvatarWrap}>
+              <Ionicons name="person" size={20} color={Colors.primary} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.farmerIdentityName}>
+                {currentFarmer?.full_name || 'Smallholder Farmer Owner'}
+              </Text>
+              <Text style={styles.farmerIdentityDetails}>
+                ID: {currentFarmer?.farmer_id_code || 'FARM-LR-XXXX'} • Contact:{' '}
+                {currentFarmer?.phone_number || '+231-77-654-3210'}
+              </Text>
+              {currentFarmer?.county && (
+                <Text style={styles.farmerIdentityLoc}>
+                  Base: {currentFarmer.community || 'Central'}, {currentFarmer.county} County
+                </Text>
+              )}
+            </View>
+          </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Farm Name *</Text>
@@ -561,62 +715,362 @@ export default function RegisterFarmScreen() {
           </View>
         </Card>
 
-        {/* Agronomic & Soil Characteristics */}
-        <Card style={styles.formCard}>
-          <Text style={styles.sectionTitle}>3. Land & Soil Characteristics</Text>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Land Tenure / Ownership</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {TENURE_TYPES.map((t) => (
-                <TouchableOpacity
-                  key={t}
-                  style={[styles.chip, ownershipType === t && styles.chipActive]}
-                  onPress={() => setOwnershipType(t)}
-                >
-                  <Text style={[styles.chipText, ownershipType === t && styles.chipTextActive]}>
-                    {t}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Predominant Soil Type</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {SOIL_TYPES.map((s) => (
-                <TouchableOpacity
-                  key={s}
-                  style={[styles.chip, soilType === s && styles.chipActive]}
-                  onPress={() => setSoilType(s)}
-                >
-                  <Text style={[styles.chipText, soilType === s && styles.chipTextActive]}>
-                    {s}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-
-          <View style={styles.switchRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.switchLabel}>Irrigation Available</Text>
-              <Text style={styles.switchSub}>Swamp water control bunds or pump channel</Text>
+        {/* Livestock Details & Management System Card (Rendered when livestock or both is selected) */}
+        {(farmingType === 'livestock' || farmingType === 'both') && (
+          <Card style={styles.formCard}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionIconWrap}>
+                <Ionicons name="paw" size={18} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionTitle}>
+                  {farmingType === 'both' ? '3. Livestock Information' : '3. Livestock Details & Management'}
+                </Text>
+                <Text style={styles.sectionSubtitle}>
+                  Species inventory, breeding purpose, housing, grazing, water & feeding systems
+                </Text>
+              </View>
             </View>
-            <Switch
-              value={irrigation}
-              onValueChange={setIrrigation}
-              trackColor={{ false: Colors.borderDark, true: Colors.primaryLight }}
-              thumbColor={irrigation ? Colors.primary : '#FFFFFF'}
-            />
-          </View>
 
-          <View style={[styles.inputGroup, { marginTop: Spacing.md }]}>
+            {/* Animal Type Selection */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Animal Type *</Text>
+              <Text style={styles.helperText}>Select the primary animal species reared on this farm</Text>
+              <View style={styles.animalTypeGrid}>
+                {LIVESTOCK_ANIMAL_TYPES.map((a) => {
+                  const isSelected = animalType === a.label;
+                  return (
+                    <TouchableOpacity
+                      key={a.label}
+                      style={[styles.animalTypeCard, isSelected && styles.animalTypeCardActive]}
+                      onPress={() => {
+                        setAnimalType(a.label as any);
+                        if (
+                          !breed ||
+                          breed === 'West African Dwarf' ||
+                          breed === 'Large White / Landrace' ||
+                          breed === 'Djallonke (West African Dwarf)' ||
+                          breed === 'Local / Broiler / Layer' ||
+                          breed === 'Ndama / Muturu'
+                        ) {
+                          setBreed(a.defaultBreed);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.animalTypeEmoji}>{a.emoji}</Text>
+                      <Text style={[styles.animalTypeTitle, isSelected && styles.animalTypeTitleActive]}>
+                        {a.label}
+                      </Text>
+                      {isSelected && (
+                        <View style={styles.animalCheckBadge}>
+                          <Ionicons name="checkmark-circle" size={14} color={Colors.primary} />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Breed and Number of Animals */}
+            <View style={styles.inputRow}>
+              <View style={[styles.inputGroup, { flex: 1.2, marginRight: Spacing.xs }]}>
+                <Text style={styles.label}>Breed</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. West African Dwarf"
+                  placeholderTextColor={Colors.textMuted}
+                  value={breed}
+                  onChangeText={setBreed}
+                />
+              </View>
+              <View style={[styles.inputGroup, { flex: 0.8, marginLeft: Spacing.xs }]}>
+                <Text style={styles.label}>Number of Animals *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 25"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="numeric"
+                  value={headCount}
+                  onChangeText={setHeadCount}
+                />
+              </View>
+            </View>
+
+            {/* Production Purpose */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Production Purpose *</Text>
+              <Text style={styles.helperText}>
+                Ask the farmer what they raise the animals for (select all that apply):
+              </Text>
+              <View style={styles.purposeGrid}>
+                {PRODUCTION_PURPOSES.map((p) => {
+                  const isSelected = productionPurposes.includes(p.id);
+                  return (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={[styles.purposeCard, isSelected && styles.purposeCardActive]}
+                      onPress={() => togglePurpose(p.id)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.purposeCheckbox, isSelected && styles.purposeCheckboxActive]}>
+                        {isSelected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                      </View>
+                      <Text style={[styles.purposeLabel, isSelected && styles.purposeLabelActive]}>
+                        {p.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Management System */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Management System *</Text>
+              <Text style={styles.helperText}>Husbandry and movement control structure</Text>
+              <View style={styles.mgmtContainer}>
+                {MANAGEMENT_SYSTEMS.map((m) => {
+                  const isSelected = managementSystem === m.id;
+                  return (
+                    <TouchableOpacity
+                      key={m.id}
+                      style={[styles.mgmtCard, isSelected && styles.mgmtCardActive]}
+                      onPress={() => setManagementSystem(m.id as any)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.mgmtRow}>
+                        <View style={[styles.mgmtRadio, isSelected && styles.mgmtRadioActive]}>
+                          {isSelected && <View style={styles.mgmtRadioInner} />}
+                        </View>
+                        <View style={{ flex: 1, marginLeft: Spacing.sm }}>
+                          <Text style={[styles.mgmtTitle, isSelected && styles.mgmtTitleActive]}>
+                            {m.title}
+                          </Text>
+                          <Text style={styles.mgmtDesc}>{m.desc}</Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Housing Information */}
+            <View style={styles.subSectionHeader}>
+              <Ionicons name="home-outline" size={16} color={Colors.primary} />
+              <Text style={styles.subSectionTitle}>Housing Information</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Housing Type</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {HOUSING_TYPES.map((h) => (
+                  <TouchableOpacity
+                    key={h}
+                    style={[styles.chip, housingType === h && styles.chipActive]}
+                    onPress={() => setHousingType(h)}
+                  >
+                    <Text style={[styles.chipText, housingType === h && styles.chipTextActive]}>{h}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.inputRow}>
+              <View style={[styles.inputGroup, { flex: 1, marginRight: Spacing.xs }]}>
+                <Text style={styles.label}>Housing Size / Dimensions</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 20 x 40 ft"
+                  placeholderTextColor={Colors.textMuted}
+                  value={housingSize}
+                  onChangeText={setHousingSize}
+                />
+              </View>
+              <View style={[styles.inputGroup, { flex: 1, marginLeft: Spacing.xs }]}>
+                <Text style={styles.label}>Holding Capacity (Heads)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. 50"
+                  placeholderTextColor={Colors.textMuted}
+                  keyboardType="numeric"
+                  value={housingCapacity}
+                  onChangeText={setHousingCapacity}
+                />
+              </View>
+            </View>
+
+            {/* Land and Grazing */}
+            <View style={styles.subSectionHeader}>
+              <Ionicons name="leaf-outline" size={16} color={Colors.primary} />
+              <Text style={styles.subSectionTitle}>Land & Grazing</Text>
+            </View>
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchLabel}>Grazing Availability</Text>
+                <Text style={styles.switchSub}>Open pasture, woodland or savanna grazing land available</Text>
+              </View>
+              <Switch
+                value={grazingAvailable}
+                onValueChange={setGrazingAvailable}
+                trackColor={{ false: Colors.borderDark, true: Colors.primaryLight }}
+                thumbColor={grazingAvailable ? Colors.primary : '#FFFFFF'}
+              />
+            </View>
+
+            {grazingAvailable && (
+              <View style={{ marginTop: Spacing.sm }}>
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Grazing Arrangement</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                    {GRAZING_ARRANGEMENTS.map((g) => (
+                      <TouchableOpacity
+                        key={g}
+                        style={[styles.chip, grazingArrangement === g && styles.chipActive]}
+                        onPress={() => setGrazingArrangement(g)}
+                      >
+                        <Text style={[styles.chipText, grazingArrangement === g && styles.chipTextActive]}>
+                          {g}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Grazing Area (Acres or Ha)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 6.5 Acres"
+                    placeholderTextColor={Colors.textMuted}
+                    value={grazingArea}
+                    onChangeText={setGrazingArea}
+                  />
+                </View>
+              </View>
+            )}
+
+            {/* Water Source and Feeding System */}
+            <View style={styles.subSectionHeader}>
+              <Ionicons name="water-outline" size={16} color={Colors.primary} />
+              <Text style={styles.subSectionTitle}>Water Source & Feeding System</Text>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Water Source *</Text>
+              <Text style={styles.helperText}>Select drinking water sources accessible to livestock</Text>
+              <View style={styles.waterGrid}>
+                {WATER_SOURCES.map((w) => {
+                  const isSelected = waterSource === w;
+                  return (
+                    <TouchableOpacity
+                      key={w}
+                      style={[styles.waterChip, isSelected && styles.waterChipActive]}
+                      onPress={() => setWaterSource(w)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={isSelected ? 'checkmark-circle' : 'water-outline'}
+                        size={15}
+                        color={isSelected ? '#FFFFFF' : Colors.primary}
+                      />
+                      <Text style={[styles.waterChipText, isSelected && styles.waterChipTextActive]}>
+                        {w}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Feeding System</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {FEEDING_SYSTEMS.map((f) => (
+                  <TouchableOpacity
+                    key={f}
+                    style={[styles.chip, feedingSystem === f && styles.chipActive]}
+                    onPress={() => setFeedingSystem(f)}
+                  >
+                    <Text style={[styles.chipText, feedingSystem === f && styles.chipTextActive]}>
+                      {f}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          </Card>
+        )}
+
+        {/* Agronomic & Soil Characteristics (Shown for Crops or Both) */}
+        {(farmingType === 'crops' || farmingType === 'both') && (
+          <Card style={styles.formCard}>
+            <Text style={styles.sectionTitle}>
+              {farmingType === 'both' ? '4. Crop Land & Soil Characteristics' : '3. Land & Soil Characteristics'}
+            </Text>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Land Tenure / Ownership</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {TENURE_TYPES.map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.chip, ownershipType === t && styles.chipActive]}
+                    onPress={() => setOwnershipType(t)}
+                  >
+                    <Text style={[styles.chipText, ownershipType === t && styles.chipTextActive]}>
+                      {t}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Predominant Soil Type</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {SOIL_TYPES.map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    style={[styles.chip, soilType === s && styles.chipActive]}
+                    onPress={() => setSoilType(s)}
+                  >
+                    <Text style={[styles.chipText, soilType === s && styles.chipTextActive]}>
+                      {s}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+
+            <View style={styles.switchRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.switchLabel}>Irrigation Available</Text>
+                <Text style={styles.switchSub}>Swamp water control bunds or pump channel</Text>
+              </View>
+              <Switch
+                value={irrigation}
+                onValueChange={setIrrigation}
+                trackColor={{ false: Colors.borderDark, true: Colors.primaryLight }}
+                thumbColor={irrigation ? Colors.primary : '#FFFFFF'}
+              />
+            </View>
+          </Card>
+        )}
+
+        {/* Parcel Description Card */}
+        <Card style={styles.formCard}>
+          <Text style={styles.sectionTitle}>
+            {farmingType === 'both' ? '5. Parcel Description' : '4. Parcel Description'}
+          </Text>
+          <View style={styles.inputGroup}>
             <Text style={styles.label}>Farm Description & Topography</Text>
             <TextInput
               style={[styles.input, styles.textArea]}
-              placeholder="Describe access road, slope, primary waterways, or previous season yields..."
+              placeholder="Describe access road, topography, water access, or notes..."
               placeholderTextColor={Colors.textMuted}
               multiline
               numberOfLines={3}
@@ -1151,5 +1605,244 @@ const styles = StyleSheet.create({
   emptyResultsText: {
     fontSize: Typography.sizes.sm,
     color: Colors.textMuted,
+  },
+  // Farmer Identity Card
+  farmerIdentityCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#DCFCE7',
+    borderRadius: Radius.md,
+    padding: Spacing.md,
+    marginBottom: Spacing.md,
+  },
+  farmerAvatarWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: Radius.full,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  farmerIdentityName: {
+    fontSize: Typography.sizes.sm,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  farmerIdentityDetails: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.primaryDark,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  farmerIdentityLoc: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  // Section Header Row
+  sectionHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: Spacing.sm,
+  },
+  sectionIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: Radius.md,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: Spacing.sm,
+  },
+  subSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.sm,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  subSectionTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.text,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  // Animal Type Grid
+  animalTypeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: 4,
+  },
+  animalTypeCard: {
+    flex: 1,
+    minWidth: '28%',
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  animalTypeCardActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#D97706',
+  },
+  animalTypeEmoji: {
+    fontSize: 24,
+    marginBottom: 4,
+  },
+  animalTypeTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  animalTypeTitleActive: {
+    color: '#92400E',
+  },
+  animalCheckBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+  },
+  // Purpose Grid
+  purposeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: 4,
+  },
+  purposeCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    width: '48%',
+  },
+  purposeCardActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: Colors.primary,
+  },
+  purposeCheckbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: Colors.borderDark,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  purposeCheckboxActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  purposeLabel: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '600',
+    color: Colors.text,
+    flex: 1,
+  },
+  purposeLabelActive: {
+    color: Colors.primaryDark,
+    fontWeight: '700',
+  },
+  // Management Systems
+  mgmtContainer: {
+    gap: Spacing.xs,
+    marginTop: 4,
+  },
+  mgmtCard: {
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+  },
+  mgmtCardActive: {
+    backgroundColor: '#F0FDF4',
+    borderColor: Colors.primary,
+  },
+  mgmtRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  mgmtRadio: {
+    width: 18,
+    height: 18,
+    borderRadius: Radius.full,
+    borderWidth: 2,
+    borderColor: Colors.borderDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  mgmtRadioActive: {
+    borderColor: Colors.primary,
+  },
+  mgmtRadioInner: {
+    width: 8,
+    height: 8,
+    borderRadius: Radius.full,
+    backgroundColor: Colors.primary,
+  },
+  mgmtTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  mgmtTitleActive: {
+    color: Colors.primaryDark,
+  },
+  mgmtDesc: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  // Water Grid
+  waterGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: 4,
+  },
+  waterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+  },
+  waterChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  waterChipText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  waterChipTextActive: {
+    color: '#FFFFFF',
   },
 });

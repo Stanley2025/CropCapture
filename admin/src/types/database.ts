@@ -97,6 +97,22 @@ export interface District {
   created_at?: string;
 }
 
+export interface LivestockDetails {
+  animal_type: 'Goats' | 'Pigs' | 'Sheep' | 'Chickens' | 'Cow' | string;
+  breed?: string;
+  head_count: number;
+  production_purpose: ('Meat production' | 'Egg production' | 'Milk production' | 'Breeding' | string)[];
+  management_system?: 'Free-range' | 'Semi-intensive' | 'Intensive' | string;
+  housing_type?: string;
+  housing_size?: string;
+  housing_capacity?: number;
+  grazing_availability?: boolean;
+  grazing_arrangement?: string;
+  grazing_area?: string;
+  water_source?: 'Well' | 'Hand pump' | 'River or stream' | 'Borehole' | 'Rainwater' | 'Pipe-borne water' | string;
+  feeding_system?: string;
+}
+
 export interface Farm {
   id: string;
   farmer_id: string;
@@ -109,6 +125,7 @@ export interface Farm {
   size: number;
   size_unit?: 'acres' | 'hectares';
   farming_type?: 'crops' | 'livestock' | 'both';
+  livestock_details?: LivestockDetails | null;
   latitude?: number | null;
   longitude?: number | null;
   gps_lat?: number;
