@@ -16,20 +16,22 @@ const REPORT_TEMPLATES = [
 
 export default function ReportsPage() {
   const [downloadSuccess, setDownloadSuccess] = useState<string | null>(null);
+  const [selectedYear, setSelectedYear] = useState<string>('2026');
 
   const handleDownload = (title: string) => {
-    // Generate CSV content dynamically
-    const csvContent = "data:text/csv;charset=utf-8,Report,GeneratedDate,Status\n" +
-      `"${title}",${new Date().toISOString()},Verified Official Ministry Record\n`;
+    // Generate CSV content dynamically with the chosen agricultural cycle year
+    const yearLabel = selectedYear === 'all' ? 'All_Cycles' : selectedYear;
+    const csvContent = "data:text/csv;charset=utf-8,Report,AgriculturalYear,GeneratedDate,Status\n" +
+      `"${title}","${selectedYear === 'all' ? 'Lifetime All Years' : selectedYear}",${new Date().toISOString()},Verified Official Ministry Record\n`;
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}.csv`);
+    link.setAttribute("download", `${title.toLowerCase().replace(/[^a-z0-9]/g, '_')}_${yearLabel}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
-    setDownloadSuccess(`Generated and downloaded ${title}`);
+    setDownloadSuccess(`Generated and downloaded ${title} (${selectedYear === 'all' ? 'All Historical Years' : selectedYear})`);
     setTimeout(() => setDownloadSuccess(null), 4000);
   };
 
@@ -46,13 +48,35 @@ export default function ReportsPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
-          >
-            <Printer className="h-3.5 w-3.5" />
-            Print Current Summary
-          </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 rounded-lg border border-[#E2E8F0] bg-white px-3 py-1.5 shadow-2xs">
+              <Calendar className="h-4 w-4 text-[#15803D]" />
+              <label htmlFor="year-select" className="text-xs font-bold text-slate-600">
+                Year:
+              </label>
+              <select
+                id="year-select"
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="text-xs font-semibold text-slate-800 bg-transparent focus:outline-none cursor-pointer"
+              >
+                <option value="2026">2026 (Current)</option>
+                <option value="2025">2025</option>
+                <option value="2024">2024</option>
+                <option value="2023">2023</option>
+                <option value="2022">2022</option>
+                <option value="all">All Historical Years</option>
+              </select>
+            </div>
+
+            <button
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 shadow-sm"
+            >
+              <Printer className="h-3.5 w-3.5" />
+              Print Current Summary
+            </button>
+          </div>
         </div>
 
         {downloadSuccess && (

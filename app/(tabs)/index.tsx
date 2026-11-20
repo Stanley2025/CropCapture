@@ -164,9 +164,20 @@ export default function HomeScreen() {
         {currentRole === 'farmer' && (
           <>
             {/* Live Metrics Grid */}
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>My Farm Production Overview</Text>
-              <Text style={styles.sectionSubtitle}>Verified records for your registered parcels</Text>
+            <View style={styles.sectionHeaderRow}>
+              <View>
+                <Text style={styles.sectionTitle}>My Farm Production Overview</Text>
+                <Text style={styles.sectionSubtitle}>Verified records for your registered parcels</Text>
+              </View>
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: Radius.full }}
+                onPress={() => router.push('/reports' as any)}
+              >
+                <Ionicons name="calendar" size={12} color={Colors.primaryDark} />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: Colors.primaryDark }}>
+                  Past Years
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.statsGrid}>
