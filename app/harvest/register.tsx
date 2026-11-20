@@ -28,6 +28,22 @@ import { DatePickerField } from '../../src/components/DatePickerField';
 const CROP_UNITS = ['kg', 'tonnes', '50kg bags', 'bunches'];
 const LIVESTOCK_UNITS = ['heads', 'animals', 'crates / trays', 'litres', 'kg (meat)'];
 
+const LIVESTOCK_SPECIES = [
+  { id: 'Goats', label: 'Goats', emoji: '🐐', defaultUnit: 'heads' },
+  { id: 'Pigs', label: 'Pigs', emoji: '🐖', defaultUnit: 'heads' },
+  { id: 'Sheep', label: 'Sheep', emoji: '🐑', defaultUnit: 'heads' },
+  { id: 'Chickens', label: 'Chickens', emoji: '🐔', defaultUnit: 'crates / trays' },
+  { id: 'Cow', label: 'Cow', emoji: '🐄', defaultUnit: 'heads' },
+];
+
+const LIVESTOCK_OFFTAKE_TYPES = [
+  { id: 'Live Animal Offtake', label: 'Live Animal Offtake', icon: 'paw', unit: 'heads' },
+  { id: 'Meat / Carcass', label: 'Meat / Slaughter', icon: 'restaurant', unit: 'kg (meat)' },
+  { id: 'Eggs / Crates', label: 'Eggs / Poultry', icon: 'egg', unit: 'crates / trays' },
+  { id: 'Dairy / Milk', label: 'Dairy / Milk', icon: 'water', unit: 'litres' },
+  { id: 'Breeding Stock', label: 'Breeding Stock', icon: 'git-network', unit: 'heads' },
+];
+
 export default function RegisterHarvestScreen() {
   const router = useRouter();
   const { currentFarmer, refreshPendingSyncCount } = useAppStore();
@@ -39,6 +55,10 @@ export default function RegisterHarvestScreen() {
 
   // For integrated farms ('both'), toggle between crop harvest and livestock offtake
   const [bothEnterpriseMode, setBothEnterpriseMode] = useState<'crops' | 'livestock'>('crops');
+
+  // Livestock Specific Harvest State
+  const [selectedAnimalSpecies, setSelectedAnimalSpecies] = useState('Goats');
+  const [offtakeType, setOfftakeType] = useState('Live Animal Offtake');
 
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('kg');
@@ -94,6 +114,16 @@ export default function RegisterHarvestScreen() {
   // When selected farm changes, auto-adapt unit, seasons, and defaults
   const handleFarmSelect = (farm: Farm) => {
     setSelectedFarmId(farm.id);
+    if (farm.farming_type === 'livestock' || farm.farming_type === 'both') {
+      const liveDetails = farm.livestock_details;
+      if (liveDetails?.selected_animals && liveDetails.selected_animals.length > 0) {
+        setSelectedAnimalSpecies(liveDetails.selected_animals[0]);
+      } else if (liveDetails?.animal_type) {
+        const first = liveDetails.animal_type.split(',')[0].trim();
+        if (first) setSelectedAnimalSpecies(first);
+      }
+    }
+
     if (farm.farming_type === 'livestock') {
       setUnit('heads');
       setStorageLocation('Farm Holding Paddock, Sanniquellie');
@@ -150,7 +180,7 @@ export default function RegisterHarvestScreen() {
 
     setIsSubmitting(true);
     try {
-      const animalType = selectedFarm?.livestock_details?.animal_type || 'Goats';
+      const animalType = isLivestock ? selectedAnimalSpecies : 'Goats';
       const cropCode = isLivestock
         ? selectedSeason?.crop?.code ||
           animalType.substring(0, 4).toUpperCase() ||
@@ -187,7 +217,7 @@ export default function RegisterHarvestScreen() {
         observations:
           observations.trim() ||
           (isLivestock
-            ? `${animalType} batch offtaken in healthy condition, inspected and vaccinated.`
+            ? `${selectedAnimalSpecies} (${offtakeType}) offtaken in healthy condition, inspected and vaccinated.`
             : 'Harvest gathered and bagged in clean dry condition.'),
         status: 'submitted',
         qr_token: randomToken,
@@ -437,51 +467,159 @@ export default function RegisterHarvestScreen() {
             {isLivestock ? '2. Livestock Offtake & Yield Batch' : '2. Harvest Yield & Date'}
           </Text>
 
-          <View style={styles.inputRow}>
-            <View style={[styles.inputGroup, { flex: 1.4, marginRight: Spacing.xs }]}>
-              <Text style={styles.label}>
-                {isLivestock ? 'Quantity / Heads Reaped *' : 'Quantity Harvested *'}
-              </Text>
-              <TextInput
-                style={styles.input}
-                placeholder={isLivestock ? 'e.g. 25' : 'e.g. 2500'}
-                placeholderTextColor={Colors.textMuted}
-                keyboardType="numeric"
-                value={quantity}
-                onChangeText={setQuantity}
+          {/* Animal Species & Offtake Type Selection (Livestock Only) */}
+          {isLivestock && (
+            <View style={{ marginBottom: Spacing.md }}>
+              <View style={styles.fieldHeaderRow}>
+                <Text style={styles.label}>Animal Species / Product *</Text>
+                <Badge label={selectedAnimalSpecies} variant="warning" size="sm" />
+              </View>
+              <View style={styles.speciesGrid}>
+                {LIVESTOCK_SPECIES.map((s) => {
+                  const isSelected = selectedAnimalSpecies === s.id;
+                  return (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={[styles.speciesCard, isSelected && styles.speciesCardActive]}
+                      onPress={() => {
+                        setSelectedAnimalSpecies(s.id);
+                        if (s.defaultUnit) setUnit(s.defaultUnit);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.speciesEmoji}>{s.emoji}</Text>
+                      <Text style={[styles.speciesText, isSelected && styles.speciesTextActive]}>
+                        {s.label}
+                      </Text>
+                      {isSelected && (
+                        <View style={styles.speciesCheckBadge}>
+                          <Ionicons name="checkmark-circle" size={14} color="#D97706" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={[styles.label, { marginTop: Spacing.sm }]}>Offtake / Yield Category *</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {LIVESTOCK_OFFTAKE_TYPES.map((t) => {
+                  const isSelected = offtakeType === t.id;
+                  return (
+                    <TouchableOpacity
+                      key={t.id}
+                      style={[
+                        styles.chip,
+                        isSelected && styles.chipActiveLivestock,
+                      ]}
+                      onPress={() => {
+                        setOfftakeType(t.id);
+                        if (t.unit) setUnit(t.unit);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={t.icon as any}
+                        size={13}
+                        color={isSelected ? '#FFFFFF' : '#D97706'}
+                        style={{ marginRight: 5 }}
+                      />
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                        {t.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Quantity Input (Full width, clear, prominent) */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>
+              {isLivestock ? 'Offtake Quantity / Head Count *' : 'Harvest Yield Quantity *'}
+            </Text>
+            <TextInput
+              style={[styles.input, styles.quantityInput]}
+              placeholder={isLivestock ? 'e.g. 25' : 'e.g. 2500'}
+              placeholderTextColor={Colors.textMuted}
+              keyboardType="numeric"
+              value={quantity}
+              onChangeText={setQuantity}
+            />
+          </View>
+
+          {/* Full-width Unit Selection Grid */}
+          <View style={styles.inputGroup}>
+            <View style={styles.fieldHeaderRow}>
+              <Text style={styles.label}>Measurement Unit *</Text>
+              <Badge
+                label={unit}
+                variant={isLivestock ? 'warning' : 'success'}
+                size="sm"
               />
             </View>
-            <View style={[styles.inputGroup, { flex: 1.1, marginLeft: Spacing.xs }]}>
-              <Text style={styles.label}>Unit</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.unitRow}>
-                {(isLivestock ? LIVESTOCK_UNITS : CROP_UNITS).map((u) => (
+            <View style={styles.unitGrid}>
+              {(isLivestock ? LIVESTOCK_UNITS : CROP_UNITS).map((u) => {
+                const isSelected = unit === u;
+                return (
                   <TouchableOpacity
                     key={u}
                     style={[
-                      styles.unitChip,
-                      unit === u &&
-                        (isLivestock ? styles.unitChipActiveLivestock : styles.unitChipActive),
+                      styles.unitTile,
+                      isSelected &&
+                        (isLivestock ? styles.unitTileActiveLivestock : styles.unitTileActive),
                     ]}
                     onPress={() => setUnit(u)}
                     activeOpacity={0.7}
                   >
+                    <Ionicons
+                      name={
+                        u.includes('head') || u.includes('animal')
+                          ? 'paw'
+                          : u.includes('crate')
+                          ? 'grid-outline'
+                          : u.includes('litre')
+                          ? 'water-outline'
+                          : u.includes('bag')
+                          ? 'cube-outline'
+                          : 'scale-outline'
+                      }
+                      size={14}
+                      color={
+                        isSelected
+                          ? '#FFFFFF'
+                          : isLivestock
+                          ? '#D97706'
+                          : Colors.primary
+                      }
+                      style={{ marginRight: 6 }}
+                    />
                     <Text
                       style={[
-                        styles.unitChipText,
-                        unit === u && styles.unitChipTextActive,
+                        styles.unitTileText,
+                        isSelected && styles.unitTileTextActive,
                       ]}
                     >
                       {u}
                     </Text>
+                    {isSelected && (
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={14}
+                        color="#FFFFFF"
+                        style={{ marginLeft: 4 }}
+                      />
+                    )}
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                );
+              })}
             </View>
           </View>
 
-          <View style={{ marginTop: Spacing.sm }}>
+          <View style={{ marginTop: Spacing.xs }}>
             <DatePickerField
-              label={isLivestock ? 'Offtake / Gathering Date' : 'Harvest Date'}
+              label={isLivestock ? 'Offtake / Gathering Date *' : 'Harvest Date *'}
               value={harvestDate}
               onChange={setHarvestDate}
               helperText={
@@ -494,7 +632,7 @@ export default function RegisterHarvestScreen() {
 
           {/* Gross Market / Sale Value for Real Farm Profit Tracking */}
           <View style={[styles.inputGroup, { marginTop: Spacing.md }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+            <View style={styles.fieldHeaderRow}>
               <Text style={styles.label}>Estimated / Market Sale Value ($ USD)</Text>
               <Badge label="Revenue & Profit" variant="success" size="sm" />
             </View>
@@ -834,5 +972,98 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 4,
     lineHeight: 15,
+  },
+  fieldHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  quantityInput: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingVertical: 12,
+  },
+  // Animal Species Grid
+  speciesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: 2,
+    marginBottom: Spacing.xs,
+  },
+  speciesCard: {
+    flex: 1,
+    minWidth: '17%',
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  speciesCardActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#D97706',
+    borderWidth: 2,
+  },
+  speciesEmoji: {
+    fontSize: 22,
+    marginBottom: 2,
+  },
+  speciesText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  speciesTextActive: {
+    color: '#92400E',
+  },
+  speciesCheckBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+  },
+  // Full-width Measurement Unit Grid
+  unitGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: 4,
+  },
+  unitTile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: Radius.md,
+  },
+  unitTileActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  unitTileActiveLivestock: {
+    backgroundColor: '#D97706',
+    borderColor: '#B45309',
+  },
+  unitTileText: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  unitTileTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });
