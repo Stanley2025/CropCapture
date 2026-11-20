@@ -99,6 +99,8 @@ export interface District {
 
 export interface LivestockDetails {
   animal_type: 'Goats' | 'Pigs' | 'Sheep' | 'Chickens' | 'Cow' | string;
+  selected_animals?: string[];
+  species_breakdown?: { species: string; count: number; breed?: string }[];
   breed?: string;
   head_count: number;
   production_purpose: ('Meat production' | 'Egg production' | 'Milk production' | 'Breeding' | string)[];
@@ -175,6 +177,11 @@ export interface FarmSeason {
   cultivated_area: number;
   seed_quantity?: number | null;
   status: SeasonStatus;
+  cycle_type?: 'crops' | 'livestock';
+  livestock_type?: string;
+  head_count?: number;
+  production_purpose?: string[];
+  management_system?: string;
   created_at: string;
   updated_at: string;
   farm?: Farm;

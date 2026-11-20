@@ -23,6 +23,7 @@ import { useAppStore } from '../../src/store/useAppStore';
 import { Header } from '../../src/components/Header';
 import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
+import { Badge } from '../../src/components/Badge';
 import {
   COUNTIES,
   DISTRICTS,
@@ -128,8 +129,8 @@ export default function RegisterFarmScreen() {
   const [name, setName] = useState('');
   const [farmingType, setFarmingType] = useState<'crops' | 'livestock' | 'both'>('crops');
 
-  // Livestock Specific State
-  const [animalType, setAnimalType] = useState<'Goats' | 'Pigs' | 'Sheep' | 'Chickens' | 'Cow'>('Goats');
+  // Livestock Specific State (Multi-selection enabled)
+  const [selectedAnimals, setSelectedAnimals] = useState<string[]>(['Goats']);
   const [breed, setBreed] = useState('West African Dwarf');
   const [headCount, setHeadCount] = useState('');
   const [productionPurposes, setProductionPurposes] = useState<string[]>(['Meat production']);
@@ -142,6 +143,35 @@ export default function RegisterFarmScreen() {
   const [grazingArea, setGrazingArea] = useState('');
   const [waterSource, setWaterSource] = useState('Well');
   const [feedingSystem, setFeedingSystem] = useState('Mixed Feeding (Pasture + Concentrates)');
+
+  // Crops Multi-Select (For Crops or Both)
+  const [selectedCrops, setSelectedCrops] = useState<string[]>(['Rice', 'Cassava']);
+  const toggleCrop = (cropName: string) => {
+    setSelectedCrops((prev) =>
+      prev.includes(cropName)
+        ? prev.length > 1
+          ? prev.filter((c) => c !== cropName)
+          : prev
+        : [...prev, cropName]
+    );
+  };
+
+  const toggleAnimal = (animalLabel: string) => {
+    setSelectedAnimals((prev) => {
+      const isCurrentlySelected = prev.includes(animalLabel);
+      if (isCurrentlySelected) {
+        if (prev.length === 1) return prev; // Keep at least one selected
+        return prev.filter((a) => a !== animalLabel);
+      } else {
+        const next = [...prev, animalLabel];
+        const defaultForAdded = LIVESTOCK_ANIMAL_TYPES.find((l) => l.label === animalLabel)?.defaultBreed;
+        if (defaultForAdded && !breed.includes(defaultForAdded)) {
+          setBreed((curr) => curr ? `${curr}, ${defaultForAdded}` : defaultForAdded);
+        }
+        return next;
+      }
+    });
+  };
 
   const togglePurpose = (purposeId: string) => {
     setProductionPurposes((prev) =>
@@ -292,8 +322,12 @@ export default function RegisterFarmScreen() {
 
     const isLivestockActive = farmingType === 'livestock' || farmingType === 'both';
     if (isLivestockActive) {
+      if (selectedAnimals.length === 0) {
+        Alert.alert('Required Field', 'Please select at least one livestock animal species.');
+        return;
+      }
       if (!headCount.trim() || isNaN(Number(headCount)) || Number(headCount) <= 0) {
-        Alert.alert('Required Field', 'Please enter the number of livestock animals (head count).');
+        Alert.alert('Required Field', 'Please enter the total number of livestock animals (head count).');
         return;
       }
       if (productionPurposes.length === 0) {
@@ -316,7 +350,8 @@ export default function RegisterFarmScreen() {
 
       const livestockDetails = isLivestockActive
         ? {
-            animal_type: animalType,
+            animal_type: selectedAnimals.join(', '),
+            selected_animals: selectedAnimals,
             breed: breed.trim() || undefined,
             head_count: parseInt(headCount, 10),
             production_purpose: productionPurposes,
@@ -354,10 +389,10 @@ export default function RegisterFarmScreen() {
         description:
           description.trim() ||
           (farmingType === 'livestock'
-            ? `${animalType} holding (${headCount || '0'} head) raised for ${productionPurposes.join(', ')} under ${managementSystem} management.`
+            ? `${selectedAnimals.join(' & ')} holding (${headCount || '0'} head) raised for ${productionPurposes.join(', ')} under ${managementSystem} management.`
             : farmingType === 'both'
-            ? `Integrated crop & ${animalType} (${headCount || '0'} head) parcel.`
-            : 'Crops farm parcel.'),
+            ? `Integrated farm: Cultivating ${selectedCrops.join(', ') || 'crops'} and rearing ${selectedAnimals.join(' & ')} (${headCount || '0'} head).`
+            : `Crops parcel cultivating ${selectedCrops.join(', ') || 'crops'}.`),
         is_active: true,
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -561,6 +596,20 @@ export default function RegisterFarmScreen() {
                 )}
               </TouchableOpacity>
             </View>
+
+            {farmingType === 'both' && (
+              <View style={styles.integratedNoticeBanner}>
+                <Ionicons name="sparkles" size={16} color="#059669" />
+                <View style={{ flex: 1, marginLeft: Spacing.xs }}>
+                  <Text style={styles.integratedNoticeTitle}>
+                    Integrated Farm Active (Crops & Livestock)
+                  </Text>
+                  <Text style={styles.integratedNoticeDesc}>
+                    Both the Livestock section (multiple species, head count, housing) and Crop Agronomic section are enabled below.
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           {/* County Selector */}
@@ -735,31 +784,28 @@ export default function RegisterFarmScreen() {
               </View>
             </View>
 
-            {/* Animal Type Selection */}
+            {/* Animal Type Selection (Multi-select enabled) */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Animal Type *</Text>
-              <Text style={styles.helperText}>Select the primary animal species reared on this farm</Text>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.label}>Animal Species (Select Multiple) *</Text>
+                <Badge
+                  label={`${selectedAnimals.length} Selected`}
+                  variant="success"
+                  size="sm"
+                />
+              </View>
+              <Text style={styles.helperText}>
+                Select all livestock species reared on this farm (you can choose multiple):
+              </Text>
               <View style={styles.animalSelectorContainer}>
                 <View style={styles.animalRow}>
                   {LIVESTOCK_ANIMAL_TYPES.slice(0, 3).map((a) => {
-                    const isSelected = animalType === a.label;
+                    const isSelected = selectedAnimals.includes(a.label);
                     return (
                       <TouchableOpacity
                         key={a.label}
                         style={[styles.animalCard, isSelected && styles.animalCardActive]}
-                        onPress={() => {
-                          setAnimalType(a.label as any);
-                          if (
-                            !breed ||
-                            breed === 'West African Dwarf' ||
-                            breed === 'Large White / Landrace' ||
-                            breed === 'Djallonke (West African Dwarf)' ||
-                            breed === 'Local / Broiler / Layer' ||
-                            breed === 'Ndama / Muturu'
-                          ) {
-                            setBreed(a.defaultBreed);
-                          }
-                        }}
+                        onPress={() => toggleAnimal(a.label)}
                         activeOpacity={0.7}
                       >
                         {isSelected && (
@@ -783,24 +829,12 @@ export default function RegisterFarmScreen() {
 
                 <View style={[styles.animalRow, { marginTop: Spacing.xs }]}>
                   {LIVESTOCK_ANIMAL_TYPES.slice(3).map((a) => {
-                    const isSelected = animalType === a.label;
+                    const isSelected = selectedAnimals.includes(a.label);
                     return (
                       <TouchableOpacity
                         key={a.label}
                         style={[styles.animalCard, isSelected && styles.animalCardActive]}
-                        onPress={() => {
-                          setAnimalType(a.label as any);
-                          if (
-                            !breed ||
-                            breed === 'West African Dwarf' ||
-                            breed === 'Large White / Landrace' ||
-                            breed === 'Djallonke (West African Dwarf)' ||
-                            breed === 'Local / Broiler / Layer' ||
-                            breed === 'Ndama / Muturu'
-                          ) {
-                            setBreed(a.defaultBreed);
-                          }
-                        }}
+                        onPress={() => toggleAnimal(a.label)}
                         activeOpacity={0.7}
                       >
                         {isSelected && (
@@ -820,27 +854,42 @@ export default function RegisterFarmScreen() {
                       </TouchableOpacity>
                     );
                   })}
+                  <View
+                    style={[
+                      styles.animalCard,
+                      { opacity: 0, borderWidth: 0, backgroundColor: 'transparent' },
+                    ]}
+                    pointerEvents="none"
+                  />
                 </View>
+              </View>
+
+              {/* Multi-Select Species Banner */}
+              <View style={styles.selectedSpeciesPill}>
+                <Ionicons name="paw" size={13} color={Colors.primary} />
+                <Text style={styles.selectedSpeciesPillText}>
+                  Selected: {selectedAnimals.join(' • ')}
+                </Text>
               </View>
             </View>
 
             {/* Breed and Number of Animals */}
             <View style={[styles.inputRow, { marginTop: Spacing.sm }]}>
               <View style={[styles.inputGroup, { flex: 1.25, marginRight: Spacing.xs }]}>
-                <Text style={styles.label}>Breed</Text>
+                <Text style={styles.label}>Breeds / Varieties</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. West African Dwarf"
+                  placeholder="e.g. West African Dwarf, Broiler"
                   placeholderTextColor={Colors.textMuted}
                   value={breed}
                   onChangeText={setBreed}
                 />
               </View>
               <View style={[styles.inputGroup, { flex: 0.85, marginLeft: Spacing.xs }]}>
-                <Text style={styles.label}>Number of Animals *</Text>
+                <Text style={styles.label}>Total Head Count *</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g. 25"
+                  placeholder="e.g. 50"
                   placeholderTextColor={Colors.textMuted}
                   keyboardType="numeric"
                   value={headCount}
@@ -1075,6 +1124,41 @@ export default function RegisterFarmScreen() {
             <Text style={styles.sectionTitle}>
               {farmingType === 'both' ? '4. Crop Land & Soil Characteristics' : '3. Land & Soil Characteristics'}
             </Text>
+
+            {/* Primary Crops Cultivated */}
+            <View style={styles.inputGroup}>
+              <View style={styles.sectionHeaderRow}>
+                <Text style={styles.label}>Primary Crops Cultivated *</Text>
+                <Badge
+                  label={`${selectedCrops.length} Crops`}
+                  variant="success"
+                  size="sm"
+                />
+              </View>
+              <Text style={styles.helperText}>Select all crops cultivated on this parcel (select multiple):</Text>
+              <View style={styles.cropsGrid}>
+                {['Rice', 'Cassava', 'Coffee', 'Cocoa', 'Oil Palm', 'Maize', 'Pepper', 'Plantain', 'Vegetables'].map((c) => {
+                  const isSelected = selectedCrops.includes(c);
+                  return (
+                    <TouchableOpacity
+                      key={c}
+                      style={[styles.cropChip, isSelected && styles.cropChipActive]}
+                      onPress={() => toggleCrop(c)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={isSelected ? 'checkmark-circle' : 'leaf-outline'}
+                        size={13}
+                        color={isSelected ? '#FFFFFF' : Colors.primary}
+                      />
+                      <Text style={[styles.cropChipText, isSelected && styles.cropChipTextActive]}>
+                        {c}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
 
             <View style={styles.inputGroup}>
               <Text style={styles.label}>Land Tenure / Ownership</Text>
@@ -1953,6 +2037,77 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   waterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  // Integrated Farm Banner
+  integratedNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  integratedNoticeTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+  },
+  integratedNoticeDesc: {
+    fontSize: 11,
+    color: Colors.textMuted,
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  // Selected Species Pill
+  selectedSpeciesPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: Radius.md,
+    marginTop: Spacing.xs,
+  },
+  selectedSpeciesPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    flex: 1,
+  },
+  // Crops Grid in Section 4
+  cropsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
+    marginTop: 4,
+  },
+  cropChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: Colors.surfaceAlt,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: Radius.full,
+  },
+  cropChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  cropChipText: {
+    fontSize: Typography.sizes.xs,
+    color: Colors.text,
+    fontWeight: '600',
+  },
+  cropChipTextActive: {
     color: '#FFFFFF',
   },
 });
