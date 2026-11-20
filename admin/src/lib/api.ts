@@ -1,20 +1,9 @@
 import { createClient } from '@/lib/supabase/client';
 import {
-  MOCK_FARMERS,
-  MOCK_FARMS,
-  MOCK_CROPS,
-  MOCK_SEASONS,
-  MOCK_HARVESTS,
-  MOCK_INSPECTIONS,
-  MOCK_ACTIVITIES,
-  MOCK_COOPERATIVES,
-  MOCK_INPUTS,
-  MOCK_AUDIT_LOGS,
-} from './mockData';
-import {
   Farmer,
   Farm,
   Crop,
+  CropVariety,
   FarmSeason,
   FarmActivity,
   HarvestBatch,
@@ -27,7 +16,7 @@ import {
 } from '@/types/database';
 
 // ============================================================================
-// High-Speed In-Memory Cache with TTL & Stale-While-Revalidate
+// High-Speed In-Memory Cache with Short TTL (3s) for Live Data
 // ============================================================================
 interface CacheEntry<T> {
   data: T;
@@ -35,7 +24,7 @@ interface CacheEntry<T> {
 }
 
 const apiCache = new Map<string, CacheEntry<any>>();
-const CACHE_TTL_MS = 60_000; // 60 seconds memory cache
+const CACHE_TTL_MS = 3_000; // 3 seconds memory cache for near real-time updates
 
 function getCached<T>(key: string): T | null {
   const entry = apiCache.get(key);
@@ -56,10 +45,9 @@ export function clearApiCache(): void {
 }
 
 /**
- * Strict timeout wrapper: Prevents slow or paused remote database calls
- * from freezing the admin UI.
+ * Timeout wrapper: Prevents frozen connections while allowing sufficient time for cloud queries
  */
-async function withTimeout<T>(queryOrPromise: any, timeoutMs = 1800): Promise<T> {
+async function withTimeout<T>(queryOrPromise: any, timeoutMs = 8000): Promise<T> {
   const promise = Promise.resolve(queryOrPromise);
   return Promise.race([
     promise,
@@ -70,7 +58,7 @@ async function withTimeout<T>(queryOrPromise: any, timeoutMs = 1800): Promise<T>
 }
 
 // ============================================================================
-// 1. DASHBOARD METRICS (Sub-second parallel count queries)
+// 1. DASHBOARD METRICS
 // ============================================================================
 export async function getDashboardMetrics() {
   const cacheKey = 'dashboard_metrics';
@@ -86,9 +74,9 @@ export async function getDashboardMetrics() {
       supabase.from('cooperatives').select('id', { count: 'exact', head: true }),
     ]);
 
-    const [farmersRes, farmsRes, harvestsRes, coopsRes] = (await withTimeout(query, 1800)) as any[];
+    const [farmersRes, farmsRes, harvestsRes, coopsRes] = (await withTimeout(query, 8000)) as any[];
 
-    if (!farmersRes.error && farmersRes.count !== null) {
+    if (!farmersRes.error) {
       const farms: any[] = farmsRes.data || [];
       const harvests: any[] = harvestsRes.data || [];
       const totalAcreage = farms.reduce((acc: number, f: any) => acc + (Number(f.size) || 0), 0);
@@ -108,39 +96,29 @@ export async function getDashboardMetrics() {
         approvedHarvests,
         rejectedHarvests,
         totalCooperatives: coopsRes.count || 0,
-        activeExtensionOfficers: 14,
+        activeExtensionOfficers: 0,
       };
 
       setCache(cacheKey, result);
       return result;
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to load live dashboard metrics from Supabase:', e);
   }
 
-  // Graceful fallback to verified benchmark data
-  const totalAcreage = MOCK_FARMS.reduce((acc, f) => acc + f.size, 0);
-  const totalHarvestKg = MOCK_HARVESTS.reduce((acc, h) => acc + h.quantity, 0);
-  const pendingInspections = MOCK_HARVESTS.filter(
-    (h) => h.status === 'submitted' || h.status === 'pending_inspection' || h.status === 'under_inspection'
-  ).length;
-  const approvedHarvests = MOCK_HARVESTS.filter((h) => h.status === 'approved').length;
-  const rejectedHarvests = MOCK_HARVESTS.filter((h) => h.status === 'rejected').length;
-
-  const fallback = {
-    totalFarmers: MOCK_FARMERS.length,
-    totalFarms: MOCK_FARMS.length,
-    totalAcreage,
-    totalHarvestKg,
-    pendingInspections,
-    approvedHarvests,
-    rejectedHarvests,
-    totalCooperatives: MOCK_COOPERATIVES.length,
-    activeExtensionOfficers: 8,
+  const emptyResult = {
+    totalFarmers: 0,
+    totalFarms: 0,
+    totalAcreage: 0,
+    totalHarvestKg: 0,
+    pendingInspections: 0,
+    approvedHarvests: 0,
+    rejectedHarvests: 0,
+    totalCooperatives: 0,
+    activeExtensionOfficers: 0,
   };
-
-  setCache(cacheKey, fallback);
-  return fallback;
+  setCache(cacheKey, emptyResult);
+  return emptyResult;
 }
 
 // ============================================================================
@@ -163,18 +141,19 @@ export async function getFarmers(limit?: number): Promise<Farmer[]> {
 
     if (limit) query = query.limit(limit);
 
-    const { data, error } = (await withTimeout(query, 1800)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Farmer[]);
       return data as Farmer[];
     }
+    if (error) {
+      console.warn('Supabase getFarmers error:', error.message);
+    }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query farmers from Supabase:', e);
   }
 
-  const result = limit ? MOCK_FARMERS.slice(0, limit) : MOCK_FARMERS;
-  setCache(cacheKey, result);
-  return result;
+  return [];
 }
 
 export async function getFarmerById(id: string): Promise<Farmer | null> {
@@ -190,18 +169,16 @@ export async function getFarmerById(id: string): Promise<Farmer | null> {
       .eq('id', id)
       .maybeSingle();
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && data) {
       setCache(cacheKey, data as Farmer);
       return data as Farmer;
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query farmer by id from Supabase:', e);
   }
 
-  const found = MOCK_FARMERS.find((f) => f.id === id || f.farmer_id_code === id) || null;
-  if (found) setCache(cacheKey, found);
-  return found;
+  return null;
 }
 
 export async function updateFarmerStatus(id: string, status: 'active' | 'disabled'): Promise<boolean> {
@@ -213,25 +190,17 @@ export async function updateFarmerStatus(id: string, status: 'active' | 'disable
         .from('farmers')
         .update({ status, updated_at: new Date().toISOString() })
         .eq('id', id),
-      2500
+      6000
     )) as any;
 
     if (!error) {
-      const found = MOCK_FARMERS.find((f) => f.id === id || f.farmer_id_code === id);
-      if (found) {
-        found.status = status;
-      }
       return true;
     }
+    console.warn('Error updating farmer status in Supabase:', error.message);
   } catch (e) {
-    // fallback to in-memory mock
+    console.warn('Failed to update farmer status in Supabase:', e);
   }
 
-  const found = MOCK_FARMERS.find((f) => f.id === id || f.farmer_id_code === id);
-  if (found) {
-    found.status = status;
-    return true;
-  }
   return false;
 }
 
@@ -255,18 +224,16 @@ export async function getFarms(limit?: number): Promise<Farm[]> {
 
     if (limit) query = query.limit(limit);
 
-    const { data, error } = (await withTimeout(query, 1800)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Farm[]);
       return data as Farm[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query farms from Supabase:', e);
   }
 
-  const result = limit ? MOCK_FARMS.slice(0, limit) : MOCK_FARMS;
-  setCache(cacheKey, result);
-  return result;
+  return [];
 }
 
 export async function getFarmsByFarmerId(farmerId: string): Promise<Farm[]> {
@@ -282,18 +249,16 @@ export async function getFarmsByFarmerId(farmerId: string): Promise<Farm[]> {
       .eq('farmer_id', farmerId)
       .order('created_at', { ascending: false });
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Farm[]);
       return data as Farm[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query farms by farmerId from Supabase:', e);
   }
 
-  const filtered = MOCK_FARMS.filter((f) => f.farmer_id === farmerId);
-  setCache(cacheKey, filtered);
-  return filtered;
+  return [];
 }
 
 export async function getFarmById(id: string): Promise<Farm | null> {
@@ -309,18 +274,16 @@ export async function getFarmById(id: string): Promise<Farm | null> {
       .eq('id', id)
       .maybeSingle();
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && data) {
       setCache(cacheKey, data as Farm);
       return data as Farm;
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query farm by id from Supabase:', e);
   }
 
-  const found = MOCK_FARMS.find((f) => f.id === id) || null;
-  if (found) setCache(cacheKey, found);
-  return found;
+  return null;
 }
 
 // ============================================================================
@@ -336,17 +299,16 @@ export async function getCrops(): Promise<Crop[]> {
   try {
     const supabase = createClient();
     const query = supabase.from('crops').select(CROP_SELECT_FIELDS).order('name');
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Crop[]);
       return data as Crop[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query crops from Supabase:', e);
   }
 
-  setCache(cacheKey, MOCK_CROPS);
-  return MOCK_CROPS;
+  return [];
 }
 
 const SEASON_SELECT_FIELDS =
@@ -366,18 +328,16 @@ export async function getSeasons(limit?: number): Promise<FarmSeason[]> {
 
     if (limit) query = query.limit(limit);
 
-    const { data, error } = (await withTimeout(query, 1800)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as FarmSeason[]);
       return data as FarmSeason[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query seasons from Supabase:', e);
   }
 
-  const result = limit ? MOCK_SEASONS.slice(0, limit) : MOCK_SEASONS;
-  setCache(cacheKey, result);
-  return result;
+  return [];
 }
 
 // ============================================================================
@@ -400,18 +360,16 @@ export async function getFarmActivities(limit?: number): Promise<FarmActivity[]>
 
     if (limit) query = query.limit(limit);
 
-    const { data, error } = (await withTimeout(query, 1800)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as FarmActivity[]);
       return data as FarmActivity[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query farm activities from Supabase:', e);
   }
 
-  const result = limit ? MOCK_ACTIVITIES.slice(0, limit) : MOCK_ACTIVITIES;
-  setCache(cacheKey, result);
-  return result;
+  return [];
 }
 
 export async function getFarmActivitiesByFarmerId(farmerId: string): Promise<FarmActivity[]> {
@@ -427,18 +385,16 @@ export async function getFarmActivitiesByFarmerId(farmerId: string): Promise<Far
       .eq('farmer_id', farmerId)
       .order('activity_date', { ascending: false });
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as FarmActivity[]);
       return data as FarmActivity[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query activities by farmerId from Supabase:', e);
   }
 
-  const filtered = MOCK_ACTIVITIES.filter((a) => a.farmer_id === farmerId);
-  setCache(cacheKey, filtered);
-  return filtered;
+  return [];
 }
 
 export async function getFarmActivitiesByFarmId(farmId: string): Promise<FarmActivity[]> {
@@ -454,18 +410,16 @@ export async function getFarmActivitiesByFarmId(farmId: string): Promise<FarmAct
       .eq('farm_id', farmId)
       .order('activity_date', { ascending: false });
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as FarmActivity[]);
       return data as FarmActivity[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query activities by farmId from Supabase:', e);
   }
 
-  const filtered = MOCK_ACTIVITIES.filter((a) => a.farm_id === farmId);
-  setCache(cacheKey, filtered);
-  return filtered;
+  return [];
 }
 
 // ============================================================================
@@ -488,18 +442,16 @@ export async function getHarvestBatches(limit?: number): Promise<HarvestBatch[]>
 
     if (limit) query = query.limit(limit);
 
-    const { data, error } = (await withTimeout(query, 1800)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as HarvestBatch[]);
       return data as HarvestBatch[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query harvest batches from Supabase:', e);
   }
 
-  const result = limit ? MOCK_HARVESTS.slice(0, limit) : MOCK_HARVESTS;
-  setCache(cacheKey, result);
-  return result;
+  return [];
 }
 
 export async function getHarvestBatchesByFarmerId(farmerId: string): Promise<HarvestBatch[]> {
@@ -515,18 +467,16 @@ export async function getHarvestBatchesByFarmerId(farmerId: string): Promise<Har
       .eq('farmer_id', farmerId)
       .order('created_at', { ascending: false });
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as HarvestBatch[]);
       return data as HarvestBatch[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query harvests by farmerId from Supabase:', e);
   }
 
-  const filtered = MOCK_HARVESTS.filter((h) => h.farmer_id === farmerId);
-  setCache(cacheKey, filtered);
-  return filtered;
+  return [];
 }
 
 export async function getHarvestBatchesByFarmId(farmId: string): Promise<HarvestBatch[]> {
@@ -542,18 +492,16 @@ export async function getHarvestBatchesByFarmId(farmId: string): Promise<Harvest
       .eq('farm_id', farmId)
       .order('created_at', { ascending: false });
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as HarvestBatch[]);
       return data as HarvestBatch[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query harvests by farmId from Supabase:', e);
   }
 
-  const filtered = MOCK_HARVESTS.filter((h) => h.farm_id === farmId);
-  setCache(cacheKey, filtered);
-  return filtered;
+  return [];
 }
 
 export async function getHarvestById(id: string): Promise<HarvestBatch | null> {
@@ -569,18 +517,16 @@ export async function getHarvestById(id: string): Promise<HarvestBatch | null> {
       .or(`id.eq.${id},batch_reference.eq.${id}`)
       .maybeSingle();
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && data) {
       setCache(cacheKey, data as HarvestBatch);
       return data as HarvestBatch;
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query harvest by id from Supabase:', e);
   }
 
-  const found = MOCK_HARVESTS.find((h) => h.id === id || h.batch_reference === id) || null;
-  if (found) setCache(cacheKey, found);
-  return found;
+  return null;
 }
 
 // ============================================================================
@@ -603,18 +549,16 @@ export async function getQualityInspections(limit?: number): Promise<QualityInsp
 
     if (limit) query = query.limit(limit);
 
-    const { data, error } = (await withTimeout(query, 1800)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as QualityInspection[]);
       return data as QualityInspection[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query quality inspections from Supabase:', e);
   }
 
-  const result = limit ? MOCK_INSPECTIONS.slice(0, limit) : MOCK_INSPECTIONS;
-  setCache(cacheKey, result);
-  return result;
+  return [];
 }
 
 export async function getQualityInspectionById(id: string): Promise<QualityInspection | null> {
@@ -630,18 +574,16 @@ export async function getQualityInspectionById(id: string): Promise<QualityInspe
       .or(`id.eq.${id},batch_id.eq.${id}`)
       .maybeSingle();
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && data) {
       setCache(cacheKey, data as QualityInspection);
       return data as QualityInspection;
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query inspection by id from Supabase:', e);
   }
 
-  const found = MOCK_INSPECTIONS.find((q) => q.id === id || q.batch_id === id) || null;
-  if (found) setCache(cacheKey, found);
-  return found;
+  return null;
 }
 
 // ============================================================================
@@ -658,17 +600,16 @@ export async function getCooperatives(): Promise<Cooperative[]> {
   try {
     const supabase = createClient();
     const query = supabase.from('cooperatives').select(COOP_SELECT_FIELDS).order('name');
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Cooperative[]);
       return data as Cooperative[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query cooperatives from Supabase:', e);
   }
 
-  setCache(cacheKey, MOCK_COOPERATIVES);
-  return MOCK_COOPERATIVES;
+  return [];
 }
 
 export async function getCooperativeById(id: string): Promise<Cooperative | null> {
@@ -684,18 +625,16 @@ export async function getCooperativeById(id: string): Promise<Cooperative | null
       .or(`id.eq.${id},code.eq.${id}`)
       .maybeSingle();
 
-    const { data, error } = (await withTimeout(query, 1500)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && data) {
       setCache(cacheKey, data as Cooperative);
       return data as Cooperative;
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query cooperative by id from Supabase:', e);
   }
 
-  const found = MOCK_COOPERATIVES.find((c) => c.id === id || c.code === id) || null;
-  if (found) setCache(cacheKey, found);
-  return found;
+  return null;
 }
 
 // ============================================================================
@@ -718,18 +657,16 @@ export async function getInputs(limit?: number): Promise<InputRecord[]> {
 
     if (limit) query = query.limit(limit);
 
-    const { data, error } = (await withTimeout(query, 1800)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as InputRecord[]);
       return data as InputRecord[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query input records from Supabase:', e);
   }
 
-  const result = limit ? MOCK_INPUTS.slice(0, limit) : MOCK_INPUTS;
-  setCache(cacheKey, result);
-  return result;
+  return [];
 }
 
 const AUDIT_SELECT_FIELDS = 'id, user_id, action, entity_type, entity_id, details, ip_address, created_at';
@@ -748,18 +685,16 @@ export async function getAuditLogs(limit?: number): Promise<AuditLog[]> {
 
     if (limit) query = query.limit(limit);
 
-    const { data, error } = (await withTimeout(query, 1800)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as AuditLog[]);
       return data as AuditLog[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query audit logs from Supabase:', e);
   }
 
-  const result = limit ? MOCK_AUDIT_LOGS.slice(0, limit) : MOCK_AUDIT_LOGS;
-  setCache(cacheKey, result);
-  return result;
+  return [];
 }
 
 const PROFILE_SELECT_FIELDS =
@@ -777,16 +712,14 @@ export async function getProfiles(): Promise<Profile[]> {
       .select(PROFILE_SELECT_FIELDS)
       .order('created_at', { ascending: false });
 
-    const { data, error } = (await withTimeout(query, 1800)) as any;
+    const { data, error } = (await withTimeout(query, 8000)) as any;
     if (!error && Array.isArray(data)) {
       setCache(cacheKey, data as Profile[]);
       return data as Profile[];
     }
   } catch (e) {
-    // fallback
+    console.warn('Failed to query profiles from Supabase:', e);
   }
 
-  const { MOCK_PROFILES } = await import('./mockData');
-  setCache(cacheKey, MOCK_PROFILES);
-  return MOCK_PROFILES;
+  return [];
 }
