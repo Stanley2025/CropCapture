@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Line } from 'react-native-svg';
 import { useAppStore } from '../src/store/useAppStore';
 import { UserRole } from '../src/types/database';
+import { DatePickerField } from '../src/components/DatePickerField';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -465,7 +466,7 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
-                {/* 3. Date of Birth (Mandatory) */}
+                {/* 3. Date of Birth (Interactive Calendar Picker) */}
                 <View style={styles.inputGroup}>
                   <View style={styles.optionalLabelRow}>
                     <Text style={styles.inputFieldLabel}>
@@ -473,21 +474,12 @@ export default function LoginScreen() {
                     </Text>
                     <Text style={styles.requiredTag}>Required</Text>
                   </View>
-                  <View style={styles.inputFieldWrapper}>
-                    <Ionicons
-                      name="calendar-outline"
-                      size={20}
-                      color="#526658"
-                      style={styles.fieldLeftIcon}
-                    />
-                    <TextInput
-                      style={styles.textInput}
-                      value={dateOfBirth}
-                      onChangeText={setDateOfBirth}
-                      placeholder="YYYY-MM-DD (e.g. 1985-04-12)"
-                      placeholderTextColor="#7F8F84"
-                    />
-                  </View>
+                  <DatePickerField
+                    mode="dob"
+                    value={dateOfBirth}
+                    onChange={setDateOfBirth}
+                    helperText="Tap to choose your birthdate from calendar"
+                  />
                 </View>
 
                 {/* 4. Gender (Mandatory) */}
