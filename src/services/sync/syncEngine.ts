@@ -119,8 +119,16 @@ export class SyncEngine {
           }
         }
       } catch (err: any) {
-        failureCount++;
         const errorMessage = err?.message || 'Network error during sync';
+        // The server allows 4 photos per harvest. Another phone got there first: this photo is dropped
+        // here (the farmer is not stuck with a sync error that can never succeed).
+        if (item.entity_type === 'harvest_photo' && /harvest_photo_limit/.test(errorMessage)) {
+          await localDb.deleteHarvestPhoto(item.payload.id, false);
+          await localDb.updateSyncQueueItem(item.id, { status: 'synced', synced_at: new Date().toISOString(), last_error: errorMessage });
+          successCount++;
+          continue;
+        }
+        failureCount++;
         errors.push({ id: item.id, error: errorMessage });
         await localDb.updateSyncQueueItem(item.id, {
           status: 'sync_failed',
@@ -194,9 +202,12 @@ export class SyncEngine {
         clean.crop_variety_id = null;
       }
     } else if (entityType === 'harvest_photo') {
-      // phone-only fields: the file path on this phone and whether it has been uploaded
+      // phone-only fields: the file path on this phone and the upload queue's bookkeeping
       delete clean.local_uri;
       delete clean.uploaded;
+      delete clean.attempts;
+      delete clean.next_attempt_at;
+      delete clean.last_error;
     } else if (entityType === 'inspection') {
       delete clean.batch;
       delete clean.results;
@@ -455,6 +466,19 @@ export class SyncEngine {
           }
           totalPulled += remotePlans.length;
           tablesUpdated.push('farm_plans');
+        }
+
+        // 2c. Photos of the harvests (the picture file stays in the private bucket; this is its record)
+        const { data: remotePhotos } = await supabase.from('harvest_photos').select('*').in('farm_id', farmIds);
+        if (remotePhotos && remotePhotos.length > 0) {
+          const localPhotoMap = byId(await localDb.getHarvestPhotos());
+          for (const rp of remotePhotos) {
+            if (pending.has(rp.id)) continue;
+            if (rp.deleted_at) await localDb.deleteHarvestPhoto(rp.id, false);
+            else await localDb.saveHarvestPhoto({ ...localPhotoMap.get(rp.id), ...rp, upload_status: 'uploaded' }, false);
+          }
+          totalPulled += remotePhotos.length;
+          tablesUpdated.push('harvest_photos');
         }
 
         // 3. Expenses on those farms

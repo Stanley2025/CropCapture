@@ -28,6 +28,7 @@ import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { DatePickerField } from '../../src/components/DatePickerField';
+import { newPublicCode } from '../../src/constants/buyerLink';
 
 // Local units (cups, tins, bags) are accepted and converted to kg (see src/shared/seasonRecord.js).
 const CROP_UNITS = ['kg', 'tonnes', '50kg bags', 'cups', 'tins', 'bunches'];
@@ -287,6 +288,7 @@ export default function RegisterHarvestScreen() {
             : 'Harvest gathered and bagged in clean dry condition.'),
         status: 'submitted',
         qr_token: randomToken,
+        public_code: newPublicCode(),
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
         crop: isLivestock

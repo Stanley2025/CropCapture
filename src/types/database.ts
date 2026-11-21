@@ -248,6 +248,8 @@ export interface HarvestBatch {
   observations?: string | null;
   status: HarvestStatus;
   qr_token: string;
+  /** Random code in the buyer link /b/{public_code}. Set on the phone; the server also fills it in when missing. */
+  public_code?: string | null;
   created_at: string;
   updated_at: string;
   is_offline_pending?: boolean;

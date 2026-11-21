@@ -48,7 +48,7 @@ export default function RootLayout() {
     }
   }, [fontsLoaded, appReady]);
 
-  if (!fontsLoaded && !appReady) {
+  if (!fontsLoaded || !appReady) {
     return null;
   }
 
@@ -80,6 +80,7 @@ export default function RootLayout() {
         <Stack.Screen name="sync-center" options={{ presentation: 'card' }} />
         <Stack.Screen name="qr-scanner" options={{ presentation: 'card' }} />
         <Stack.Screen name="traceability/[token]" options={{ presentation: 'card' }} />
+        <Stack.Screen name="harvest-photos/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="inspector/index" options={{ presentation: 'card' }} />
         <Stack.Screen name="inspector/inspect/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="extension/index" options={{ presentation: 'card' }} />

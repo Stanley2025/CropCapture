@@ -42,6 +42,13 @@ function createFakeServer(columns = {}) {
               if (bad) return { error: { message: `Could not find the '${bad}' column of '${name}' in the schema cache` } };
             }
           }
+          // database rules such as the 4-photo limit: server.rules[table](row, tableMap) returns an error message
+          if (server.rules && server.rules[name]) {
+            for (const row of list) {
+              const message = server.rules[name](row, table(name));
+              if (message) return { error: { message } };
+            }
+          }
           for (const row of list) table(name).set(row[(opts && opts.onConflict) || 'id'], { ...(table(name).get(row.id) || {}), ...row });
           return { error: null };
         },

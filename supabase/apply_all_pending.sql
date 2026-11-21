@@ -516,6 +516,10 @@ SET public_code = substr(replace(gen_random_uuid()::text || gen_random_uuid()::t
 WHERE public_code IS NULL;
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_harvest_batches_public_code ON public.harvest_batches(public_code);
+-- Any harvest saved without a code (USSD, the REST API, an old phone) gets one from the database.
+ALTER TABLE public.harvest_batches
+  ALTER COLUMN public_code SET DEFAULT substr(replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''), 1, 20);
+
 
 -- 2. Photos --------------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS public.harvest_photos (

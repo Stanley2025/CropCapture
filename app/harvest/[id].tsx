@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronLeft, Share2, ShieldCheck, ExternalLink } from 'lucide-react-native';
+import { ChevronLeft, Share2, Camera, ChevronRight, Link2 } from 'lucide-react-native';
 import QRCode from 'react-native-qrcode-svg';
 import {
   Colors,
@@ -23,7 +23,9 @@ import { localDb } from '../../src/services/storage/localDatabase';
 import { useAppStore } from '../../src/store/useAppStore';
 import { HarvestBatch, QualityInspection, Farm } from '../../src/types/database';
 import { Chip } from '../../src/components/Chip';
-import { HarvestPhotos } from '../../src/components/harvest/HarvestPhotos';
+import { buyerUrl, newPublicCode } from '../../src/constants/buyerLink';
+import { t } from '../../src/i18n/en';
+import { MAX_PHOTOS_PER_HARVEST } from '../../src/shared/harvestPhotos';
 
 export default function HarvestDetailsScreen() {
   const router = useRouter();
@@ -34,6 +36,8 @@ export default function HarvestDetailsScreen() {
   const [harvest, setHarvest] = useState<HarvestBatch | null>(null);
   const [farm, setFarm] = useState<Farm | null>(null);
   const [inspection, setInspection] = useState<QualityInspection | null>(null);
+  const [photoCount, setPhotoCount] = useState(0);
+  const [loaded, setLoaded] = useState(false);
 
   const loadBatch = useCallback(async () => {
     if (!id) return;
@@ -44,9 +48,14 @@ export default function HarvestDetailsScreen() {
         localDb.getInspections(),
       ]);
 
-      const foundHarvest = allHarvests.find((h) => h.id === id);
+      let foundHarvest = allHarvests.find((h) => h.id === id);
+      if (foundHarvest && !foundHarvest.public_code) {
+        // an older harvest: give it a code now (it syncs like any other change)
+        foundHarvest = await localDb.saveHarvest({ ...foundHarvest, public_code: newPublicCode() }, true);
+      }
       if (foundHarvest) {
         setHarvest(foundHarvest);
+        setPhotoCount((await localDb.getHarvestPhotos(foundHarvest.id)).length);
         const foundFarm = allFarms.find((f) => f.id === foundHarvest.farm_id);
         setFarm(foundFarm || null);
 
@@ -55,6 +64,8 @@ export default function HarvestDetailsScreen() {
       }
     } catch (e) {
       console.error('Error loading batch:', e);
+    } finally {
+      setLoaded(true);
     }
   }, [id]);
 
@@ -62,33 +73,35 @@ export default function HarvestDetailsScreen() {
     loadBatch();
   }, [loadBatch]);
 
-  // Fallback demo batch matching V2 screenshot if id not found
-  const activeBatch: HarvestBatch =
-    harvest ||
-    ({
-      id: id || 'demo-batch-01',
-      farm_id: 'farm-01',
-      farmer_id: 'farmer-01',
-      batch_reference: 'AGR-2026-RICE-000001',
-      qr_token: 'AGR-SEC-77491-VERIFIED',
-      crop: { name: 'Rice', category: 'Cereals' },
-      crop_variety_id: 'Suakoko 8',
-      quantity: 2450,
-      unit: 'kg',
-      harvest_date: '2026-10-22',
-      status: 'approved',
-      is_server_verified: true,
-      created_at: '2026-10-22T10:00:00.000Z',
-    } as unknown as HarvestBatch);
-
-  const publicVerificationUrl = `https://farmtori.app/verify/${activeBatch.qr_token || 'AGR-SEC-77491-VERIFIED'}`;
+  if (!harvest) {
+    return (
+      <View style={[styles.root, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={{ color: Colors.textMuted, fontSize: 15 }}>{loaded ? t('harvestNotFound') : ''}</Text>
+      </View>
+    );
+  }
+  const activeBatch: HarvestBatch = harvest;
+  const publicUrl = buyerUrl(activeBatch.public_code || activeBatch.id);
 
   const handleShare = async () => {
     try {
       await Share.share({
-        title: `FarmTori Batch ${activeBatch.batch_reference}`,
-        message: `FarmTori Verified Batch Passport\nBatch: ${activeBatch.batch_reference}\nCrop: ${activeBatch.crop?.name || 'Rice'} (${activeBatch.crop_variety_id || 'Suakoko 8'})\nYield: ${activeBatch.quantity} ${activeBatch.unit}\nStatus: ${activeBatch.status.toUpperCase()}\n\nVerify public record: ${publicVerificationUrl}`,
+        title: `FarmTori ${activeBatch.batch_reference}`,
+        message: t('shareMessage', {
+          batch: activeBatch.batch_reference,
+          crop: activeBatch.crop?.name || '',
+          quantity: `${activeBatch.quantity} ${activeBatch.unit}`,
+          url: publicUrl,
+        }),
       });
+    } catch (e: any) {
+      console.warn('Share error:', e);
+    }
+  };
+
+  const handleShareLink = async () => {
+    try {
+      await Share.share({ message: publicUrl, url: publicUrl });
     } catch (e: any) {
       console.warn('Share error:', e);
     }
@@ -102,27 +115,20 @@ export default function HarvestDetailsScreen() {
     );
   };
 
-  const isServerVerified = Boolean(
-    activeBatch.is_server_verified ||
-    activeBatch.server_signature ||
-    (activeBatch.status === 'approved' &&
-      !activeBatch.is_offline_pending &&
-      !activeBatch.batch_reference.startsWith('PENDING-'))
-  );
-  const isApproved = activeBatch.status === 'approved' && isServerVerified;
+  const isApproved = activeBatch.status === 'approved';
   const isPendingNumber = Boolean(
     activeBatch.is_offline_pending || activeBatch.batch_reference.startsWith('PENDING-')
   );
 
-  const cropName = activeBatch.crop?.name || 'Rice';
-  const variety = activeBatch.crop_variety_id || 'Suakoko 8';
-  const titleDisplay = `${cropName} • ${variety}`;
-  const batchRefDisplay = isPendingNumber ? 'Pending number' : activeBatch.batch_reference;
+  const cropName = activeBatch.crop?.name || '';
+  const variety = activeBatch.crop_variety_id && !/^[0-9a-f]{8}-/i.test(String(activeBatch.crop_variety_id)) ? activeBatch.crop_variety_id : null;
+  const titleDisplay = variety ? `${cropName} • ${variety}` : cropName;
+  const batchRefDisplay = isPendingNumber ? t('batchNumberPending') : activeBatch.batch_reference;
   const yieldDisplay = `${Number(activeBatch.quantity).toLocaleString()} ${activeBatch.unit || 'kg'}`;
   
   // Format harvest date (e.g. 22 Oct 2026)
   const formatHarvestDate = (dateStr: string) => {
-    if (!dateStr) return '22 Oct 2026';
+    if (!dateStr) return '';
     try {
       const parts = dateStr.split('-');
       if (parts.length === 3) {
@@ -179,13 +185,9 @@ export default function HarvestDetailsScreen() {
                 <View style={styles.approvedPill}>
                   <Text style={styles.approvedPillText}>Approved</Text>
                 </View>
-              ) : isPendingNumber ? (
-                <View style={styles.warningPill}>
-                  <Text style={styles.warningPillText}>Not verified yet</Text>
-                </View>
               ) : (
                 <View style={styles.warningPill}>
-                  <Text style={styles.warningPillText}>Pending inspection</Text>
+                  <Text style={styles.warningPillText}>{t('statusAwaitingApproval')}</Text>
                 </View>
               )}
             </View>
@@ -198,7 +200,7 @@ export default function HarvestDetailsScreen() {
             <View style={styles.qrContainer}>
               <View style={styles.qrFrame}>
                 <QRCode
-                  value={publicVerificationUrl}
+                  value={publicUrl}
                   size={190}
                   color={Colors.primaryDark}
                   backgroundColor="#FFFFFF"
@@ -223,28 +225,28 @@ export default function HarvestDetailsScreen() {
           </View>
 
           {/* Quality & Traceability Link Card */}
-          {/* Pictures of the product: buyers who scan this harvest's QR code can see them */}
-          {harvest ? <HarvestPhotos harvest={harvest} offline={isOfflineMode} /> : null}
+          <TouchableOpacity style={styles.linkBtn} onPress={handleShareLink} activeOpacity={0.85} accessibilityRole="button" accessibilityLabel={t('shareLink')}>
+            <Link2 size={20} color={Colors.primary} strokeWidth={2.4} />
+            <Text style={styles.linkBtnText}>{t('shareLink')}</Text>
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.traceabilityCard}
-            onPress={() => router.push(`/traceability/${activeBatch.qr_token || 'AGR-SEC-77491-VERIFIED'}` as any)}
+            onPress={() => router.push(`/harvest-photos/${activeBatch.id}` as any)}
             activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel={t('passportPhotosCard')}
           >
             <View style={styles.traceabilityLeft}>
               <View style={styles.traceabilityIconCircle}>
-                <ShieldCheck size={20} color={Colors.primary} strokeWidth={2.4} />
+                <Camera size={20} color={Colors.primary} strokeWidth={2.4} />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.traceabilityTitle}>Official National Registry</Text>
-                <Text style={styles.traceabilitySub}>
-                  {isServerVerified
-                    ? 'Verified by Ministry of Agriculture Quality Bureau'
-                    : 'Awaiting server verification & sync'}
-                </Text>
+                <Text style={styles.traceabilityTitle}>{t('passportPhotosCard')}</Text>
+                <Text style={styles.traceabilitySub}>{t('passportPhotosSub', { count: photoCount, max: MAX_PHOTOS_PER_HARVEST })}</Text>
               </View>
             </View>
-            <ExternalLink size={18} color={Colors.textMuted} />
+            <ChevronRight size={18} color={Colors.textMuted} />
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -402,6 +404,19 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.2,
   },
+  linkBtn: {
+    minHeight: 48,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: Colors.card,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: Spacing.md,
+  },
+  linkBtnText: { color: Colors.primary, fontWeight: '800', fontSize: 15 },
   traceabilityCard: {
     backgroundColor: Colors.card,
     borderRadius: 20,
