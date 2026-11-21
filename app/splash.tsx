@@ -1,317 +1,260 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  Image,
-  Dimensions,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
-  Animated,
+  Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  Colors,
+  FontFamily,
+  Spacing,
+  Shadows,
+} from '../src/constants/theme';
+import { FarmerHero } from '../src/components/FarmerHero';
 import { useAppStore } from '../src/store/useAppStore';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
-const SLIDES = [
-  {
-    id: 1,
-    image: require('../assets/splash/splash_1.png'),
-    title: 'CropCapture',
-    subtitle: 'From field to Capture.',
-    description: 'Digital Farm Records & Geolocation Mapping',
-  },
-  {
-    id: 2,
-    image: require('../assets/splash/splash_2.png'),
-    title: 'CropCapture',
-    subtitle: 'From field to frame.',
-    description: 'Real-Time Crop Diagnosis & Field Photography',
-  },
-  {
-    id: 3,
-    image: require('../assets/splash/splash_3.png'),
-    title: 'CropCapture',
-    subtitle: 'From field to frame.',
-    description: 'Cassava & Root Crop Harvest Yield Verification',
-  },
-  {
-    id: 4,
-    image: require('../assets/splash/splash_4.png'),
-    title: 'CropCapture',
-    subtitle: 'From field to frame.',
-    description: 'National Rice Quality Grading & QR Traceability',
-  },
-];
-
-const AUTO_ADVANCE_DELAY = 4500; // 4.5 seconds per slide
-
 export default function SplashScreen() {
   const router = useRouter();
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-
-  const startProgress = () => {
-    progressAnim.setValue(0);
-    Animated.timing(progressAnim, {
-      toValue: 1,
-      duration: AUTO_ADVANCE_DELAY,
-      useNativeDriver: false,
-    }).start(({ finished }) => {
-      if (finished) {
-        if (currentIndex < SLIDES.length - 1) {
-          setCurrentIndex((prev) => prev + 1);
-        } else {
-          // Completed all slides, navigate to dashboard
-          handleFinish();
-        }
-      }
-    });
-  };
-
-  useEffect(() => {
-    startProgress();
-    return () => {
-      progressAnim.stopAnimation();
-    };
-  }, [currentIndex]);
-
+  const insets = useSafeAreaInsets();
   const { isAuthenticated } = useAppStore();
 
-  const handleFinish = async () => {
+  const handleGetStarted = async () => {
     try {
       await AsyncStorage.setItem('@cropcapture_has_seen_splash', 'true');
-    } catch (e) {
+    } catch {
       // ignore
     }
-    router.replace(isAuthenticated ? '/(tabs)' : '/login');
-  };
-
-  const handleNext = () => {
-    progressAnim.stopAnimation();
-    if (currentIndex < SLIDES.length - 1) {
-      setCurrentIndex((prev) => prev + 1);
+    if (isAuthenticated) {
+      router.replace('/(tabs)');
     } else {
-      handleFinish();
+      router.replace('/login' as any);
     }
   };
 
-  const handlePrev = () => {
-    progressAnim.stopAnimation();
-    if (currentIndex > 0) {
-      setCurrentIndex((prev) => prev - 1);
+  const handleSignIn = async () => {
+    try {
+      await AsyncStorage.setItem('@cropcapture_has_seen_splash', 'true');
+    } catch {
+      // ignore
+    }
+    if (isAuthenticated) {
+      router.replace('/(tabs)');
+    } else {
+      router.replace('/login' as any);
     }
   };
-
-  const currentSlide = SLIDES[currentIndex];
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" />
-
-      {/* Full-bleed Illustrated Slide Background */}
-      <View style={styles.imageContainer}>
-        <Image
-          source={currentSlide.image}
-          style={styles.slideImage}
-          resizeMode="cover"
-        />
-
-        {/* Tap areas for quick navigation left/right */}
-        <TouchableOpacity
-          style={styles.leftTapZone}
-          activeOpacity={1}
-          onPress={handlePrev}
-        />
-        <TouchableOpacity
-          style={styles.rightTapZone}
-          activeOpacity={1}
-          onPress={handleNext}
-        />
+    <View style={styles.container}>
+      {/* Background SVG Artwork with Sky, Sun, Hills, Farmer, and Rows */}
+      <View style={StyleSheet.absoluteFill}>
+        <FarmerHero width={SCREEN_WIDTH} height={SCREEN_HEIGHT} />
       </View>
 
-      {/* Top Bar with Skip Button */}
-      <View style={styles.topBar}>
-        <View style={styles.brandRow}>
-          <Text style={styles.brandText}>AGRITRACK LIBERIA</Text>
+      {/* Top Branding Section */}
+      <View style={[styles.topBranding, { paddingTop: Math.max(insets.top, 20) + 32 }]}>
+        {/* Viewfinder sprout icon */}
+        <View style={styles.brandIconBox}>
+          <View style={styles.bracketTopLeft} />
+          <View style={styles.bracketTopRight} />
+          <View style={styles.bracketBottomLeft} />
+          <View style={styles.bracketBottomRight} />
+          <View style={styles.leafIconContainer}>
+            <View style={styles.leafLeft} />
+            <View style={styles.leafRight} />
+            <View style={styles.leafStem} />
+          </View>
         </View>
 
-        <TouchableOpacity style={styles.skipButton} onPress={handleFinish}>
-          <Text style={styles.skipText}>Skip</Text>
-          <Ionicons name="chevron-forward" size={14} color="rgba(255,255,255,0.7)" />
+        <Text style={styles.brandTitle}>CropCapture</Text>
+        <Text style={styles.tagline}>From field to frame.</Text>
+        <Text style={styles.taglineSub}>Every harvest verified.</Text>
+      </View>
+
+      {/* Bottom Action Buttons (Lime Get Started + White Outline Sign In) */}
+      <View
+        style={[
+          styles.bottomActions,
+          { paddingBottom: Math.max(insets.bottom, 20) + 16 },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.getStartedBtn}
+          onPress={handleGetStarted}
+          activeOpacity={0.88}
+        >
+          <Text style={styles.getStartedBtnText}>Get started</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.signInBtn}
+          onPress={handleSignIn}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.signInBtnText}>Sign in</Text>
         </TouchableOpacity>
       </View>
-
-      {/* Bottom Control Bar */}
-      <View style={styles.bottomBar}>
-        {/* Progress Bar Indicators */}
-        <View style={styles.indicatorsRow}>
-          {SLIDES.map((slide, idx) => {
-            const isCompleted = idx < currentIndex;
-            const isCurrent = idx === currentIndex;
-
-            return (
-              <View key={slide.id} style={styles.indicatorTrack}>
-                {isCompleted && <View style={styles.indicatorFillCompleted} />}
-                {isCurrent && (
-                  <Animated.View
-                    style={[
-                      styles.indicatorFillCurrent,
-                      {
-                        width: progressAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0%', '100%'],
-                        }),
-                      },
-                    ]}
-                  />
-                )}
-              </View>
-            );
-          })}
-        </View>
-
-        {/* Action Button at bottom */}
-        <View style={styles.actionRow}>
-          <TouchableOpacity
-            style={styles.enterButton}
-            onPress={handleFinish}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.enterButtonText}>
-              {currentIndex === SLIDES.length - 1 ? 'Enter AgriTrack Liberia' : 'Get Started'}
-            </Text>
-            <Ionicons name="arrow-forward" size={18} color="#0D221A" />
-          </TouchableOpacity>
-        </View>
-      </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0D221A',
-  },
-  imageContainer: {
-    ...StyleSheet.absoluteFill as any,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  slideImage: {
-    width: SCREEN_WIDTH,
-    height: SCREEN_HEIGHT,
-  },
-  leftTapZone: {
-    position: 'absolute',
-    left: 0,
-    top: 100,
-    bottom: 120,
-    width: SCREEN_WIDTH * 0.35,
-  },
-  rightTapZone: {
-    position: 'absolute',
-    right: 0,
-    top: 100,
-    bottom: 120,
-    width: SCREEN_WIDTH * 0.35,
-  },
-  topBar: {
-    position: 'absolute',
-    top: StatusBar.currentHeight ? StatusBar.currentHeight + 12 : 36,
-    left: 16,
-    right: 16,
-    flexDirection: 'row',
+    backgroundColor: '#86B564',
+    position: 'relative',
     justifyContent: 'space-between',
+  },
+  topBranding: {
     alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
     zIndex: 10,
   },
-  brandRow: {
-    backgroundColor: 'rgba(13, 34, 26, 0.65)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: 'rgba(163, 230, 53, 0.25)',
-  },
-  brandText: {
-    color: '#A3E635',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 1.2,
-  },
-  skipButton: {
-    flexDirection: 'row',
+  brandIconBox: {
+    width: 48,
+    height: 48,
+    position: 'relative',
     alignItems: 'center',
-    gap: 2,
-    backgroundColor: 'rgba(13, 34, 26, 0.65)',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
-  skipText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  bottomBar: {
+  bracketTopLeft: {
     position: 'absolute',
-    bottom: 30,
-    left: 20,
-    right: 20,
+    top: 0,
+    left: 0,
+    width: 14,
+    height: 14,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderColor: '#1B7F36',
+    borderTopLeftRadius: 4,
+  },
+  bracketTopRight: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderColor: '#1B7F36',
+    borderTopRightRadius: 4,
+  },
+  bracketBottomLeft: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    width: 14,
+    height: 14,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderColor: '#1B7F36',
+    borderBottomLeftRadius: 4,
+  },
+  bracketBottomRight: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 14,
+    height: 14,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderColor: '#1B7F36',
+    borderBottomRightRadius: 4,
+  },
+  leafIconContainer: {
+    width: 22,
+    height: 22,
+    position: 'relative',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leafLeft: {
+    position: 'absolute',
+    left: 2,
+    top: 3,
+    width: 8,
+    height: 12,
+    backgroundColor: '#1B7F36',
+    borderTopLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    transform: [{ rotate: '-25deg' }],
+  },
+  leafRight: {
+    position: 'absolute',
+    right: 2,
+    top: 3,
+    width: 8,
+    height: 12,
+    backgroundColor: '#1B7F36',
+    borderTopRightRadius: 8,
+    borderBottomLeftRadius: 8,
+    transform: [{ rotate: '25deg' }],
+  },
+  leafStem: {
+    position: 'absolute',
+    bottom: 1,
+    width: 2.5,
+    height: 8,
+    backgroundColor: '#1B7F36',
+    borderRadius: 1,
+  },
+  brandTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 28,
+    color: '#0F3D22',
+    letterSpacing: -0.5,
+    marginBottom: 8,
+  },
+  tagline: {
+    fontFamily: FontFamily.medium,
+    fontSize: 16,
+    color: '#17301F',
+    lineHeight: 22,
+  },
+  taglineSub: {
+    fontFamily: FontFamily.medium,
+    fontSize: 16,
+    color: '#17301F',
+    lineHeight: 22,
+  },
+  bottomActions: {
+    paddingHorizontal: Spacing.xl,
+    gap: 12,
     zIndex: 10,
   },
-  indicatorsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 18,
-  },
-  indicatorTrack: {
-    flex: 1,
-    height: 4,
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderRadius: 2,
-    overflow: 'hidden',
-  },
-  indicatorFillCompleted: {
-    ...StyleSheet.absoluteFill as any,
-    backgroundColor: '#A3E635',
-  },
-  indicatorFillCurrent: {
-    height: '100%',
-    backgroundColor: '#A3E635',
-  },
-  actionRow: {
-    alignItems: 'center',
-  },
-  enterButton: {
-    flexDirection: 'row',
+  getStartedBtn: {
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.lime, // #A5D65A
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#A3E635',
-    width: '100%',
-    paddingVertical: 14,
-    borderRadius: 12,
-    shadowColor: '#A3E635',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...Shadows.card,
   },
-  enterButtonText: {
-    color: '#0D221A',
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+  getStartedBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 16,
+    color: '#0F3D22',
+  },
+  signInBtn: {
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signInBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
   },
 });
