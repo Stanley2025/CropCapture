@@ -1,27 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TextInput,
   TouchableOpacity,
-  SafeAreaView,
   Alert,
+  ScrollView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius, Spacing, Typography } from '../src/constants/theme';
-import { Header } from '../src/components/Header';
-import { Button } from '../src/components/Button';
-import { Card } from '../src/components/Card';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChevronLeft, QrCode, Search, ArrowRight } from 'lucide-react-native';
+import {
+  Colors,
+  FontFamily,
+  Spacing,
+  Typography,
+  Shadows,
+} from '../src/constants/theme';
 import { localDb } from '../src/services/storage/localDatabase';
 
 export default function QRScannerScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [manualToken, setManualToken] = useState('');
   const [recentBatches, setRecentBatches] = useState<Array<{ ref: string; token: string; crop: string }>>([]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     localDb.getHarvests().then((all) => {
       setRecentBatches(
         all.slice(0, 3).map((h) => ({
@@ -39,209 +44,299 @@ export default function QRScannerScreen() {
       Alert.alert('Input Required', 'Please enter a batch reference or QR verification token.');
       return;
     }
-
-    // Extract token if user pasted full URL (e.g. https://agritrack.lr/verify/xyz)
     const cleaned = raw.includes('/verify/') ? raw.split('/verify/')[1] : raw;
     router.push(`/traceability/${cleaned}` as any);
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header title="Scan QR Passport" subtitle="Batch provenance & quality inspection" showBack />
+    <View style={styles.root}>
+      {/* Top Header */}
+      <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top, 16) + 10 }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <ChevronLeft size={22} color="#FFFFFF" strokeWidth={2.4} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, paddingLeft: 12 }}>
+            <Text style={styles.headerTitle}>Scan QR passport</Text>
+            <Text style={styles.headerSub}>Verify batch provenance & quality grade</Text>
+          </View>
+        </View>
+      </View>
 
-      <View style={styles.container}>
-        {/* Camera Viewfinder Mockup */}
-        <View style={styles.viewfinderContainer}>
-          <View style={styles.cameraFrame}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Scanner Viewfinder Box */}
+        <View style={styles.viewfinderCard}>
+          <View style={styles.cameraBox}>
             <View style={styles.cornerTL} />
             <View style={styles.cornerTR} />
             <View style={styles.cornerBL} />
             <View style={styles.cornerBR} />
-            <Ionicons name="qr-code-outline" size={80} color="rgba(255,255,255,0.7)" />
-            <Text style={styles.frameInstructions}>
-              Align AgriTrack QR passport code inside this frame
-            </Text>
+            <QrCode size={72} color="rgba(255,255,255,0.7)" strokeWidth={1.5} />
+            <Text style={styles.viewfinderHint}>Align QR code within frame</Text>
           </View>
         </View>
 
-        {/* Manual Token Fallback */}
-        <Card style={styles.inputCard}>
-          <Text style={styles.inputTitle}>Manual Batch Reference or Token</Text>
-          <Text style={styles.inputSub}>
-            If lighting or camera lens is obstructed, type or paste the batch identifier.
+        {/* Manual Code Input Card */}
+        <View style={styles.manualCard}>
+          <Text style={styles.manualCardTitle}>Enter batch reference manually</Text>
+          <Text style={styles.manualCardSub}>
+            If camera scanning is unavailable in low light or offline.
           </Text>
 
           <View style={styles.inputRow}>
             <TextInput
-              style={styles.input}
+              style={styles.textInput}
               placeholder="e.g. AGR-2026-RICE-000001"
               placeholderTextColor={Colors.textMuted}
               value={manualToken}
               onChangeText={setManualToken}
               autoCapitalize="characters"
             />
-            <Button
-              title="Verify"
-              onPress={() => handleVerify()}
-              size="sm"
-              style={{ marginLeft: Spacing.xs }}
-            />
           </View>
 
-          {recentBatches.length > 0 && (
-            <View style={styles.quickList}>
-              <Text style={styles.quickLabel}>Registered Batches on Device:</Text>
-              {recentBatches.map((b) => (
-                <TouchableOpacity
-                  key={b.ref}
-                  style={styles.quickItem}
-                  onPress={() => handleVerify(b.token)}
-                >
-                  <Ionicons name="document-text-outline" size={14} color={Colors.primary} />
-                  <Text style={styles.quickItemText}>
-                    {b.ref} ({b.crop})
-                  </Text>
-                  <Ionicons name="chevron-forward" size={12} color={Colors.textMuted} />
-                </TouchableOpacity>
-              ))}
+          <TouchableOpacity
+            style={styles.verifyBtn}
+            onPress={() => handleVerify()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.verifyBtnText}>Verify batch passport</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Recent Batches List */}
+        {recentBatches.length > 0 && (
+          <View style={styles.recentSection}>
+            <Text style={styles.recentSectionTitle}>Recent verified batches</Text>
+            <View style={styles.recentCard}>
+              {recentBatches.map((b, idx) => {
+                const isLast = idx === recentBatches.length - 1;
+                return (
+                  <TouchableOpacity
+                    key={b.ref}
+                    style={[styles.recentRow, !isLast && styles.recentRowDivider]}
+                    onPress={() => handleVerify(b.token)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.recentRef}>{b.ref}</Text>
+                      <Text style={styles.recentCrop}>{b.crop} • Verified batch</Text>
+                    </View>
+                    <ArrowRight size={18} color={Colors.primary} />
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-          )}
-        </Card>
-      </View>
-    </SafeAreaView>
+          </View>
+        )}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.primaryDark,
-  },
-  container: {
+  root: {
     flex: 1,
     backgroundColor: Colors.background,
-    padding: Spacing.md,
   },
-  viewfinderContainer: {
-    height: 260,
-    backgroundColor: '#0F172A',
-    borderRadius: Radius.xl,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: Spacing.md,
-    overflow: 'hidden',
+  headerContainer: {
+    backgroundColor: Colors.primary,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: 24,
   },
-  cameraFrame: {
-    width: 200,
-    height: 200,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: Radius.lg,
-    justifyContent: 'center',
+  headerRow: {
+    flexDirection: 'row',
     alignItems: 'center',
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 20,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.xs,
+    color: '#DDF0D8',
+    marginTop: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: Spacing.xl,
+    paddingBottom: 40,
+  },
+  viewfinderCard: {
+    backgroundColor: Colors.primaryDark,
+    borderRadius: 28,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 20,
+    ...Shadows.card,
+  },
+  cameraBox: {
+    width: 220,
+    height: 220,
+    borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
     position: 'relative',
-    padding: Spacing.md,
   },
   cornerTL: {
     position: 'absolute',
-    top: -2,
-    left: -2,
+    top: 12,
+    left: 12,
     width: 24,
     height: 24,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-    borderColor: Colors.primaryLight,
+    borderTopWidth: 3.5,
+    borderLeftWidth: 3.5,
+    borderColor: Colors.lime,
+    borderTopLeftRadius: 6,
   },
   cornerTR: {
     position: 'absolute',
-    top: -2,
-    right: -2,
+    top: 12,
+    right: 12,
     width: 24,
     height: 24,
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-    borderColor: Colors.primaryLight,
+    borderTopWidth: 3.5,
+    borderRightWidth: 3.5,
+    borderColor: Colors.lime,
+    borderTopRightRadius: 6,
   },
   cornerBL: {
     position: 'absolute',
-    bottom: -2,
-    left: -2,
+    bottom: 12,
+    left: 12,
     width: 24,
     height: 24,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-    borderColor: Colors.primaryLight,
+    borderBottomWidth: 3.5,
+    borderLeftWidth: 3.5,
+    borderColor: Colors.lime,
+    borderBottomLeftRadius: 6,
   },
   cornerBR: {
     position: 'absolute',
-    bottom: -2,
-    right: -2,
+    bottom: 12,
+    right: 12,
     width: 24,
     height: 24,
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-    borderColor: Colors.primaryLight,
+    borderBottomWidth: 3.5,
+    borderRightWidth: 3.5,
+    borderColor: Colors.lime,
+    borderBottomRightRadius: 6,
   },
-  frameInstructions: {
-    color: '#CBD5E1',
-    fontSize: 10,
-    textAlign: 'center',
-    marginTop: Spacing.sm,
+  viewfinderHint: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.xs,
+    color: '#DDF0D8',
+    marginTop: 14,
   },
-  inputCard: {
-    padding: Spacing.lg,
+  manualCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+    marginBottom: 20,
+    ...Shadows.card,
   },
-  inputTitle: {
-    fontSize: Typography.sizes.sm,
-    fontWeight: Typography.weights.bold,
+  manualCardTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 16,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  manualCardSub: {
+    fontFamily: FontFamily.regular,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    marginBottom: 16,
+  },
+  inputRow: {
+    marginBottom: 14,
+  },
+  textInput: {
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: Colors.inputBg,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    paddingHorizontal: 16,
+    fontFamily: FontFamily.medium,
+    fontSize: 15,
     color: Colors.text,
   },
-  inputSub: {
+  verifyBtn: {
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verifyBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 16,
+    color: '#FFFFFF',
+  },
+  recentSection: {
+    marginBottom: 20,
+  },
+  recentSectionTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 17,
+    color: Colors.text,
+    marginBottom: 10,
+    letterSpacing: -0.2,
+  },
+  recentCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 18,
+    ...Shadows.card,
+  },
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+  },
+  recentRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  recentRef: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: Colors.text,
+  },
+  recentCrop: {
+    fontFamily: FontFamily.medium,
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
     marginTop: 2,
-    marginBottom: Spacing.md,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  input: {
-    flex: 1,
-    backgroundColor: Colors.surfaceAlt,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 10,
-    fontSize: Typography.sizes.sm,
-    color: Colors.text,
-  },
-  quickList: {
-    marginTop: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    paddingTop: Spacing.sm,
-  },
-  quickLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  quickItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceAlt,
-  },
-  quickItemText: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.primaryDark,
-    fontWeight: '600',
-    flex: 1,
   },
 });

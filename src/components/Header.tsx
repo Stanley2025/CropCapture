@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { Colors, Spacing, Typography } from '../constants/theme';
+import { Colors, FontFamily, Radius, Spacing, Typography } from '../constants/theme';
 import { useAppStore } from '../store/useAppStore';
 
 interface HeaderProps {
@@ -36,9 +36,9 @@ export const Header: React.FC<HeaderProps> = ({
   const getSyncColor = () => {
     if (isOfflineMode) return Colors.warning;
     if (syncStatus === 'synchronizing') return Colors.info;
-    if (isFarmer) return Colors.accent;
+    if (isFarmer) return Colors.lime;
     if (pendingSyncCount > 0) return Colors.warning;
-    return Colors.accent;
+    return Colors.lime;
   };
 
   return (
@@ -51,10 +51,10 @@ export const Header: React.FC<HeaderProps> = ({
               style={styles.backButton}
               accessibilityLabel="Go back"
             >
-              <Ionicons name="arrow-back" size={24} color={Colors.white} />
+              <Ionicons name="arrow-back" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           )}
-          <View>
+          <View style={{ flex: 1 }}>
             <Text style={styles.appTitle}>CROPCAPTURE</Text>
             {title && <Text style={styles.screenTitle}>{title}</Text>}
             {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
@@ -82,7 +82,7 @@ export const Header: React.FC<HeaderProps> = ({
             onPress={() => router.push('/sync-center' as any)}
             accessibilityLabel="Open Offline Sync Center"
           >
-            <Ionicons name="cloud-outline" size={22} color={Colors.white} />
+            <Ionicons name="cloud-outline" size={20} color="#FFFFFF" />
             {!isFarmer && pendingSyncCount > 0 && (
               <View style={styles.badge}>
                 <Text style={styles.badgeText}>{pendingSyncCount}</Text>
@@ -97,7 +97,7 @@ export const Header: React.FC<HeaderProps> = ({
               onPress={() => router.push('/qr-scanner' as any)}
               accessibilityLabel="Scan QR Batch"
             >
-              <Ionicons name="qr-code-outline" size={20} color={Colors.white} />
+              <Ionicons name="qr-code-outline" size={19} color="#FFFFFF" />
             </TouchableOpacity>
           )}
 
@@ -110,12 +110,12 @@ export const Header: React.FC<HeaderProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.primaryDark,
+    backgroundColor: Colors.primary,
     paddingTop: Spacing.md,
-    paddingBottom: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.1)',
+    paddingBottom: Spacing.lg,
+    paddingHorizontal: Spacing.xl,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
   topRow: {
     flexDirection: 'row',
@@ -126,57 +126,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    paddingRight: 8,
   },
   backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
     marginRight: Spacing.sm,
-    padding: Spacing.xs,
   },
   appTitle: {
-    color: Colors.primaryLight,
-    fontSize: Typography.sizes.xs,
-    fontWeight: Typography.weights.bold,
+    color: '#DDF0D8',
+    fontSize: 10,
+    fontFamily: FontFamily.bold,
     letterSpacing: 1.2,
   },
   screenTitle: {
     color: '#FFFFFF',
     fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.bold,
-    marginTop: 2,
+    fontFamily: FontFamily.extraBold,
+    marginTop: 1,
+    letterSpacing: -0.3,
   },
   subtitle: {
-    color: '#CBD5E1',
+    color: '#DDF0D8',
     fontSize: Typography.sizes.xs,
+    fontFamily: FontFamily.medium,
     marginTop: 1,
   },
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: Spacing.sm,
+    gap: 8,
   },
   syncPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: 16,
     borderWidth: 1,
-    backgroundColor: 'rgba(0,0,0,0.25)',
+    backgroundColor: 'rgba(0,0,0,0.18)',
   },
   statusDot: {
     width: 7,
     height: 7,
     borderRadius: 4,
-    marginRight: 5,
+    marginRight: 6,
   },
   syncText: {
     fontSize: 11,
-    fontWeight: '600',
+    fontFamily: FontFamily.bold,
   },
   iconButton: {
     position: 'relative',
-    padding: 6,
-    backgroundColor: 'rgba(255,255,255,0.12)',
+    width: 40,
+    height: 40,
     borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   badge: {
     position: 'absolute',

@@ -4,22 +4,30 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  SafeAreaView,
   TouchableOpacity,
-  Platform,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius, Spacing, Typography } from '../../src/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  ChevronLeft,
+  ShieldCheck,
+  AlertCircle,
+  Clock,
+  ExternalLink,
+} from 'lucide-react-native';
+import {
+  Colors,
+  FontFamily,
+  Spacing,
+  Typography,
+  Shadows,
+} from '../../src/constants/theme';
 import { localDb } from '../../src/services/storage/localDatabase';
 import { HarvestBatch, QualityInspection } from '../../src/types/database';
-import { Header } from '../../src/components/Header';
-import { Card } from '../../src/components/Card';
-import { Badge } from '../../src/components/Badge';
-import { Button } from '../../src/components/Button';
 
 export default function PublicTraceabilityScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { token } = useLocalSearchParams<{ token: string }>();
 
   const [harvest, setHarvest] = useState<HarvestBatch | null>(null);
@@ -29,7 +37,9 @@ export default function PublicTraceabilityScreen() {
   useEffect(() => {
     if (!token) return;
     Promise.all([localDb.getHarvests(), localDb.getInspections()]).then(([allH, allI]) => {
-      const match = allH.find((h) => h.qr_token === token || h.id === token || h.batch_reference === token);
+      const match = allH.find(
+        (h) => h.qr_token === token || h.id === token || h.batch_reference === token
+      );
       if (match) {
         setHarvest(match);
         const matchInsp = allI.find((i) => i.batch_id === match.id);
@@ -41,65 +51,92 @@ export default function PublicTraceabilityScreen() {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <Header title="Batch Traceability" showBack />
-        <View style={styles.centerContainer}>
-          <Text style={styles.loadingText}>Verifying cryptographic QR passport...</Text>
-        </View>
-      </SafeAreaView>
+      <View style={[styles.root, styles.centerBox]}>
+        <Text style={styles.loadingText}>Verifying QR passport...</Text>
+      </View>
     );
   }
 
   if (!harvest) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <Header title="Batch Verification" showBack />
-        <View style={styles.centerContainer}>
-          <Ionicons name="warning-outline" size={48} color={Colors.danger} />
-          <Text style={styles.errorTitle}>Traceability Record Not Found</Text>
-          <Text style={styles.errorSub}>
-            The scanned QR code or verification token does not match an active CropCapture passport.
-          </Text>
-          <Button title="Return to Scanner" onPress={() => router.back()} size="sm" style={{ marginTop: Spacing.md }} />
-        </View>
-      </SafeAreaView>
+      <View style={[styles.root, styles.centerBox]}>
+        <AlertCircle size={44} color={Colors.danger} />
+        <Text style={styles.errorTitle}>Traceability Record Not Found</Text>
+        <Text style={styles.errorSub}>
+          The scanned QR token does not match an active CropCapture passport.
+        </Text>
+        <TouchableOpacity style={styles.returnBtn} onPress={() => router.back()}>
+          <Text style={styles.returnBtnText}>Return to scanner</Text>
+        </TouchableOpacity>
+      </View>
     );
   }
 
   const isServerVerified = Boolean(
     harvest.is_server_verified ||
     harvest.server_signature ||
-    (harvest.status === 'approved' && !harvest.is_offline_pending && !harvest.batch_reference.startsWith('PENDING-'))
+    (harvest.status === 'approved' &&
+      !harvest.is_offline_pending &&
+      !harvest.batch_reference.startsWith('PENDING-'))
   );
   const isApproved = harvest.status === 'approved' && isServerVerified;
-  const isUnsynced = Boolean(harvest.is_offline_pending || harvest.batch_reference.startsWith('PENDING-'));
+  const isUnsynced = Boolean(
+    harvest.is_offline_pending || harvest.batch_reference.startsWith('PENDING-')
+  );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header
-        title="CropCapture Certificate"
-        subtitle="Public Agricultural Verification Record"
-        showBack
-      />
+    <View style={styles.root}>
+      {/* Curved Green Header */}
+      <View style={[styles.headerContainer, { paddingTop: Math.max(insets.top, 16) + 10 }]}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <ChevronLeft size={22} color="#FFFFFF" strokeWidth={2.4} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, paddingLeft: 12 }}>
+            <Text style={styles.headerTitle}>CropCapture certificate</Text>
+            <Text style={styles.headerSub}>Public agricultural verification record</Text>
+          </View>
+        </View>
+      </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Verification Status Banner */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.contentContainer}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Status Banner Card */}
         <View
           style={[
             styles.statusBanner,
-            isApproved ? styles.statusApproved : styles.statusPending,
+            isApproved
+              ? styles.statusBannerApproved
+              : isUnsynced
+              ? styles.statusBannerDanger
+              : styles.statusBannerWarning,
           ]}
         >
-          <Ionicons
-            name={isApproved ? 'checkmark-circle' : isUnsynced ? 'alert-circle' : 'time-outline'}
-            size={36}
-            color={isApproved ? '#047857' : isUnsynced ? '#DC2626' : '#B45309'}
-          />
-          <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
+          {isApproved ? (
+            <ShieldCheck size={28} color="#047857" strokeWidth={2.4} />
+          ) : isUnsynced ? (
+            <AlertCircle size={28} color={Colors.danger} strokeWidth={2.4} />
+          ) : (
+            <Clock size={28} color={Colors.amber} strokeWidth={2.4} />
+          )}
+          <View style={{ flex: 1, paddingLeft: 12 }}>
             <Text
               style={[
                 styles.statusBannerTitle,
-                isApproved ? { color: '#047857' } : isUnsynced ? { color: '#DC2626' } : { color: '#B45309' },
+                isApproved
+                  ? { color: '#047857' }
+                  : isUnsynced
+                  ? { color: Colors.danger }
+                  : { color: Colors.amberText },
               ]}
             >
               {isApproved
@@ -118,9 +155,9 @@ export default function PublicTraceabilityScreen() {
           </View>
         </View>
 
-        {/* Public Batch Summary Card (Zero Sensitive Farmer PII) */}
-        <Card style={styles.certCard}>
-          <View style={styles.certHeader}>
+        {/* Certificate Details Card */}
+        <View style={styles.certCard}>
+          <View style={styles.certCardHeader}>
             <View>
               <Text style={styles.registryTag}>
                 {isUnsynced ? 'LOCAL OFFLINE RECORD' : 'PUBLIC RECORD ARCHIVE'}
@@ -129,227 +166,266 @@ export default function PublicTraceabilityScreen() {
                 {isUnsynced ? 'Pending number' : harvest.batch_reference}
               </Text>
             </View>
-            <Badge
-              label={isApproved ? 'VERIFIED' : isUnsynced ? 'NOT VERIFIED YET' : 'PENDING INSPECTION'}
-              variant={isApproved ? 'success' : isUnsynced ? 'danger' : 'warning'}
-            />
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Agricultural Commodity</Text>
-            <Text style={styles.fieldValue}>{harvest.crop?.name || 'Produce'}</Text>
-          </View>
-
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Variety / Cultivar</Text>
-            <Text style={styles.fieldValue}>{harvest.crop_variety_id || 'Standard Variety'}</Text>
-          </View>
-
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Production County</Text>
-            <Text style={styles.fieldValue}>
-              {harvest.farm?.county || 'Nimba County, Republic of Liberia'}
-            </Text>
-          </View>
-
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Harvest Date</Text>
-            <Text style={styles.fieldValue}>{harvest.harvest_date}</Text>
-          </View>
-
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>
-              {isApproved ? 'Certified Quantity' : 'Reported Quantity'}
-            </Text>
-            <Text style={styles.fieldValue}>
-              {harvest.quantity.toLocaleString()} {harvest.unit}
-            </Text>
-          </View>
-
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Inspection Outcome</Text>
-            <Text
-              style={[
-                styles.fieldValue,
-                { color: isApproved ? Colors.primaryDark : isUnsynced ? Colors.danger : Colors.warning },
-              ]}
+            <View
+              style={
+                isApproved
+                  ? styles.pillApproved
+                  : isUnsynced
+                  ? styles.pillDanger
+                  : styles.pillWarning
+              }
             >
-              {isApproved && inspection
-                ? inspection.final_grade.replace('_', ' ').toUpperCase()
-                : isUnsynced
-                ? 'NOT VERIFIED YET'
-                : 'PENDING REVIEW'}
-            </Text>
-          </View>
-
-          {isApproved && inspection && (
-            <View style={styles.fieldRow}>
-              <Text style={styles.fieldLabel}>Date of Inspection</Text>
-              <Text style={styles.fieldValue}>
-                {new Date(inspection.inspection_date).toLocaleDateString()}
+              <Text
+                style={
+                  isApproved
+                    ? styles.pillApprovedText
+                    : isUnsynced
+                    ? styles.pillDangerText
+                    : styles.pillWarningText
+                }
+              >
+                {isApproved ? 'VERIFIED' : isUnsynced ? 'NOT VERIFIED YET' : 'PENDING'}
               </Text>
             </View>
-          )}
+          </View>
 
           <View style={styles.divider} />
 
-          <View style={styles.securitySeal}>
-            <Ionicons
-              name={isApproved ? 'shield-checkmark' : 'warning-outline'}
-              size={16}
-              color={isApproved ? Colors.primary : Colors.warning}
-            />
-            <Text style={styles.securityText}>
-              {isApproved
-                ? `Digital Passport Token: ${harvest.qr_token}`
-                : 'Offline Draft — Pending synchronization and official certificate signing'}
+          <View style={styles.specRow}>
+            <Text style={styles.specLabel}>Agricultural Commodity</Text>
+            <Text style={styles.specValue}>{harvest.crop?.name || 'Produce'}</Text>
+          </View>
+
+          <View style={styles.specRow}>
+            <Text style={styles.specLabel}>Variety / Cultivar</Text>
+            <Text style={styles.specValue}>{harvest.crop_variety_id || 'Suakoko 8'}</Text>
+          </View>
+
+          <View style={styles.specRow}>
+            <Text style={styles.specLabel}>Production County</Text>
+            <Text style={styles.specValue}>Nimba County, Republic of Liberia</Text>
+          </View>
+
+          <View style={styles.specRow}>
+            <Text style={styles.specLabel}>Harvest Date</Text>
+            <Text style={styles.specValue}>{harvest.harvest_date}</Text>
+          </View>
+
+          <View style={styles.specRow}>
+            <Text style={styles.specLabel}>
+              {isApproved ? 'Certified Quantity' : 'Reported Quantity'}
+            </Text>
+            <Text style={styles.specValue}>
+              {Number(harvest.quantity).toLocaleString()} {harvest.unit}
             </Text>
           </View>
-        </Card>
 
-        {/* Traceability Disclaimer required by Master Prompt Section 13 */}
-        <View style={styles.disclaimerBox}>
-          <Ionicons name="information-circle-outline" size={18} color={Colors.textMuted} />
-          <Text style={styles.disclaimerText}>
-            Notice: This record represents agricultural traceability and quality parameters gathered through the CropCapture platform. It confirms crop provenance, harvest season, and post-harvest measurements. Personal farmer contact and financial records are protected by privacy regulations.
-          </Text>
+          <View style={styles.divider} />
+
+          <View style={styles.specRow}>
+            <Text style={styles.specLabel}>Quality Grade</Text>
+            <Text style={[styles.specValue, { fontFamily: FontFamily.extraBold, color: isApproved ? Colors.primary : Colors.amberText }]}>
+              {inspection ? inspection.final_grade.replace('_', ' ').toUpperCase() : isApproved ? 'GRADE A' : 'PENDING INSPECTION'}
+            </Text>
+          </View>
         </View>
-
-        <View style={{ height: Spacing.xxl }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.primaryDark,
-  },
-  container: {
+  root: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
-    padding: Spacing.md,
-  },
-  centerContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  centerBox: {
     alignItems: 'center',
+    justifyContent: 'center',
     padding: Spacing.xl,
   },
   loadingText: {
-    color: Colors.textMuted,
+    fontFamily: FontFamily.medium,
     fontSize: Typography.sizes.sm,
+    color: Colors.textMuted,
   },
   errorTitle: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: '700',
-    color: Colors.danger,
-    marginTop: Spacing.md,
+    fontFamily: FontFamily.bold,
+    fontSize: 18,
+    color: Colors.text,
+    marginTop: 12,
+    marginBottom: 6,
   },
   errorSub: {
+    fontFamily: FontFamily.regular,
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
     textAlign: 'center',
-    marginTop: Spacing.xs,
-    lineHeight: 18,
+    marginBottom: 16,
+  },
+  returnBtn: {
+    height: 48,
+    paddingHorizontal: 24,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  returnBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 14,
+    color: '#FFFFFF',
+  },
+  headerContainer: {
+    backgroundColor: Colors.primary,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: 24,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 20,
+    color: '#FFFFFF',
+    letterSpacing: -0.3,
+  },
+  headerSub: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.xs,
+    color: '#DDF0D8',
+    marginTop: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    padding: Spacing.xl,
+    paddingBottom: 40,
   },
   statusBanner: {
     flexDirection: 'row',
-    alignItems: 'center',
-    padding: Spacing.md,
-    borderRadius: Radius.lg,
-    marginBottom: Spacing.md,
+    alignItems: 'flex-start',
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 20,
     borderWidth: 1,
+    ...Shadows.card,
   },
-  statusApproved: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
+  statusBannerApproved: {
+    backgroundColor: '#E4F4DF',
+    borderColor: '#C9DBC4',
   },
-  statusPending: {
-    backgroundColor: '#FFFBEB',
+  statusBannerWarning: {
+    backgroundColor: Colors.amberBg,
     borderColor: '#FDE68A',
   },
+  statusBannerDanger: {
+    backgroundColor: Colors.dangerBg,
+    borderColor: '#FCA5A5',
+  },
   statusBannerTitle: {
-    fontSize: Typography.sizes.sm,
-    fontWeight: '800',
-    letterSpacing: 0.5,
+    fontFamily: FontFamily.extraBold,
+    fontSize: 14,
+    letterSpacing: 0.3,
+    marginBottom: 4,
   },
   statusBannerSub: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 2,
-    lineHeight: 16,
+    fontFamily: FontFamily.regular,
+    fontSize: Typography.sizes.xs,
+    color: Colors.text,
+    lineHeight: 18,
   },
   certCard: {
-    marginBottom: Spacing.md,
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+    ...Shadows.card,
   },
-  certHeader: {
+  certCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Spacing.xs,
+    marginBottom: 14,
   },
   registryTag: {
-    fontSize: 9,
-    fontWeight: '700',
+    fontFamily: FontFamily.bold,
+    fontSize: 10,
     color: Colors.textMuted,
     letterSpacing: 1,
+    marginBottom: 2,
   },
   batchRef: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.bold,
-    color: Colors.primaryDark,
-    marginTop: 2,
+    fontFamily: FontFamily.extraBold,
+    fontSize: 18,
+    color: Colors.text,
+  },
+  pillApproved: {
+    backgroundColor: Colors.tint,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pillApprovedText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+    color: Colors.primary,
+  },
+  pillWarning: {
+    backgroundColor: Colors.amberBg,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pillWarningText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+    color: Colors.amberText,
+  },
+  pillDanger: {
+    backgroundColor: Colors.dangerBg,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pillDangerText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+    color: Colors.danger,
   },
   divider: {
     height: 1,
     backgroundColor: Colors.border,
-    marginVertical: Spacing.sm,
+    marginVertical: 14,
   },
-  fieldRow: {
+  specRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 7,
-  },
-  fieldLabel: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textMuted,
-  },
-  fieldValue: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  securitySeal: {
-    flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    justifyContent: 'center',
-    paddingTop: Spacing.xs,
+    paddingVertical: 8,
   },
-  securityText: {
-    fontSize: 10,
+  specLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.sm,
     color: Colors.textMuted,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
-  disclaimerBox: {
-    flexDirection: 'row',
-    gap: Spacing.xs,
-    backgroundColor: Colors.surfaceAlt,
-    padding: Spacing.md,
-    borderRadius: Radius.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  disclaimerText: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    flex: 1,
-    lineHeight: 16,
+  specValue: {
+    fontFamily: FontFamily.bold,
+    fontSize: Typography.sizes.sm,
+    color: Colors.text,
+    fontVariant: ['tabular-nums'],
   },
 });

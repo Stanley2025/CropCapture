@@ -6,21 +6,32 @@ import {
   ScrollView,
   TouchableOpacity,
   RefreshControl,
-  SafeAreaView,
   Alert,
-  Platform,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius, Spacing, Typography } from '../src/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
+import {
+  ChevronLeft,
+  Cloud,
+  CloudOff,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  Database,
+} from 'lucide-react-native';
+import {
+  Colors,
+  FontFamily,
+  Spacing,
+  Typography,
+  Shadows,
+} from '../src/constants/theme';
 import { localDb, SyncQueueItem } from '../src/services/storage/localDatabase';
 import { useAppStore } from '../src/store/useAppStore';
-import { Header } from '../src/components/Header';
-import { Card } from '../src/components/Card';
-import { Badge } from '../src/components/Badge';
-import { Button } from '../src/components/Button';
-import { EmptyState } from '../src/components/EmptyState';
 
 export default function OfflineSyncCenterScreen() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     isOfflineMode,
     syncStatus,
@@ -93,358 +104,418 @@ export default function OfflineSyncCenterScreen() {
     await loadData();
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'synced':
-        return <Badge label="Synced to cloud" variant="success" size="sm" />;
-      case 'waiting_to_sync':
-        return <Badge label="Saved on this phone" variant="warning" size="sm" />;
-      case 'synchronizing':
-        return <Badge label="Syncing now..." variant="info" size="sm" />;
-      case 'sync_failed':
-        return <Badge label="Needs sync retry" variant="danger" size="sm" />;
-      default:
-        return <Badge label="Saved on this phone" variant="default" size="sm" />;
-    }
-  };
-
-  const getPlainEnglishError = (err: string | null) => {
-    if (!err) return null;
-    const lower = err.toLowerCase();
-    if (lower.includes('network') || lower.includes('fetch') || lower.includes('internet') || lower.includes('connection') || lower.includes('eai_again')) {
-      return 'Waiting for internet connection. Your record is safely stored on this phone and will automatically upload when network returns.';
-    }
-    if (lower.includes('timeout')) {
-      return 'Connection was too slow. It will retry automatically.';
-    }
-    return `Sync paused: ${err}. Your data is safely stored on this phone.`;
-  };
-
   const totalLocalRecords = Object.values(storageStats).reduce((a, b) => a + b, 0);
+  const pendingCount = queue.filter((i) => i.status !== 'synced').length;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header
-        title="Offline Sync Center"
-        subtitle="Local SQLite database & cloud queue"
-        showBack
-      />
-
+    <View style={styles.root}>
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.content}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />}
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingTop: Math.max(insets.top, 16) + 12, paddingBottom: 60 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
       >
-        {/* Connection Control Card */}
-        <Card style={styles.controlCard}>
-          <View style={styles.controlTopRow}>
-            <View>
-              <Text style={styles.controlTitle}>Connection Mode</Text>
-              <Text style={styles.controlSub}>
+        {/* Header Bar */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+          >
+            <ChevronLeft size={22} color={Colors.text} strokeWidth={2.4} />
+          </TouchableOpacity>
+          <View style={{ flex: 1, paddingLeft: 12 }}>
+            <Text style={styles.screenTitle}>Sync center</Text>
+            <Text style={styles.screenSub}>Offline SQLite database & sync queue</Text>
+          </View>
+        </View>
+
+        {/* Connection Mode Card */}
+        <View style={styles.card}>
+          <View style={styles.cardHeaderRow}>
+            <View style={{ flex: 1, paddingRight: 8 }}>
+              <Text style={styles.cardTitle}>Connection Mode</Text>
+              <Text style={styles.cardSub}>
                 {isOfflineMode
-                  ? 'Forced Offline: Working securely from local storage'
-                  : 'Online: Automated synchronization enabled'}
+                  ? 'Forced Offline: Working securely from local device'
+                  : 'Online: Background automatic synchronization'}
               </Text>
             </View>
             <TouchableOpacity
-              style={[styles.toggleBtn, isOfflineMode ? styles.toggleOffline : styles.toggleOnline]}
+              style={[
+                styles.modeToggleBtn,
+                isOfflineMode ? styles.modeToggleOffline : styles.modeToggleOnline,
+              ]}
               onPress={toggleOfflineMode}
+              activeOpacity={0.85}
             >
-              <Ionicons
-                name={isOfflineMode ? 'cloud-offline' : 'cloud-done'}
-                size={18}
-                color="#FFFFFF"
-              />
-              <Text style={styles.toggleBtnText}>
-                {isOfflineMode ? 'Go Online' : 'Simulate Offline'}
+              {isOfflineMode ? (
+                <CloudOff size={16} color="#FFFFFF" strokeWidth={2.4} />
+              ) : (
+                <Cloud size={16} color="#FFFFFF" strokeWidth={2.4} />
+              )}
+              <Text style={styles.modeToggleBtnText}>
+                {isOfflineMode ? 'Go online' : 'Force offline'}
               </Text>
             </TouchableOpacity>
           </View>
 
-          <View style={styles.syncMetaRow}>
-            <View style={styles.syncMetaItem}>
-              <Text style={styles.metaLabel}>ENGINE STATUS</Text>
-              <Text style={styles.metaValue}>{syncStatus.toUpperCase()}</Text>
+          {/* Telemetry Row */}
+          <View style={styles.telemetryRow}>
+            <View style={styles.telemetryCol}>
+              <Text style={styles.telemetryLabel}>Status</Text>
+              <Text style={styles.telemetryValue}>{syncStatus.toUpperCase()}</Text>
             </View>
-            <View style={styles.syncMetaItem}>
-              <Text style={styles.metaLabel}>LAST SUCCESSFUL SYNC</Text>
-              <Text style={styles.metaValue}>
-                {lastSyncTime ? new Date(lastSyncTime).toLocaleTimeString() : 'Never'}
+            <View style={styles.telemetryCol}>
+              <Text style={styles.telemetryLabel}>Pending Queue</Text>
+              <Text style={styles.telemetryValue}>
+                {pendingCount} {pendingCount === 1 ? 'item' : 'items'}
               </Text>
             </View>
-            <View style={styles.syncMetaItem}>
-              <Text style={styles.metaLabel}>PENDING QUEUE</Text>
-              <Text style={styles.metaValue}>
-                {queue.filter((i) => i.status !== 'synced').length} Records
+            <View style={styles.telemetryCol}>
+              <Text style={styles.telemetryLabel}>Last Sync</Text>
+              <Text style={styles.telemetryValue}>
+                {lastSyncTime ? new Date(lastSyncTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Never'}
               </Text>
             </View>
           </View>
 
-          <Button
-            title={syncStatus === 'synchronizing' ? 'Syncing Records...' : 'Execute Synchronization'}
+          {/* Sync Button */}
+          <TouchableOpacity
+            style={styles.syncPrimaryBtn}
             onPress={handleSyncNow}
-            size="md"
-            loading={syncStatus === 'synchronizing'}
-            icon={<Ionicons name="refresh" size={18} color="#FFFFFF" />}
-            style={{ marginTop: Spacing.md }}
-          />
-        </Card>
+            disabled={syncStatus === 'synchronizing'}
+            activeOpacity={0.85}
+          >
+            <RefreshCw size={18} color="#FFFFFF" strokeWidth={2.4} />
+            <Text style={styles.syncPrimaryBtnText}>
+              {syncStatus === 'synchronizing' ? 'Syncing...' : 'Sync now'}
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         {/* Local Storage Telemetry */}
-        <Card style={styles.storageCard}>
-          <Text style={styles.sectionTitle}>Local SQLite Database Store</Text>
-          <Text style={styles.sectionSubtitle}>
-            {totalLocalRecords} records stored securely in persistent storage
+        <View style={styles.card}>
+          <View style={styles.cardTitleRow}>
+            <Database size={18} color={Colors.primary} strokeWidth={2.4} />
+            <Text style={styles.cardTitle}>Local Device Store</Text>
+          </View>
+          <Text style={styles.cardSub}>
+            {totalLocalRecords} records stored securely in phone database
           </Text>
 
           <View style={styles.storageGrid}>
-            <View style={styles.storageItem}>
-              <Text style={styles.storageCount}>{storageStats.farms}</Text>
+            <View style={styles.storageBox}>
+              <Text style={styles.storageNum}>{storageStats.farms}</Text>
               <Text style={styles.storageLabel}>Farms</Text>
             </View>
-            <View style={styles.storageItem}>
-              <Text style={styles.storageCount}>{storageStats.seasons}</Text>
+            <View style={styles.storageBox}>
+              <Text style={styles.storageNum}>{storageStats.seasons}</Text>
               <Text style={styles.storageLabel}>Seasons</Text>
             </View>
-            <View style={styles.storageItem}>
-              <Text style={styles.storageCount}>{storageStats.activities}</Text>
+            <View style={styles.storageBox}>
+              <Text style={styles.storageNum}>{storageStats.activities}</Text>
               <Text style={styles.storageLabel}>Activities</Text>
             </View>
-            <View style={styles.storageItem}>
-              <Text style={styles.storageCount}>{storageStats.harvests}</Text>
+            <View style={styles.storageBox}>
+              <Text style={styles.storageNum}>{storageStats.harvests}</Text>
               <Text style={styles.storageLabel}>Harvests</Text>
             </View>
-            <View style={styles.storageItem}>
-              <Text style={styles.storageCount}>{storageStats.inputs}</Text>
-              <Text style={styles.storageLabel}>Inputs</Text>
-            </View>
-            <View style={styles.storageItem}>
-              <Text style={styles.storageCount}>{storageStats.expenses}</Text>
-              <Text style={styles.storageLabel}>Expenses</Text>
-            </View>
           </View>
-        </Card>
-
-        {/* Sync Queue List */}
-        <View style={styles.queueHeaderRow}>
-          <Text style={styles.sectionTitle}>Active Sync Queue</Text>
-          {queue.length > 0 && (
-            <TouchableOpacity
-              onPress={async () => {
-                await localDb.clearCompletedSyncQueue();
-                await loadData();
-              }}
-            >
-              <Text style={styles.clearText}>Clear Synced</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
-        {queue.length === 0 ? (
-          <EmptyState
-            icon={<Ionicons name="checkmark-done-circle-outline" size={32} color={Colors.primary} />}
-            title="All Records Up to Date"
-            description="Your device local database is synchronized with the backend. Any new records created while offline will queue here."
-          />
-        ) : (
-          queue.map((item) => (
-            <Card key={item.id} style={styles.queueCard}>
-              <View style={styles.queueItemHeader}>
-                <View style={styles.queueTypeRow}>
-                  <Ionicons name="document-text-outline" size={16} color={Colors.primary} />
-                  <Text style={styles.queueType}>
-                    {item.entity_type.toUpperCase()} • {item.action.toUpperCase()}
-                  </Text>
-                </View>
-                {getStatusBadge(item.status)}
-              </View>
+        {/* Queue Items Section */}
+        <View style={styles.queueSection}>
+          <Text style={styles.sectionHeaderTitle}>Sync queue</Text>
 
-              <Text style={styles.queueId}>Client UUID: {item.id}</Text>
-              <Text style={styles.queueTimestamp}>
-                Queued at {new Date(item.created_at).toLocaleTimeString()} • Retries: {item.retry_count}
+          {queue.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <CheckCircle2 size={32} color={Colors.primary} strokeWidth={2.2} />
+              <Text style={styles.emptyTitle}>Everything is synced</Text>
+              <Text style={styles.emptySub}>
+                All farm records on this phone are up to date with the server.
               </Text>
-
-              {item.last_error && (
-                <View style={styles.errorBox}>
-                  <Ionicons name="alert-circle" size={14} color={Colors.danger} />
-                  <Text style={styles.errorText}>{getPlainEnglishError(item.last_error)}</Text>
-                </View>
-              )}
-            </Card>
-          ))
-        )}
-
-        <View style={{ height: Spacing.xxl }} />
+            </View>
+          ) : (
+            <View style={styles.queueCard}>
+              {queue.map((item, idx) => {
+                const isLast = idx === queue.length - 1;
+                const isSynced = item.status === 'synced';
+                return (
+                  <View
+                    key={item.id}
+                    style={[styles.queueRow, !isLast && styles.queueRowDivider]}
+                  >
+                    <View style={{ flex: 1, paddingRight: 8 }}>
+                      <Text style={styles.queueAction}>
+                        {item.table_name.toUpperCase()} • {item.action}
+                      </Text>
+                      <Text style={styles.queueRecordId}>ID: {item.record_id}</Text>
+                    </View>
+                    <View style={isSynced ? styles.pillSynced : styles.pillPending}>
+                      <Text style={isSynced ? styles.pillSyncedText : styles.pillPendingText}>
+                        {isSynced ? 'Synced' : 'Waiting'}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.primaryDark,
-  },
-  container: {
+  root: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
-    padding: Spacing.md,
-  },
-  controlCard: {
-    marginBottom: Spacing.md,
-  },
-  controlTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: Spacing.md,
-  },
-  controlTitle: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.bold,
-    color: Colors.text,
-  },
-  controlSub: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textMuted,
-    marginTop: 2,
-    maxWidth: 200,
-  },
-  toggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-  },
-  toggleOnline: {
-    backgroundColor: '#047857',
-  },
-  toggleOffline: {
-    backgroundColor: '#B45309',
-  },
-  toggleBtnText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  syncMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.surfaceAlt,
-    padding: Spacing.sm,
-    borderRadius: Radius.md,
-  },
-  syncMetaItem: {
+  scrollView: {
     flex: 1,
   },
-  metaLabel: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
+  contentContainer: {
+    paddingHorizontal: Spacing.xl,
   },
-  metaValue: {
-    fontSize: 11,
-    fontWeight: '700',
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E4F4DF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  screenTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 24,
     color: Colors.text,
-    marginTop: 2,
+    letterSpacing: -0.4,
   },
-  storageCard: {
-    marginBottom: Spacing.md,
-  },
-  sectionTitle: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.bold,
-    color: Colors.text,
-  },
-  sectionSubtitle: {
+  screenSub: {
+    fontFamily: FontFamily.medium,
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
     marginTop: 1,
-    marginBottom: Spacing.sm,
+  },
+  card: {
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+    marginBottom: 16,
+    ...Shadows.card,
+  },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  cardTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 16,
+    color: Colors.text,
+  },
+  cardSub: {
+    fontFamily: FontFamily.regular,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  modeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+  },
+  modeToggleOnline: {
+    backgroundColor: Colors.primary,
+  },
+  modeToggleOffline: {
+    backgroundColor: Colors.amber,
+  },
+  modeToggleBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 12,
+    color: '#FFFFFF',
+  },
+  telemetryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    marginBottom: 16,
+  },
+  telemetryCol: {
+    flex: 1,
+  },
+  telemetryLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    marginBottom: 4,
+  },
+  telemetryValue: {
+    fontFamily: FontFamily.bold,
+    fontSize: 14,
+    color: Colors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  syncPrimaryBtn: {
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  syncPrimaryBtnText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: '#FFFFFF',
   },
   storageGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: Spacing.xs,
-    marginTop: Spacing.xs,
+    gap: 10,
+    marginTop: 14,
   },
-  storageItem: {
-    width: '31%',
-    backgroundColor: Colors.surfaceAlt,
-    padding: Spacing.sm,
-    borderRadius: Radius.md,
-    alignItems: 'center',
+  storageBox: {
+    flex: 1,
+    backgroundColor: Colors.inputBg,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: Colors.inputBorder,
+    paddingVertical: 12,
+    alignItems: 'center',
   },
-  storageCount: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.bold,
-    color: Colors.primaryDark,
+  storageNum: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 18,
+    color: Colors.text,
+    fontVariant: ['tabular-nums'],
+    marginBottom: 2,
   },
   storageLabel: {
-    fontSize: 10,
+    fontFamily: FontFamily.medium,
+    fontSize: 11,
     color: Colors.textMuted,
-    marginTop: 2,
   },
-  queueHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  queueSection: {
+    marginTop: 8,
+    marginBottom: 20,
+  },
+  sectionHeaderTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 18,
+    color: Colors.text,
+    marginBottom: 12,
+    letterSpacing: -0.3,
+  },
+  emptyCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 24,
     alignItems: 'center',
-    marginBottom: Spacing.xs,
+    ...Shadows.card,
   },
-  clearText: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  queueCard: {
-    marginBottom: Spacing.xs,
-    padding: Spacing.sm,
-  },
-  queueItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  emptyTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 16,
+    color: Colors.text,
+    marginTop: 10,
     marginBottom: 4,
   },
-  queueTypeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  queueType: {
+  emptySub: {
+    fontFamily: FontFamily.regular,
     fontSize: Typography.sizes.xs,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  queueId: {
-    fontSize: 10,
     color: Colors.textMuted,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    textAlign: 'center',
+    lineHeight: 18,
   },
-  queueTimestamp: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    marginTop: 2,
+  queueCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 16,
+    ...Shadows.card,
   },
-  errorBox: {
+  queueRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF2F2',
-    padding: 6,
-    borderRadius: Radius.sm,
-    marginTop: 4,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
   },
-  errorText: {
-    fontSize: 10,
-    color: Colors.danger,
-    flex: 1,
+  queueRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  queueAction: {
+    fontFamily: FontFamily.bold,
+    fontSize: 14,
+    color: Colors.text,
+    marginBottom: 2,
+  },
+  queueRecordId: {
+    fontFamily: FontFamily.medium,
+    fontSize: 11,
+    color: Colors.textMuted,
+  },
+  pillSynced: {
+    backgroundColor: Colors.tint,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pillSyncedText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+    color: Colors.primary,
+  },
+  pillPending: {
+    backgroundColor: Colors.amberBg,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  pillPendingText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 11,
+    color: Colors.amberText,
   },
 });

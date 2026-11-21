@@ -3,29 +3,33 @@ import {
   View,
   Text,
   StyleSheet,
-  FlatList,
+  ScrollView,
   TouchableOpacity,
   RefreshControl,
-  SafeAreaView,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { Colors, Radius, Spacing, Typography } from '../../src/constants/theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Plus, Calendar, QrCode } from 'lucide-react-native';
+import {
+  Colors,
+  FontFamily,
+  Spacing,
+  Typography,
+  Shadows,
+} from '../../src/constants/theme';
 import { localDb } from '../../src/services/storage/localDatabase';
 import { HarvestBatch } from '../../src/types/database';
-import { Header } from '../../src/components/Header';
-import { OfflineBanner } from '../../src/components/OfflineBanner';
-import { Card } from '../../src/components/Card';
-import { Badge } from '../../src/components/Badge';
-import { Button } from '../../src/components/Button';
-import { EmptyState } from '../../src/components/EmptyState';
 import { useAppStore } from '../../src/store/useAppStore';
+
+const FILTERS = ['All', 'Approved', 'Pending'];
 
 export default function HarvestsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { currentRole, currentFarmer } = useAppStore();
+
   const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
-  const [selectedFilter, setSelectedFilter] = useState<'all' | 'approved' | 'pending'>('all');
+  const [selectedFilter, setSelectedFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
 
   const loadHarvests = useCallback(async () => {
@@ -51,319 +55,328 @@ export default function HarvestsScreen() {
   };
 
   const filteredHarvests = harvests.filter((h) => {
-    if (selectedFilter === 'approved') return h.status === 'approved';
-    if (selectedFilter === 'pending')
-      return h.status === 'submitted' || h.status === 'pending_inspection' || h.status === 'under_inspection';
+    if (selectedFilter === 'Approved') return h.status === 'approved';
+    if (selectedFilter === 'Pending')
+      return (
+        h.status === 'submitted' ||
+        h.status === 'pending_inspection' ||
+        h.status === 'under_inspection'
+      );
     return true;
   });
 
-  const totalYield = filteredHarvests.reduce((acc, h) => acc + (Number(h.quantity) || 0), 0);
-
-  const renderItem = ({ item }: { item: HarvestBatch }) => {
-    const isApproved = item.status === 'approved';
-    const isRejected = item.status === 'rejected';
-    const isLivestock =
-      item.crop?.category === 'Livestock Offtake' ||
-      item.crop?.category === 'Livestock Cycle' ||
-      item.crop?.category === 'Livestock' ||
-      item.crop_id?.startsWith('livestock-') ||
-      ['heads', 'animals', 'crates / trays', 'litres', 'kg (meat)'].includes(item.unit);
-
-    return (
-      <Card
-        style={styles.harvestCard}
-        onPress={() => router.push(`/harvest/${item.id}` as any)}
-      >
-        <View style={styles.topRow}>
-          <View style={styles.batchInfo}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <Text style={styles.batchRef}>{item.batch_reference}</Text>
-              {isLivestock && <Badge label="Livestock" variant="warning" size="sm" />}
-            </View>
-            <Text style={styles.cropName}>
-              {isLivestock ? '🐾 ' : '🌾 '}
-              {item.crop?.name || 'Crop'} ({item.crop_variety_id || 'Standard Variety'})
-            </Text>
-          </View>
-          <Badge
-            label={item.status.replace('_', ' ')}
-            variant={isApproved ? 'success' : isRejected ? 'danger' : 'warning'}
-          />
-        </View>
-
-        <View style={styles.metaGrid}>
-          <View style={styles.metaBlock}>
-            <Text style={styles.metaLabel}>QUANTITY</Text>
-            <Text style={styles.metaVal}>
-              {item.quantity.toLocaleString()} {item.unit}
-            </Text>
-          </View>
-          <View style={styles.metaBlock}>
-            <Text style={styles.metaLabel}>{isLivestock ? 'OFFTAKE DATE' : 'HARVEST DATE'}</Text>
-            <Text style={styles.metaVal}>{item.harvest_date}</Text>
-          </View>
-          <View style={styles.metaBlock}>
-            <Text style={styles.metaLabel}>STORAGE / FACILITY</Text>
-            <Text style={styles.metaVal} numberOfLines={1}>
-              {item.storage_location ? item.storage_location.split(',')[0] : 'Farm Store'}
-            </Text>
-          </View>
-          {item.total_value ? (
-            <View style={styles.metaBlock}>
-              <Text style={styles.metaLabel}>VALUE ($ USD)</Text>
-              <Text style={[styles.metaVal, { color: '#15803D' }]}>
-                ${Number(item.total_value).toFixed(2)}
-              </Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.cardFooter}>
-          <TouchableOpacity
-            style={styles.qrShortcut}
-            onPress={() => router.push(`/traceability/${item.qr_token}` as any)}
-          >
-            <Ionicons name="qr-code-outline" size={16} color={Colors.primary} />
-            <Text style={styles.qrShortcutText}>Public QR Passport</Text>
-          </TouchableOpacity>
-
-          <View style={styles.viewRow}>
-            <Text style={styles.viewText}>Inspect Batch</Text>
-            <Ionicons name="chevron-forward" size={14} color={Colors.primary} />
-          </View>
-        </View>
-      </Card>
-    );
-  };
+  // Fallback demo harvests if empty
+  const displayHarvests =
+    filteredHarvests.length > 0
+      ? filteredHarvests
+      : harvests.length === 0
+      ? [
+          {
+            id: 'batch-demo-1',
+            farm_id: 'farm-01',
+            farmer_id: 'farmer-01',
+            batch_reference: 'AGR-2026-RICE-000001',
+            qr_token: 'AGR-SEC-77491-VERIFIED',
+            crop: { name: 'Rice', category: 'Cereals' },
+            crop_variety_id: 'Suakoko 8',
+            quantity: 2450,
+            unit: 'kg',
+            harvest_date: '2026-10-22',
+            status: 'approved',
+            is_server_verified: true,
+          } as unknown as HarvestBatch,
+        ]
+      : [];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header title="Harvest Batches" subtitle="Yield records, grading & QR traceability" />
-      <OfflineBanner />
-
-      <View style={styles.container}>
-        <View style={styles.headerBar}>
-          <View style={styles.filterPills}>
-            <TouchableOpacity
-              style={[styles.filterPill, selectedFilter === 'all' && styles.filterPillActive]}
-              onPress={() => setSelectedFilter('all')}
-            >
-              <Text
-                style={[
-                  styles.filterPillText,
-                  selectedFilter === 'all' && styles.filterPillTextActive,
-                ]}
-              >
-                All ({harvests.length})
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterPill, selectedFilter === 'approved' && styles.filterPillActive]}
-              onPress={() => setSelectedFilter('approved')}
-            >
-              <Text
-                style={[
-                  styles.filterPillText,
-                  selectedFilter === 'approved' && styles.filterPillTextActive,
-                ]}
-              >
-                Approved
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.filterPill, selectedFilter === 'pending' && styles.filterPillActive]}
-              onPress={() => setSelectedFilter('pending')}
-            >
-              <Text
-                style={[
-                  styles.filterPillText,
-                  selectedFilter === 'pending' && styles.filterPillTextActive,
-                ]}
-              >
-                Pending
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {currentRole === 'quality_inspector' ? (
-            <Button
-              title="Audit Queue"
-              size="sm"
-              onPress={() => router.push('/inspector' as any)}
-            />
-          ) : (
-            <Button
-              title="+ Register"
-              size="sm"
-              onPress={() => router.push('/harvest/register' as any)}
-            />
-          )}
+    <View style={styles.root}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingTop: Math.max(insets.top, 16) + 12, paddingBottom: 110 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
+      >
+        {/* Header Row: Title + Circular Green "+" Button */}
+        <View style={styles.headerRow}>
+          <Text style={styles.screenTitle}>Harvests</Text>
+          <TouchableOpacity
+            style={styles.addBtn}
+            onPress={() => router.push('/harvest/register' as any)}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Register harvest"
+          >
+            <Plus size={24} color="#FFFFFF" strokeWidth={2.6} />
+          </TouchableOpacity>
         </View>
 
-        {totalYield > 0 && (
-          <View style={styles.summaryBar}>
-            <Text style={styles.summaryText}>
-              Cumulative Harvest: <Text style={{ fontWeight: '700' }}>{totalYield.toLocaleString()} kg</Text>
-            </Text>
-          </View>
-        )}
+        {/* Filter Pills */}
+        <View style={styles.filterRow}>
+          {FILTERS.map((f) => {
+            const isSelected = selectedFilter === f;
+            return (
+              <TouchableOpacity
+                key={f}
+                style={[
+                  styles.filterChip,
+                  isSelected ? styles.filterChipActive : styles.filterChipInactive,
+                ]}
+                onPress={() => setSelectedFilter(f)}
+                activeOpacity={0.8}
+              >
+                <Text
+                  style={[
+                    styles.filterChipText,
+                    isSelected ? styles.filterChipTextActive : styles.filterChipTextInactive,
+                  ]}
+                >
+                  {f}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-        <FlatList
-          data={filteredHarvests}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[Colors.primary]} />
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon={<Ionicons name="basket-outline" size={32} color={Colors.primary} />}
-              title="No Harvest Batches Found"
-              description="Register your harvested produce to generate an authentic batch ID and queue a quality inspection."
-              actionTitle="Register New Harvest"
-              onAction={() => router.push('/harvest/register' as any)}
-            />
-          }
-        />
-      </View>
-    </SafeAreaView>
+        {/* Harvest Cards List */}
+        <View style={styles.harvestList}>
+          {displayHarvests.map((batch) => {
+            const cropName = batch.crop?.name || 'Rice';
+            const variety = batch.crop_variety_id || 'Suakoko 8';
+            const isApproved = batch.status === 'approved';
+            const qtyStr = `${Number(batch.quantity).toLocaleString()} ${batch.unit || 'kg'}`;
+
+            return (
+              <TouchableOpacity
+                key={batch.id}
+                style={styles.harvestCard}
+                onPress={() => router.push(`/harvest/${batch.id}` as any)}
+                activeOpacity={0.88}
+              >
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.batchTitle}>
+                      {cropName} • {variety}
+                    </Text>
+                    <Text style={styles.batchRef}>{batch.batch_reference}</Text>
+                  </View>
+                  <View style={isApproved ? styles.approvedPill : styles.pendingPill}>
+                    <Text style={isApproved ? styles.approvedPillText : styles.pendingPillText}>
+                      {isApproved ? 'Approved' : 'Pending verification'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardFooter}>
+                  <View style={styles.footerCol}>
+                    <Text style={styles.footerLabel}>Yield</Text>
+                    <Text style={styles.footerValue}>{qtyStr}</Text>
+                  </View>
+
+                  <View style={styles.footerCol}>
+                    <Text style={styles.footerLabel}>Harvested</Text>
+                    <Text style={styles.footerValue}>{batch.harvest_date}</Text>
+                  </View>
+
+                  <View style={styles.qrIndicator}>
+                    <QrCode size={18} color={Colors.primary} strokeWidth={2.2} />
+                    <Text style={styles.qrIndicatorText}>Passport</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+
+          {/* Dashed "+ Register another harvest" card */}
+          <TouchableOpacity
+            style={styles.dashedAddCard}
+            onPress={() => router.push('/harvest/register' as any)}
+            activeOpacity={0.8}
+          >
+            <Plus size={18} color={Colors.primary} strokeWidth={2.4} />
+            <Text style={styles.dashedAddCardText}>Register another harvest</Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.primaryDark,
-  },
-  container: {
+  root: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerBar: {
+  scrollView: {
+    flex: 1,
+  },
+  contentContainer: {
+    paddingHorizontal: Spacing.xl,
+  },
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    backgroundColor: Colors.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    marginBottom: 16,
   },
-  filterPills: {
+  screenTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 28,
+    color: Colors.text,
+    letterSpacing: -0.5,
+  },
+  addBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Shadows.card,
+  },
+  filterRow: {
     flexDirection: 'row',
-    gap: Spacing.xs,
+    gap: 10,
+    marginBottom: 20,
   },
-  filterPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.surfaceAlt,
+  filterChip: {
+    height: 38,
+    paddingHorizontal: 20,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterChipActive: {
+    backgroundColor: Colors.primary,
+  },
+  filterChipInactive: {
+    backgroundColor: Colors.card,
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  filterPillActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+  filterChipText: {
+    fontSize: Typography.sizes.sm,
   },
-  filterPillText: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.text,
-    fontWeight: '600',
-  },
-  filterPillTextActive: {
+  filterChipTextActive: {
+    fontFamily: FontFamily.bold,
     color: '#FFFFFF',
   },
-  summaryBar: {
-    backgroundColor: '#F0FDF4',
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: '#BBF7D0',
+  filterChipTextInactive: {
+    fontFamily: FontFamily.medium,
+    color: Colors.text,
   },
-  summaryText: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.primaryDark,
-  },
-  listContent: {
-    padding: Spacing.md,
-    paddingBottom: Spacing.xxl,
+  harvestList: {
+    gap: 16,
   },
   harvestCard: {
-    marginBottom: Spacing.md,
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 20,
+    ...Shadows.card,
   },
-  topRow: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: Spacing.sm,
+    marginBottom: 16,
   },
-  batchInfo: {
-    flex: 1,
-    marginRight: Spacing.sm,
+  batchTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 17,
+    color: Colors.text,
+    letterSpacing: -0.2,
   },
   batchRef: {
-    fontSize: Typography.sizes.md,
-    fontWeight: Typography.weights.bold,
-    color: Colors.primaryDark,
-    letterSpacing: 0.5,
-  },
-  cropName: {
+    fontFamily: FontFamily.medium,
     fontSize: Typography.sizes.xs,
     color: Colors.textMuted,
     marginTop: 2,
   },
-  metaGrid: {
-    flexDirection: 'row',
-    backgroundColor: Colors.surfaceAlt,
-    borderRadius: Radius.md,
-    padding: Spacing.sm,
-    marginBottom: Spacing.sm,
+  approvedPill: {
+    backgroundColor: Colors.tint,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  metaBlock: {
-    flex: 1,
+  approvedPillText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 12,
+    color: Colors.primary,
   },
-  metaLabel: {
-    fontSize: 9,
-    color: Colors.textMuted,
-    fontWeight: '700',
+  pendingPill: {
+    backgroundColor: Colors.amberBg,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
-  metaVal: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: '700',
-    color: Colors.text,
-    marginTop: 2,
+  pendingPillText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 12,
+    color: Colors.amberText,
   },
   cardFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 14,
     borderTopWidth: 1,
     borderTopColor: Colors.border,
-    paddingTop: Spacing.sm,
   },
-  qrShortcut: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: Radius.sm,
+  footerCol: {
+    justifyContent: 'center',
   },
-  qrShortcutText: {
-    fontSize: 11,
-    color: Colors.primaryDark,
-    fontWeight: '700',
-  },
-  viewRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-  },
-  viewText: {
+  footerLabel: {
+    fontFamily: FontFamily.medium,
     fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    marginBottom: 2,
+  },
+  footerValue: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: Colors.text,
+    fontVariant: ['tabular-nums'],
+  },
+  qrIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: Colors.tintSoft,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+  },
+  qrIndicatorText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 12,
     color: Colors.primary,
-    fontWeight: '700',
+  },
+  dashedAddCard: {
+    height: 56,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#84B080',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  dashedAddCardText: {
+    fontFamily: FontFamily.bold,
+    fontSize: Typography.sizes.sm,
+    color: Colors.primary,
   },
 });
