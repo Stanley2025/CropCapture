@@ -34,7 +34,7 @@ import {
 } from '../../src/constants/theme';
 import { useAppStore } from '../../src/store/useAppStore';
 import { localDb } from '../../src/services/storage/localDatabase';
-import { StatsCard } from '../../src/components/StatsCard';
+import { StatsCard } from '../../src/components';
 
 export default function ProfileScreen() {
   const router = useRouter();
