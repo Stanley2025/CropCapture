@@ -1,4 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { KeyboardAwareScrollView } from '../../src/components/KeyboardAwareScrollView';
+import { WeatherCard } from '../../src/components/activity/WeatherCard';
+import { ActivityWeatherLine } from '../../src/components/activity/ActivityWeatherLine';
+import { ActivityDetailSheet } from '../../src/components/activity/ActivityDetailSheet';
+import { validateWeather, WeatherSky, DayFeel } from '../../src/shared/activityWeather';
+import { t, StringKey } from '../../src/i18n/en';
 import {
   View,
   Text,
@@ -26,7 +32,9 @@ import {
   CROP_ACTIVITY_TYPES,
   CROP_ACTIVITY_FILTERS,
   matchesCategory,
+  groupOf,
 } from '../../src/shared/activityTypes';
+import { BottomSheet } from '../../src/components/BottomSheet';
 
 // Crop activities are grouped (Fertilizer application, Weeding, Irrigation and watering, Pest management).
 // The list lives in src/shared/activityTypes.js so the activity log and the tabs filter use the same groups.
@@ -106,6 +114,16 @@ export default function RecordActivityScreen() {
   const [laborCount, setLaborCount] = useState('2');
   const [selectedLandPrepOps, setSelectedLandPrepOps] = useState<string[]>([]);
   const [selectedHarvestOps, setSelectedHarvestOps] = useState<string[]>([]);
+  // Choosing from the long lists happens in sheets, so the form behind them never grows.
+  const [activitySheetOpen, setActivitySheetOpen] = useState(false);
+  const [tasksSheetOpen, setTasksSheetOpen] = useState(false);
+  const [showMaterials, setShowMaterials] = useState(false);
+  // Weather the farmer saw today: all optional
+  const [weatherSky, setWeatherSky] = useState<WeatherSky | null>(null);
+  const [rainMm, setRainMm] = useState('');
+  const [dayFeel, setDayFeel] = useState<DayFeel | null>(null);
+  const [rainError, setRainError] = useState<StringKey | null>(null);
+  const [detailActivity, setDetailActivity] = useState<FarmActivity | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [logFilterCategory, setLogFilterCategory] = useState('All');
 
@@ -242,6 +260,14 @@ export default function RecordActivityScreen() {
   const currentActivityTypes = isLivestock ? LIVESTOCK_ACTIVITY_TYPES : CROP_ACTIVITY_TYPES;
   const currentUnits = isLivestock ? LIVESTOCK_UNITS : CROP_UNITS;
 
+  // Land preparation and harvesting each come with a checklist of specific tasks.
+  const tasksKind = !isLivestock && activityType === 'Land preparation' ? 'land' : !isLivestock && isHarvestingActivity(activityType) ? 'harvest' : null;
+  const taskOps: string[] | null = tasksKind === 'land' ? LAND_PREPARATION_OPERATIONS : tasksKind === 'harvest' ? HARVESTING_OPERATIONS : null;
+  const selectedTasks = tasksKind === 'land' ? selectedLandPrepOps : tasksKind === 'harvest' ? selectedHarvestOps : [];
+  const toggleTask = (op: string) => (tasksKind === 'land' ? toggleLandPrepOp(op) : toggleHarvestOp(op));
+  const clearTasks = () => (tasksKind === 'land' ? setSelectedLandPrepOps([]) : setSelectedHarvestOps([]));
+  const taskTitle = tasksKind === 'land' ? 'Land preparation tasks' : 'Harvesting tasks';
+
   const availableSeasons = useMemo(() => {
     if (!selectedFarmId) return [];
     return seasons.filter((s) => {
@@ -275,6 +301,13 @@ export default function RecordActivityScreen() {
       return;
     }
 
+    const weather = validateWeather({ sky: weatherSky, rainMm, dayFeel });
+    if (!weather.ok) {
+      setRainError((weather.errors.rain_mm as StringKey) || null);
+      return;
+    }
+    setRainError(null);
+
     setIsSubmitting(true);
     try {
       const finalDesc = description.trim()
@@ -299,6 +332,7 @@ export default function RecordActivityScreen() {
         labor_count: laborCount ? parseInt(laborCount, 10) : 1,
         photo_url: null,
         recorded_by: currentUserProfile.id,
+        ...weather.values,
         sync_status: 'waiting_to_sync',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
@@ -315,6 +349,10 @@ export default function RecordActivityScreen() {
       setSelectedHarvestOps([]);
       setQuantity('');
       setCost('');
+      setWeatherSky(null);
+      setRainMm('');
+      setDayFeel(null);
+      setRainError(null);
 
       Alert.alert(
         'Activity Recorded Successfully!',
@@ -389,7 +427,7 @@ export default function RecordActivityScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {activeTab === 'record' ? (
           <>
             {farms.length === 0 ? (
@@ -609,253 +647,96 @@ export default function RecordActivityScreen() {
                   )}
                 </Card>
 
-                {/* 2. Activity Type & Date */}
+                {/* 2. What was done */}
                 <Card style={styles.formCard}>
-                  <Text style={styles.sectionTitle}>
-                    {isLivestock ? '2. Livestock Operation & Details' : '2. Agronomic Activity & Details'}
-                  </Text>
-                  <Text style={styles.label}>
-                    {isLivestock ? 'Livestock Operation Classification *' : 'Activity Classification *'}
-                  </Text>
-                  {isLivestock ? (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={styles.chipRow}
-                  >
-                    {currentActivityTypes.map((type) => (
-                      <TouchableOpacity
-                        key={type}
-                        style={[
-                          styles.chip,
-                          activityType === type &&
-                            (isLivestock ? styles.chipActiveLivestock : styles.chipActive),
-                        ]}
-                        onPress={() => setActivityType(type)}
-                      >
+                  <Text style={styles.sectionTitle}>{isLivestock ? '2. Operation' : '2. What did you do?'}</Text>
+
+                  <TouchableOpacity style={styles.pickerRow} activeOpacity={0.8} onPress={() => setActivitySheetOpen(true)}>
+                    <View style={[styles.pickerIcon, isLivestock && styles.pickerIconLivestock]}>
+                      <Ionicons name={isLivestock ? 'paw' : 'leaf'} size={18} color={isLivestock ? '#B45309' : Colors.primaryDark} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.pickerLabel}>{isLivestock ? 'Operation' : 'Activity'}</Text>
+                      <Text style={styles.pickerValue} numberOfLines={1}>
+                        {activityType}
+                      </Text>
+                      {!isLivestock && groupOf(activityType) && groupOf(activityType) !== activityType ? (
+                        <Text style={styles.pickerHint}>{groupOf(activityType)}</Text>
+                      ) : null}
+                    </View>
+                    <Ionicons name="chevron-down" size={20} color={Colors.textMuted} />
+                  </TouchableOpacity>
+
+                  {taskOps ? (
+                    <TouchableOpacity
+                      style={[styles.pickerRow, { marginTop: Spacing.sm }]}
+                      activeOpacity={0.8}
+                      onPress={() => setTasksSheetOpen(true)}
+                    >
+                      <View style={[styles.pickerIcon, tasksKind === 'harvest' && styles.pickerIconHarvest]}>
                         <Ionicons
-                          name={isLivestock ? 'paw-outline' : 'leaf-outline'}
-                          size={12}
-                          color={
-                            activityType === type
-                              ? '#FFFFFF'
-                              : isLivestock
-                              ? '#D97706'
-                              : Colors.primary
-                          }
-                          style={{ marginRight: 4 }}
+                          name={tasksKind === 'harvest' ? 'basket-outline' : 'construct-outline'}
+                          size={18}
+                          color={tasksKind === 'harvest' ? '#92400E' : Colors.primaryDark}
                         />
-                        <Text
-                          style={[
-                            styles.chipText,
-                            activityType === type && styles.chipTextActive,
-                          ]}
-                        >
-                          {type}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                  ) : (
-                    <View>
-                      {CROP_ACTIVITY_SECTIONS.map((section) => (
-                        <View key={section.title || section.items[0]}>
-                          {section.title ? <Text style={styles.groupTitle}>{section.title}</Text> : null}
-                          <View style={styles.groupChips}>
-                            {section.items.map((type) => (
-                              <TouchableOpacity
-                                key={type}
-                                style={[styles.chip, activityType === type && styles.chipActive]}
-                                onPress={() => setActivityType(type)}
-                              >
-                                <Text style={[styles.chipText, activityType === type && styles.chipTextActive]}>
-                                  {type}
-                                </Text>
-                              </TouchableOpacity>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.pickerLabel}>{taskTitle} *</Text>
+                        {selectedTasks.length > 0 ? (
+                          <View style={styles.tagRow}>
+                            {selectedTasks.slice(0, 3).map((t) => (
+                              <Text key={t} style={styles.tag} numberOfLines={1}>
+                                {t}
+                              </Text>
                             ))}
+                            {selectedTasks.length > 3 ? <Text style={styles.tag}>{`+${selectedTasks.length - 3} more`}</Text> : null}
                           </View>
-                        </View>
-                      ))}
-                    </View>
-                  )}
+                        ) : (
+                          <Text style={styles.pickerPlaceholder}>Tap to choose the tasks you did</Text>
+                        )}
+                      </View>
+                      <Ionicons name="chevron-forward" size={20} color={Colors.textMuted} />
+                    </TouchableOpacity>
+                  ) : null}
 
-                  {/* Specific Land Preparation Operations (when Land preparation is selected) */}
-                  {activityType === 'Land preparation' && (
-                    <View style={styles.landPrepContainer}>
-                      <View style={styles.landPrepHeaderRow}>
-                        <Ionicons name="construct-outline" size={16} color={Colors.primaryDark} />
-                        <Text style={styles.landPrepTitle}>
-                          Land Preparation Operations *
-                        </Text>
-                      </View>
-                      <Text style={styles.landPrepSubtitle}>
-                        Select one or more land preparation tasks completed for this parcel:
-                      </Text>
-                      <View style={styles.landPrepGrid}>
-                        {LAND_PREPARATION_OPERATIONS.map((op) => {
-                          const isSelected = selectedLandPrepOps.includes(op);
-                          return (
-                            <TouchableOpacity
-                              key={op}
-                              style={[
-                                styles.landPrepChip,
-                                isSelected && styles.landPrepChipActive,
-                              ]}
-                              onPress={() => toggleLandPrepOp(op)}
-                              activeOpacity={0.75}
-                            >
-                              <Ionicons
-                                name={isSelected ? 'checkbox' : 'square-outline'}
-                                size={15}
-                                color={isSelected ? '#FFFFFF' : Colors.primaryDark}
-                                style={{ marginRight: 6 }}
-                              />
-                              <Text
-                                style={[
-                                  styles.landPrepChipText,
-                                  isSelected && styles.landPrepChipTextActive,
-                                ]}
-                              >
-                                {op}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  )}
-
-                  {/* Specific Harvesting Operations (when Harvesting or Harvest preparation is selected) */}
-                  {isHarvestingActivity(activityType) && (
-                    <View style={styles.harvestContainer}>
-                      <View style={styles.harvestHeaderRow}>
-                        <Ionicons name="basket-outline" size={16} color="#92400E" />
-                        <Text style={styles.harvestTitle}>
-                          Harvesting Operations *
-                        </Text>
-                      </View>
-                      <Text style={styles.harvestSubtitle}>
-                        Select one or more harvesting tasks completed for this parcel:
-                      </Text>
-                      <View style={styles.harvestGrid}>
-                        {HARVESTING_OPERATIONS.map((op) => {
-                          const isSelected = selectedHarvestOps.includes(op);
-                          return (
-                            <TouchableOpacity
-                              key={op}
-                              style={[
-                                styles.harvestChip,
-                                isSelected && styles.harvestChipActive,
-                              ]}
-                              onPress={() => toggleHarvestOp(op)}
-                              activeOpacity={0.75}
-                            >
-                              <Ionicons
-                                name={isSelected ? 'checkbox' : 'square-outline'}
-                                size={15}
-                                color={isSelected ? '#FFFFFF' : '#92400E'}
-                                style={{ marginRight: 6 }}
-                              />
-                              <Text
-                                style={[
-                                  styles.harvestChipText,
-                                  isSelected && styles.harvestChipTextActive,
-                                ]}
-                              >
-                                {op}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    </View>
-                  )}
-
-                  <View style={{ marginTop: Spacing.sm }}>
+                  <View style={{ marginTop: Spacing.md }}>
                     <DatePickerField
                       label={isLivestock ? 'Operation Date' : 'Activity Date'}
                       value={activityDate}
                       onChange={setActivityDate}
-                      helperText="Tap to choose date from calendar"
                     />
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.label}>
-                      {isLivestock ? 'Description & Husbandry Observations *' : 'Description & Field Observations *'}
-                    </Text>
+                    <Text style={styles.label}>{selectedTasks.length > 0 ? 'Notes (optional)' : 'Notes *'}</Text>
                     <TextInput
                       style={[styles.input, styles.textArea]}
-                      placeholder={
-                        isLivestock
-                          ? 'e.g. Administered PPR and anthrax vaccines to 25 goats, disinfected pens, provided supplementary minerals and checked water troughs...'
-                          : 'e.g. Cleared perimeter drainage ditch and applied compound NPK fertilizer along rice bunds...'
-                      }
+                      placeholder={isLivestock ? 'e.g. Vaccinated 25 goats and cleaned the pens' : 'e.g. Applied compost along the rice bunds'}
                       placeholderTextColor={Colors.textMuted}
                       multiline
-                      numberOfLines={3}
+                      numberOfLines={2}
                       value={description}
                       onChangeText={setDescription}
                     />
                   </View>
                 </Card>
 
-                {/* 3. Quantities, Labor & Cost */}
+                <WeatherCard
+                  sky={weatherSky}
+                  onSky={setWeatherSky}
+                  rainMm={rainMm}
+                  onRainMm={(v) => {
+                    setRainMm(v);
+                    if (rainError) setRainError(null);
+                  }}
+                  rainError={rainError}
+                  dayFeel={dayFeel}
+                  onDayFeel={setDayFeel}
+                />
+
+                {/* 3. Cost, workers and (optionally) materials */}
                 <Card style={styles.formCard}>
-                  <Text style={styles.sectionTitle}>
-                    {isLivestock ? '3. Animals / Feed, Labor & Cost' : '3. Material, Labor & Cost'}
-                  </Text>
-
-                  <View style={styles.inputRow}>
-                    <View style={[styles.inputGroup, { flex: 1.3, marginRight: Spacing.xs }]}>
-                      <Text style={styles.label}>
-                        {isLivestock ? 'Animals / Quantity' : 'Material Quantity'}
-                      </Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder={isLivestock ? 'e.g. 25' : 'e.g. 50'}
-                        keyboardType="numeric"
-                        value={quantity}
-                        onChangeText={setQuantity}
-                      />
-                    </View>
-                    <View style={[styles.inputGroup, { flex: 1.1, marginLeft: Spacing.xs }]}>
-                      <Text style={styles.label}>Unit</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder={isLivestock ? 'heads / doses / bales' : 'kg / bags / liters'}
-                        value={unit}
-                        onChangeText={setUnit}
-                      />
-                    </View>
-                  </View>
-
-                  {/* Quick Unit Selector */}
-                  <View style={{ marginBottom: Spacing.sm }}>
-                    <Text style={[styles.label, { fontSize: 10, marginBottom: 4 }]}>QUICK UNIT SELECTOR:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                      {currentUnits.map((u) => (
-                        <TouchableOpacity
-                          key={u}
-                          style={[
-                            styles.unitChip,
-                            unit === u &&
-                              (isLivestock ? styles.unitChipActiveLivestock : styles.unitChipActive),
-                          ]}
-                          onPress={() => setUnit(u)}
-                        >
-                          <Text
-                            style={[
-                              styles.unitChipText,
-                              unit === u && styles.unitChipTextActive,
-                            ]}
-                          >
-                            {u}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
+                  <Text style={styles.sectionTitle}>3. Cost & workers</Text>
 
                   <View style={styles.inputRow}>
                     <View style={[styles.inputGroup, { flex: 1, marginRight: Spacing.xs }]}>
@@ -863,22 +744,70 @@ export default function RecordActivityScreen() {
                       <TextInput
                         style={styles.input}
                         placeholder="e.g. 45"
+                        placeholderTextColor={Colors.textMuted}
                         keyboardType="numeric"
                         value={cost}
                         onChangeText={setCost}
                       />
                     </View>
                     <View style={[styles.inputGroup, { flex: 1, marginLeft: Spacing.xs }]}>
-                      <Text style={styles.label}>Labor Workers</Text>
+                      <Text style={styles.label}>Workers</Text>
                       <TextInput
                         style={styles.input}
                         placeholder="e.g. 2"
+                        placeholderTextColor={Colors.textMuted}
                         keyboardType="numeric"
                         value={laborCount}
                         onChangeText={setLaborCount}
                       />
                     </View>
                   </View>
+
+                  <TouchableOpacity style={styles.materialsToggle} activeOpacity={0.7} onPress={() => setShowMaterials((v) => !v)}>
+                    <Ionicons name={showMaterials ? 'remove-circle-outline' : 'add-circle-outline'} size={18} color={Colors.primary} />
+                    <Text style={styles.materialsToggleText}>
+                      {showMaterials ? 'Hide materials' : isLivestock ? 'Add animals / feed used (optional)' : 'Add materials used (optional)'}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {showMaterials ? (
+                    <View>
+                      <View style={styles.inputRow}>
+                        <View style={[styles.inputGroup, { flex: 1.3, marginRight: Spacing.xs }]}>
+                          <Text style={styles.label}>{isLivestock ? 'Animals / Quantity' : 'Quantity'}</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder={isLivestock ? 'e.g. 25' : 'e.g. 50'}
+                            placeholderTextColor={Colors.textMuted}
+                            keyboardType="numeric"
+                            value={quantity}
+                            onChangeText={setQuantity}
+                          />
+                        </View>
+                        <View style={[styles.inputGroup, { flex: 1.1, marginLeft: Spacing.xs }]}>
+                          <Text style={styles.label}>Unit</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder={isLivestock ? 'heads / doses' : 'kg / bags'}
+                            placeholderTextColor={Colors.textMuted}
+                            value={unit}
+                            onChangeText={setUnit}
+                          />
+                        </View>
+                      </View>
+                      <View style={styles.groupChips}>
+                        {currentUnits.map((u) => (
+                          <TouchableOpacity
+                            key={u}
+                            style={[styles.unitChip, unit === u && (isLivestock ? styles.unitChipActiveLivestock : styles.unitChipActive)]}
+                            onPress={() => setUnit(u)}
+                          >
+                            <Text style={[styles.unitChipText, unit === u && styles.unitChipTextActive]}>{u}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  ) : null}
                 </Card>
 
                 <Button
@@ -888,6 +817,86 @@ export default function RecordActivityScreen() {
                   loading={isSubmitting}
                   icon={<Ionicons name="checkmark-done" size={20} color="#FFFFFF" />}
                 />
+
+                {/* Choose the activity: the groups are headings, so a long list stays easy to scan */}
+                <BottomSheet
+                  visible={activitySheetOpen}
+                  title={isLivestock ? 'Choose an operation' : 'Choose an activity'}
+                  onClose={() => setActivitySheetOpen(false)}
+                >
+                  {isLivestock ? (
+                    <View style={styles.groupChips}>
+                      {LIVESTOCK_ACTIVITY_TYPES.map((type) => (
+                        <TouchableOpacity
+                          key={type}
+                          style={[styles.chip, activityType === type && styles.chipActiveLivestock]}
+                          onPress={() => {
+                            setActivityType(type);
+                            setActivitySheetOpen(false);
+                          }}
+                        >
+                          <Text style={[styles.chipText, activityType === type && styles.chipTextActive]}>{type}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  ) : (
+                    CROP_ACTIVITY_SECTIONS.map((section) => (
+                      <View key={section.title || section.items[0]}>
+                        {section.title ? <Text style={styles.groupTitle}>{section.title}</Text> : null}
+                        <View style={styles.groupChips}>
+                          {section.items.map((type) => (
+                            <TouchableOpacity
+                              key={type}
+                              style={[styles.chip, activityType === type && styles.chipActive]}
+                              onPress={() => {
+                                setActivityType(type);
+                                setActivitySheetOpen(false);
+                              }}
+                            >
+                              <Text style={[styles.chipText, activityType === type && styles.chipTextActive]}>{type}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                    ))
+                  )}
+                </BottomSheet>
+
+                {/* Choose the tasks: a two-column checklist that scrolls inside the sheet */}
+                <BottomSheet
+                  visible={tasksSheetOpen && !!taskOps}
+                  title={taskTitle}
+                  subtitle="Tap every task you completed"
+                  onClose={() => setTasksSheetOpen(false)}
+                  footer={
+                    <>
+                      <Button title="Clear" variant="outline" size="md" onPress={clearTasks} style={{ flex: 1 }} />
+                      <Button
+                        title={selectedTasks.length > 0 ? `Done (${selectedTasks.length})` : 'Done'}
+                        size="md"
+                        onPress={() => setTasksSheetOpen(false)}
+                        style={{ flex: 2 }}
+                      />
+                    </>
+                  }
+                >
+                  <View style={styles.taskGrid}>
+                    {(taskOps || []).map((op) => {
+                      const on = selectedTasks.includes(op);
+                      return (
+                        <TouchableOpacity
+                          key={op}
+                          style={[styles.taskItem, on && styles.taskItemActive]}
+                          onPress={() => toggleTask(op)}
+                          activeOpacity={0.75}
+                        >
+                          <Ionicons name={on ? 'checkbox' : 'square-outline'} size={18} color={on ? '#FFFFFF' : Colors.primaryDark} />
+                          <Text style={[styles.taskText, on && styles.taskTextActive]}>{op}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </BottomSheet>
               </>
             )}
 
@@ -904,7 +913,14 @@ export default function RecordActivityScreen() {
                 {activities.slice(0, 3).map((act) => {
                   const isLive = LIVESTOCK_ACTIVITY_TYPES.includes(act.activity_type);
                   return (
-                    <Card key={act.id} style={styles.logCardCompact}>
+                    <TouchableOpacity
+                      key={act.id}
+                      activeOpacity={0.85}
+                      onPress={() => setDetailActivity(act)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${act.activity_type}. ${t('tapForDetails')}`}
+                    >
+                    <Card style={styles.logCardCompact}>
                       <View style={styles.logTopRow}>
                         <View style={[styles.logBadgeWrap, isLive && styles.logBadgeWrapLivestock]}>
                           <Ionicons
@@ -921,6 +937,7 @@ export default function RecordActivityScreen() {
                       <Text style={styles.logDescText} numberOfLines={2}>
                         {act.description}
                       </Text>
+                      <ActivityWeatherLine activity={act} />
                       <View style={styles.logMetaRow}>
                         <Text style={styles.logFarmText}>
                           📍 {farmLookup.get(act.farm_id) || 'Registered Farm'}
@@ -928,6 +945,7 @@ export default function RecordActivityScreen() {
                         {act.cost ? <Text style={styles.logCostText}>${act.cost}</Text> : null}
                       </View>
                     </Card>
+                    </TouchableOpacity>
                   );
                 })}
               </View>
@@ -983,7 +1001,14 @@ export default function RecordActivityScreen() {
               filteredActivities.map((act) => {
                 const isLive = LIVESTOCK_ACTIVITY_TYPES.includes(act.activity_type);
                 return (
-                  <Card key={act.id} style={styles.logCard}>
+                  <TouchableOpacity
+                    key={act.id}
+                    activeOpacity={0.85}
+                    onPress={() => setDetailActivity(act)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${act.activity_type}. ${t('tapForDetails')}`}
+                  >
+                  <Card style={styles.logCard}>
                     <View style={styles.logTopRow}>
                       <View style={[styles.logBadgeWrap, isLive && styles.logBadgeWrapLivestock]}>
                         <Ionicons
@@ -999,6 +1024,7 @@ export default function RecordActivityScreen() {
                     </View>
 
                     <Text style={styles.logFullDesc}>{act.description}</Text>
+                    <ActivityWeatherLine activity={act} />
 
                     <View style={styles.logDetailsGrid}>
                       <View style={styles.logDetailItem}>
@@ -1059,6 +1085,7 @@ export default function RecordActivityScreen() {
                     </View>
                   </View>
                 </Card>
+                  </TouchableOpacity>
               );
             })
           )}
@@ -1066,7 +1093,13 @@ export default function RecordActivityScreen() {
         )}
 
         <View style={{ height: Spacing.xxl }} />
-      </ScrollView>
+      </KeyboardAwareScrollView>
+
+      <ActivityDetailSheet
+        activity={detailActivity}
+        farmName={detailActivity ? farmLookup.get(detailActivity.farm_id) : undefined}
+        onClose={() => setDetailActivity(null)}
+      />
     </SafeAreaView>
   );
 }
@@ -1172,6 +1205,62 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginBottom: Spacing.xs,
   },
+  pickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.md,
+    backgroundColor: Colors.inputBg,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    borderRadius: Radius.lg,
+    paddingVertical: 12,
+    paddingHorizontal: Spacing.md,
+  },
+  pickerIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.tint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerIconLivestock: { backgroundColor: '#FEF3C7' },
+  pickerIconHarvest: { backgroundColor: '#FEF3C7' },
+  pickerLabel: { fontSize: 11, fontWeight: '700', color: Colors.textMuted, letterSpacing: 0.4, textTransform: 'uppercase' },
+  pickerValue: { fontSize: 16, fontWeight: '700', color: Colors.text, marginTop: 1 },
+  pickerHint: { fontSize: 12, color: Colors.textMuted, marginTop: 1 },
+  pickerPlaceholder: { fontSize: 14, color: Colors.textMuted, marginTop: 2 },
+  tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  tag: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.primaryDark,
+    backgroundColor: Colors.tint,
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    overflow: 'hidden',
+    maxWidth: '100%',
+  },
+  materialsToggle: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10 },
+  materialsToggleText: { fontSize: 14, fontWeight: '700', color: Colors.primary },
+  taskGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  taskItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '48.5%',
+    minHeight: 48,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+    backgroundColor: Colors.inputBg,
+  },
+  taskItemActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  taskText: { flex: 1, fontSize: 13, fontWeight: '600', color: Colors.text },
+  taskTextActive: { color: '#FFFFFF' },
   groupTitle: {
     marginTop: Spacing.md,
     marginBottom: Spacing.xs,

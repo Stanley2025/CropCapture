@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { ActivityWeatherLine } from '../../src/components/activity/ActivityWeatherLine';
+import { KeyboardAwareScrollView } from '../../src/components/KeyboardAwareScrollView';
 import {
   View,
   Text,
@@ -21,6 +23,7 @@ import {
 import { localDb } from '../../src/services/storage/localDatabase';
 import { FarmActivity, Farm } from '../../src/types/database';
 import { useAppStore } from '../../src/store/useAppStore';
+import { matchesCategory as activityMatchesCategory } from '../../src/shared/activityTypes';
 
 const CATEGORIES = [
   'All',
@@ -77,13 +80,11 @@ export default function ActivitiesScreen() {
 
   const getFarmName = (farmId: string) => {
     const f = farms.find((farm) => farm.id === farmId);
-    return f ? f.name : 'Gbehley Rice Plot';
+    return f ? f.name : 'Farm';
   };
 
   const filteredActivities = activities.filter((act) => {
-    const matchesCategory =
-      selectedCategory === 'All' ||
-      act.activity_type.toLowerCase().includes(selectedCategory.toLowerCase());
+    const matchesCategory = activityMatchesCategory(act.activity_type, selectedCategory);
     const matchesSearch =
       !searchQuery.trim() ||
       act.activity_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -91,48 +92,12 @@ export default function ActivitiesScreen() {
     return matchesCategory && matchesSearch;
   });
 
-  // Fallback demo activities if empty
-  const displayActivities =
-    filteredActivities.length > 0
-      ? filteredActivities
-      : activities.length === 0
-      ? [
-          {
-            id: 'act-demo-1',
-            farm_id: 'farm-01',
-            activity_type: 'Planting',
-            description: 'Transplanted Suakoko 8 rice seedlings into lowland bunded plots.',
-            activity_date: '15 Jun 2026',
-            cost: 65,
-            labor_count: 4,
-            sync_status: 'synced',
-          } as unknown as FarmActivity,
-          {
-            id: 'act-demo-2',
-            farm_id: 'farm-01',
-            activity_type: 'Fertilizer Application',
-            description: 'Applied NPK 15-15-15 basal fertilizer across 4.1 acres.',
-            activity_date: '20 Jul 2026',
-            cost: 85,
-            labor_count: 2,
-            sync_status: 'synced',
-          } as unknown as FarmActivity,
-          {
-            id: 'act-demo-3',
-            farm_id: 'farm-01',
-            activity_type: 'Weeding',
-            description: 'Manual weeding along rice paddy bunds.',
-            activity_date: '15 Aug 2026',
-            cost: 40,
-            labor_count: 3,
-            sync_status: 'synced',
-          } as unknown as FarmActivity,
-        ]
-      : [];
+  // Only the farmer's own activities are listed (never invented ones).
+  const displayActivities = filteredActivities;
 
   return (
     <View style={styles.root}>
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.scrollView}
         contentContainerStyle={[
           styles.contentContainer,
@@ -212,6 +177,17 @@ export default function ActivitiesScreen() {
 
         {/* Activities List */}
         <View style={styles.activitiesList}>
+          {displayActivities.length === 0 ? (
+            <View style={{ backgroundColor: Colors.card, borderRadius: 18, borderWidth: 1, borderColor: Colors.border, padding: 18 }}>
+              <Text style={{ color: Colors.text, fontSize: 16, fontWeight: '700' }}>No activities yet</Text>
+              <Text style={{ color: Colors.textMuted, fontSize: 14, marginTop: 4 }}>
+                Activities you record on your farms will appear here.
+              </Text>
+              <TouchableOpacity style={{ alignSelf: 'flex-start', marginTop: 12, paddingVertical: 9, paddingHorizontal: 18, borderRadius: 999, backgroundColor: Colors.primary }} activeOpacity={0.85} onPress={() => router.push('/activity/record' as any)}>
+                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Record an activity</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           {displayActivities.map((act) => {
             const farmName = getFarmName(act.farm_id);
             return (
@@ -233,6 +209,8 @@ export default function ActivitiesScreen() {
                     {act.description}
                   </Text>
                 ) : null}
+
+                <ActivityWeatherLine activity={act} />
 
                 <View style={styles.cardFooterRow}>
                   <View style={styles.footerItem}>
@@ -267,7 +245,7 @@ export default function ActivitiesScreen() {
             <Text style={styles.dashedAddCardText}>Record another activity</Text>
           </TouchableOpacity>
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
