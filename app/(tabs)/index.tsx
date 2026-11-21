@@ -163,6 +163,38 @@ export default function HomeScreen() {
         {/* ========================================================= */}
         {currentRole === 'farmer' && (
           <>
+            {/* Live Weather Forecast & Alerts Widget */}
+            <TouchableOpacity
+              style={styles.weatherWidgetCard}
+              activeOpacity={0.85}
+              onPress={() => router.push('/weather' as any)}
+            >
+              <View style={styles.weatherWidgetLeft}>
+                <View style={styles.weatherWidgetIconCircle}>
+                  <Ionicons name="cloud-outline" size={24} color="#A3E635" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.weatherWidgetTemp}>31°C · Partly cloudy</Text>
+                    <View style={styles.weatherSeasonBadge}>
+                      <Text style={styles.weatherSeasonText}>Dry season</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.weatherWidgetSub}>
+                    {currentUserProfile.district || currentFarmer.district || 'Gbehley'}, {currentUserProfile.county || currentFarmer.county || 'Nimba'} · 20% rain expected
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.weatherWidgetRight}>
+                <View style={styles.weatherAlertBadge}>
+                  <Ionicons name="notifications" size={13} color="#FFFFFF" />
+                  <Text style={styles.weatherAlertBadgeText}>Alerts</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color="#8DA695" />
+              </View>
+            </TouchableOpacity>
+
             {/* Live Metrics Grid */}
             <View style={styles.sectionHeaderRow}>
               <View>
@@ -286,6 +318,17 @@ export default function HomeScreen() {
                   <Ionicons name="bar-chart" size={22} color="#0369A1" />
                 </View>
                 <Text style={styles.actionBtnText}>Reports & Analytics</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => router.push('/weather' as any)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.actionIconBox, { backgroundColor: '#DCFCE7' }]}>
+                  <Ionicons name="partly-sunny" size={22} color="#15803D" />
+                </View>
+                <Text style={styles.actionBtnText}>Weather & Alerts</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -446,6 +489,17 @@ export default function HomeScreen() {
                   <Ionicons name="document-text" size={22} color="#7C3AED" />
                 </View>
                 <Text style={styles.actionBtnText}>Advisory Reports</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
+                onPress={() => router.push('/weather' as any)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.actionIconBox, { backgroundColor: '#DCFCE7' }]}>
+                  <Ionicons name="partly-sunny" size={22} color="#15803D" />
+                </View>
+                <Text style={styles.actionBtnText}>Weather & Alerts</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -752,6 +806,17 @@ export default function HomeScreen() {
 
               <TouchableOpacity
                 style={styles.actionBtn}
+                onPress={() => router.push('/weather' as any)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.actionIconBox, { backgroundColor: '#DCFCE7' }]}>
+                  <Ionicons name="partly-sunny" size={22} color="#15803D" />
+                </View>
+                <Text style={styles.actionBtnText}>Weather & Alerts</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionBtn}
                 onPress={() => router.push('/sync-center' as any)}
                 activeOpacity={0.7}
               >
@@ -1042,6 +1107,75 @@ const styles = StyleSheet.create({
   },
   inspectButtonText: {
     fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  weatherWidgetCard: {
+    backgroundColor: '#132E20',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: Spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  weatherWidgetLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: 12,
+  },
+  weatherWidgetIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  weatherWidgetTemp: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  weatherSeasonBadge: {
+    backgroundColor: 'rgba(163, 230, 53, 0.2)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  weatherSeasonText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#A3E635',
+  },
+  weatherWidgetSub: {
+    fontSize: 12,
+    color: '#B4CCBA',
+    marginTop: 2,
+  },
+  weatherWidgetRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 8,
+  },
+  weatherAlertBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E07A2A',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  weatherAlertBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
   },

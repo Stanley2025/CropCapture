@@ -33,6 +33,7 @@ import {
   County,
   District,
 } from '../../src/constants/liberiaGeographicData';
+import { getDistrictCoordinates } from '../../src/constants/liberiaCoordinates';
 
 const SOIL_TYPES = [
   'Clay Loam (Swamp Basin)',
@@ -384,8 +385,18 @@ export default function RegisterFarmScreen() {
         community: community.trim(),
         size: parseFloat(size),
         size_unit: sizeUnit,
-        latitude: latitude ?? 7.362145,
-        longitude: longitude ?? -8.712398,
+        latitude:
+          latitude ??
+          getDistrictCoordinates(
+            resolvedDistrict?.name || district.trim(),
+            resolvedCounty?.name || county.trim()
+          ).latitude,
+        longitude:
+          longitude ??
+          getDistrictCoordinates(
+            resolvedDistrict?.name || district.trim(),
+            resolvedCounty?.name || county.trim()
+          ).longitude,
         ownership_type: ownershipType,
         irrigation,
         soil_type: soilType,

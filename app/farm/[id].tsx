@@ -184,7 +184,7 @@ export default function FarmDetailsScreen() {
               <View style={{ marginLeft: Spacing.sm }}>
                 <Text style={styles.gpsTitle}>Verified GPS Geolocation</Text>
                 <Text style={styles.gpsCoordText}>
-                  {farm.latitude ? `${farm.latitude.toFixed(6)}° N, ${farm.longitude?.toFixed(6)}° W` : 'Not Tagged'}
+                  {farm.latitude ? `${farm.latitude.toFixed(6)}° N, ${farm.longitude?.toFixed(6)}° W` : 'District Center GPS (Auto)'}
                 </Text>
               </View>
             </View>
@@ -193,7 +193,7 @@ export default function FarmDetailsScreen() {
               onPress={() =>
                 Alert.alert(
                   'GPS Geolocation Coordinates',
-                  `Farm Latitude: ${farm.latitude || 7.362145}\nFarm Longitude: ${farm.longitude || -8.712398}\n\nBoundary points registered with County Agricultural Registry.`
+                  `Farm Latitude: ${farm.latitude || 7.412}\nFarm Longitude: ${farm.longitude || -8.65}\n\nCoordinates registered for district weather alerts and agricultural registry.`
                 )
               }
             >
@@ -201,6 +201,26 @@ export default function FarmDetailsScreen() {
               <Text style={styles.openMapText}>Map Pin</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Farm Microclimate & Weather Forecast Banner */}
+          <TouchableOpacity
+            style={styles.weatherBanner}
+            activeOpacity={0.85}
+            onPress={() => router.push('/weather' as any)}
+          >
+            <View style={styles.weatherBannerLeft}>
+              <View style={styles.weatherBannerIcon}>
+                <Ionicons name="cloud-outline" size={20} color="#A3E635" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.weatherBannerTitle}>Local Weather: 31°C · Partly cloudy</Text>
+                <Text style={styles.weatherBannerSubtitle}>
+                  {farm.district || 'Gbehley'}, {farm.county || 'Nimba'} · 5-day rain forecast & alerts
+                </Text>
+              </View>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color="#B4CCBA" />
+          </TouchableOpacity>
 
           {farm.description ? (
             <Text style={styles.farmDesc}>{farm.description}</Text>
@@ -823,5 +843,38 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     flex: 1,
     lineHeight: 14,
+  },
+  weatherBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#132E20',
+    borderRadius: Radius.md,
+    padding: Spacing.sm,
+    marginTop: Spacing.xs,
+  },
+  weatherBannerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    gap: Spacing.sm,
+  },
+  weatherBannerIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  weatherBannerTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  weatherBannerSubtitle: {
+    fontSize: 10.5,
+    color: '#B4CCBA',
+    marginTop: 1,
   },
 });

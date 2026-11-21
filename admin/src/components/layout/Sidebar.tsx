@@ -20,6 +20,7 @@ import {
   Bell,
   Menu,
   SunMedium,
+  CloudSun,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -53,6 +54,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
       { title: 'Farm records', href: '/farm-records', icon: FileText },
       { title: 'Inputs & expenses', href: '/inputs', icon: Coins },
       { title: 'Harvests', href: '/harvests', icon: Leaf, badge: 'Live' },
+      { title: 'Weather & alerts', href: '/weather-alerts', icon: CloudSun, badge: 'Liberia' },
     ],
   },
   {
