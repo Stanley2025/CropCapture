@@ -96,16 +96,28 @@ export default function OfflineSyncCenterScreen() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'synced':
-        return <Badge label="Synced" variant="success" size="sm" />;
+        return <Badge label="Synced to cloud" variant="success" size="sm" />;
       case 'waiting_to_sync':
-        return <Badge label="Waiting to Sync" variant="warning" size="sm" />;
+        return <Badge label="Saved on this phone" variant="warning" size="sm" />;
       case 'synchronizing':
-        return <Badge label="Synchronizing..." variant="info" size="sm" />;
+        return <Badge label="Syncing now..." variant="info" size="sm" />;
       case 'sync_failed':
-        return <Badge label="Sync Failed" variant="danger" size="sm" />;
+        return <Badge label="Needs sync retry" variant="danger" size="sm" />;
       default:
-        return <Badge label="Saved on Device" variant="default" size="sm" />;
+        return <Badge label="Saved on this phone" variant="default" size="sm" />;
     }
+  };
+
+  const getPlainEnglishError = (err: string | null) => {
+    if (!err) return null;
+    const lower = err.toLowerCase();
+    if (lower.includes('network') || lower.includes('fetch') || lower.includes('internet') || lower.includes('connection') || lower.includes('eai_again')) {
+      return 'Waiting for internet connection. Your record is safely stored on this phone and will automatically upload when network returns.';
+    }
+    if (lower.includes('timeout')) {
+      return 'Connection was too slow. It will retry automatically.';
+    }
+    return `Sync paused: ${err}. Your data is safely stored on this phone.`;
   };
 
   const totalLocalRecords = Object.values(storageStats).reduce((a, b) => a + b, 0);
@@ -255,7 +267,7 @@ export default function OfflineSyncCenterScreen() {
               {item.last_error && (
                 <View style={styles.errorBox}>
                   <Ionicons name="alert-circle" size={14} color={Colors.danger} />
-                  <Text style={styles.errorText}>{item.last_error}</Text>
+                  <Text style={styles.errorText}>{getPlainEnglishError(item.last_error)}</Text>
                 </View>
               )}
             </Card>
