@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { KeyboardAwareScrollView } from '../../src/components/KeyboardAwareScrollView';
 import {
   View,
   Text,
@@ -19,6 +20,8 @@ import {
   generateBatchReference,
 } from '../../src/services/storage/localDatabase';
 import { useAppStore } from '../../src/store/useAppStore';
+import { generateQrToken } from '../../src/shared/farmRecords';
+import { toKg } from '../../src/shared/seasonRecord';
 import { Farm, FarmSeason, HarvestBatch } from '../../src/types/database';
 import { Header } from '../../src/components/Header';
 import { Button } from '../../src/components/Button';
@@ -26,7 +29,8 @@ import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { DatePickerField } from '../../src/components/DatePickerField';
 
-const CROP_UNITS = ['kg', 'tonnes', '50kg bags', 'bunches'];
+// Local units (cups, tins, bags) are accepted and converted to kg (see src/shared/seasonRecord.js).
+const CROP_UNITS = ['kg', 'tonnes', '50kg bags', 'cups', 'tins', 'bunches'];
 const LIVESTOCK_UNITS = ['heads', 'animals', 'crates / trays', 'litres', 'kg (meat)'];
 
 const LIVESTOCK_SPECIES = [
@@ -245,8 +249,9 @@ export default function RegisterHarvestScreen() {
           'LIVE'
         : selectedSeason?.crop?.code || 'CROP';
 
+      const kgConversion = toKg({ quantity: parseFloat(quantity), unit, cropCode: selectedSeason?.crop?.code });
       const batchReference = generateBatchReference(cropCode);
-      const randomToken = `cropcapture_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const randomToken = generateQrToken();
 
       const newHarvest: HarvestBatch = {
         id: generateUUID(),
@@ -263,6 +268,9 @@ export default function RegisterHarvestScreen() {
         harvest_date: harvestDate,
         quantity: parseFloat(quantity),
         unit,
+        // Quantity in kg, converted from the local unit (null for units with no weight, e.g. bunches).
+        quantity_kg: isLivestock ? null : kgConversion ? kgConversion.kg : null,
+        kg_per_unit: isLivestock ? null : kgConversion ? kgConversion.kgPerUnit : null,
         total_value: totalValue.trim() && !isNaN(Number(totalValue)) ? parseFloat(totalValue) : null,
         unit_price:
           totalValue.trim() && !isNaN(Number(totalValue)) && parseFloat(quantity) > 0
@@ -321,7 +329,7 @@ export default function RegisterHarvestScreen() {
             onPress: () => setActiveTab('log'),
           },
           {
-            text: 'View Batch & QR',
+            text: isLivestock ? 'View Batch & QR' : 'Add photos for buyers',
             onPress: () => router.push(`/harvest/${newHarvest.id}` as any),
           },
           {
@@ -406,7 +414,7 @@ export default function RegisterHarvestScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {activeTab === 'register' ? (
           <>
             {/* ========================================================= */}
@@ -680,6 +688,13 @@ export default function RegisterHarvestScreen() {
               value={quantity}
               onChangeText={setQuantity}
             />
+            {!isLivestock && Number(quantity) > 0 && toKg({ quantity: Number(quantity), unit }) && unit !== 'kg' ? (
+              <Text style={styles.kgHint}>
+                {`about ${toKg({ quantity: Number(quantity), unit })!.kg.toLocaleString()} kg${
+                  toKg({ quantity: Number(quantity), unit })!.estimated ? ' (estimate: local cup and tin sizes vary)' : ''
+                }`}
+              </Text>
+            ) : null}
           </View>
 
           {/* Full-width Unit Selection Grid */}
@@ -1190,12 +1205,13 @@ export default function RegisterHarvestScreen() {
     )}
 
     <View style={{ height: Spacing.xxl }} />
-  </ScrollView>
+  </KeyboardAwareScrollView>
 </SafeAreaView>
 );
 }
 
 const styles = StyleSheet.create({
+  kgHint: { marginTop: 6, fontSize: 13, color: Colors.textMuted },
   safeArea: {
     flex: 1,
     backgroundColor: Colors.primaryDark,

@@ -14,6 +14,7 @@ import {
   County,
   District,
   FarmPlan,
+  HarvestPhoto,
 } from '../../types/database';
 import { normalizeActivity } from '../../shared/activityWeather';
 import {
@@ -39,7 +40,8 @@ export interface SyncQueueItem {
     | 'season_problem'
     | 'season_disposal'
     | 'season_weather'
-    | 'farm_plan';
+    | 'farm_plan'
+    | 'harvest_photo';
   action: 'create' | 'update' | 'delete';
   payload: any;
   status: SyncStatusType;
@@ -69,6 +71,7 @@ const STORAGE_KEYS = {
   SEASON_DISPOSALS: '@agritrack_season_disposals',
   SEASON_WEATHER: '@agritrack_season_weather',
   FARM_PLANS: '@agritrack_farm_plans',
+  HARVEST_PHOTOS: '@agritrack_harvest_photos',
 };
 
 /** The records that hang off a season (see src/shared/seasonRecord.js and seasonWeather.js). */
@@ -495,6 +498,29 @@ export class LocalDatabase {
     const plans = await this.getItems<FarmPlan>(STORAGE_KEYS.FARM_PLANS);
     await this.setItems(STORAGE_KEYS.FARM_PLANS, plans.filter((p) => p.id !== id));
     if (queueSync) await this.addToSyncQueue('farm_plan', 'delete', { id });
+  }
+
+  // --- HARVEST PHOTOS (pictures of the product, for the buyer) ---
+  public async getHarvestPhotos(harvestId?: string): Promise<HarvestPhoto[]> {
+    const photos = await this.getItems<HarvestPhoto>(STORAGE_KEYS.HARVEST_PHOTOS);
+    return photos.filter((p) => !p.deleted_at && (!harvestId || p.harvest_id === harvestId));
+  }
+
+  /** Saves on the phone. Queue it for upload only once the picture file itself has reached the server. */
+  public async saveHarvestPhoto(photo: HarvestPhoto, queueSync = false): Promise<HarvestPhoto> {
+    const photos = await this.getItems<HarvestPhoto>(STORAGE_KEYS.HARVEST_PHOTOS);
+    const index = photos.findIndex((p) => p.id === photo.id);
+    if (index >= 0) photos[index] = photo;
+    else photos.push(photo);
+    await this.setItems(STORAGE_KEYS.HARVEST_PHOTOS, photos);
+    if (queueSync) await this.addToSyncQueue('harvest_photo', 'create', photo);
+    return photo;
+  }
+
+  public async deleteHarvestPhoto(id: string, queueSync = true): Promise<void> {
+    const photos = await this.getItems<HarvestPhoto>(STORAGE_KEYS.HARVEST_PHOTOS);
+    await this.setItems(STORAGE_KEYS.HARVEST_PHOTOS, photos.filter((p) => p.id !== id));
+    if (queueSync) await this.addToSyncQueue('harvest_photo', 'delete', { id });
   }
 
   // --- INSPECTIONS ---

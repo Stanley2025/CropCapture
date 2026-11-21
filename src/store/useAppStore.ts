@@ -4,6 +4,7 @@ import { UserRole, Farmer, Profile, SyncStatusType, AppNotification } from '../t
 import { localDb, generateUUID } from '../services/storage/localDatabase';
 import { syncEngine } from '../services/sync/syncEngine';
 import { refreshAllSeasonWeather } from '../services/season/seasonWeatherService';
+import { uploadPendingHarvestPhotos } from '../services/photos/harvestPhotoService';
 import { secureSessionManager } from '../services/auth/secureSessionManager';
 
 export interface PersonaDetails {
@@ -352,11 +353,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       date_of_birth: farmerData.date_of_birth || null,
       phone_number: '+231-77-000-0000',
       email: `farmer_${farmerData.farm_id_code}@cropcapture.app`,
-      county: 'Nimba',
-      district: farmerData.address?.trim() || 'Central District',
-      community: farmerData.address?.trim() || 'Main Village',
+      // No location until the farmer registers a farm: the profile then shows that farm's location
+      // (it used to be filled with "Nimba" for everyone).
+      county: '',
+      district: farmerData.address?.trim() || '',
+      community: farmerData.address?.trim() || '',
       address: farmerData.address?.trim() || null,
-      cooperative_id: '33333333-3333-3333-3333-333333333301',
+      cooperative_id: null,
       pin: farmerData.pin || null,
       id_type: farmerData.id_type || null,
       id_number: farmerData.id_number || null,
@@ -440,6 +443,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().pullRemoteChanges();
     // Quietly record the weather for each season (no screen of its own; shown inside the season record).
     refreshAllSeasonWeather(get().isOfflineMode).catch((e) => console.warn('Season weather refresh skipped:', e));
+    uploadPendingHarvestPhotos(get().isOfflineMode).catch((e) => console.warn('Harvest photo upload skipped:', e));
     const queue = await localDb.getSyncQueue();
     const pendingCount = queue.filter(
       (i) => i.status === 'waiting_to_sync' || i.status === 'sync_failed'

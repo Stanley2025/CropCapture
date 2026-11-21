@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Image,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -24,6 +25,9 @@ import {
 } from '../../src/constants/theme';
 import { localDb } from '../../src/services/storage/localDatabase';
 import { HarvestBatch, QualityInspection } from '../../src/types/database';
+import { useAppStore } from '../../src/store/useAppStore';
+import { loadBuyerData, BuyerData } from '../../src/services/photos/buyerViewService';
+import { t } from '../../src/i18n/en';
 
 export default function PublicTraceabilityScreen() {
   const router = useRouter();
@@ -34,20 +38,21 @@ export default function PublicTraceabilityScreen() {
   const [inspection, setInspection] = useState<QualityInspection | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const { isOfflineMode } = useAppStore();
+  const [data, setData] = useState<BuyerData | null>(null);
+
   useEffect(() => {
     if (!token) return;
-    Promise.all([localDb.getHarvests(), localDb.getInspections()]).then(([allH, allI]) => {
-      const match = allH.find(
-        (h) => h.qr_token === token || h.id === token || h.batch_reference === token
-      );
-      if (match) {
-        setHarvest(match);
-        const matchInsp = allI.find((i) => i.batch_id === match.id);
-        setInspection(matchInsp || null);
-      }
-      setIsLoading(false);
-    });
-  }, [token]);
+    // From the server when there is a connection (what a buyer sees); otherwise this phone's own copy.
+    loadBuyerData(token, isOfflineMode)
+      .then((d) => {
+        setData(d);
+        setHarvest((d ? d.harvest : null) as HarvestBatch | null);
+        setInspection((d ? d.inspection : null) as QualityInspection | null);
+      })
+      .catch(() => setData(null))
+      .finally(() => setIsLoading(false));
+  }, [token, isOfflineMode]);
 
   if (isLoading) {
     return (
@@ -198,12 +203,12 @@ export default function PublicTraceabilityScreen() {
 
           <View style={styles.specRow}>
             <Text style={styles.specLabel}>Variety / Cultivar</Text>
-            <Text style={styles.specValue}>{harvest.crop_variety_id || 'Suakoko 8'}</Text>
+            <Text style={styles.specValue}>{data?.view.product.variety || t('notRecorded')}</Text>
           </View>
 
           <View style={styles.specRow}>
             <Text style={styles.specLabel}>Production County</Text>
-            <Text style={styles.specValue}>Nimba County, Republic of Liberia</Text>
+            <Text style={styles.specValue}>{data?.view.farm?.county ? `${data.view.farm.county} County, Republic of Liberia` : t('notRecorded')}</Text>
           </View>
 
           <View style={styles.specRow}>
@@ -225,16 +230,68 @@ export default function PublicTraceabilityScreen() {
           <View style={styles.specRow}>
             <Text style={styles.specLabel}>Quality Grade</Text>
             <Text style={[styles.specValue, { fontFamily: FontFamily.extraBold, color: isApproved ? Colors.primary : Colors.amberText }]}>
-              {inspection ? inspection.final_grade.replace('_', ' ').toUpperCase() : isApproved ? 'GRADE A' : 'PENDING INSPECTION'}
+              {inspection && inspection.final_grade ? String(inspection.final_grade).replace('_', ' ').toUpperCase() : 'PENDING INSPECTION'}
             </Text>
           </View>
         </View>
+
+        {/* The farm and the farmer's product photos */}
+        {data?.view.farm?.name ? (
+          <View style={styles.buyerCard}>
+            <Text style={styles.buyerTitle}>{t('buyerFarm')}</Text>
+            <Text style={styles.buyerFarm}>{data.view.farm.name}</Text>
+          </View>
+        ) : null}
+
+        <View style={styles.buyerCard}>
+          <Text style={styles.buyerTitle}>{t('buyerPhotos')}</Text>
+          {data && data.view.photos.length > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingTop: 10 }}>
+              {data.view.photos.map((p) => (
+                <Image key={p.id} source={{ uri: p.url }} style={styles.buyerPhoto} accessibilityLabel={t('photoOfProduct')} />
+              ))}
+            </ScrollView>
+          ) : (
+            <Text style={styles.buyerEmpty}>{t('buyerNoPhotos')}</Text>
+          )}
+        </View>
+
+        {/* What was done on the farm: the kind of activity, its date and the weather the farmer recorded */}
+        <View style={styles.buyerCard}>
+          <Text style={styles.buyerTitle}>{t('buyerActivities')}</Text>
+          {data && data.view.activities.length > 0 ? (
+            data.view.activities.map((a) => (
+              <View key={a.id} style={styles.buyerActivity} accessible accessibilityLabel={`${a.date}. ${a.type}${a.weather ? `. ${a.weather}` : ''}`}>
+                <View style={styles.buyerDot} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.buyerActDate}>{a.date}</Text>
+                  <Text style={styles.buyerActType}>{a.type}</Text>
+                  {a.weather ? <Text style={styles.buyerActWeather}>{a.weather}</Text> : null}
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.buyerEmpty}>{t('buyerNoActivities')}</Text>
+          )}
+        </View>
+
+        {data && data.source === 'phone' ? <Text style={styles.buyerEmpty}>{t('buyerOwnCopy')}</Text> : null}
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  buyerCard: { backgroundColor: Colors.card, borderRadius: 20, borderWidth: 1, borderColor: Colors.border, padding: 16, marginTop: 14 },
+  buyerTitle: { fontFamily: FontFamily.bold, fontSize: 16, color: Colors.text },
+  buyerFarm: { fontFamily: FontFamily.medium, fontSize: 15, color: Colors.text, marginTop: 6 },
+  buyerPhoto: { width: 220, height: 220, borderRadius: 16, backgroundColor: Colors.tint },
+  buyerEmpty: { fontSize: 13, color: Colors.textMuted, marginTop: 8 },
+  buyerActivity: { flexDirection: 'row', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  buyerDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: Colors.primary, marginTop: 6 },
+  buyerActDate: { fontSize: 12, color: Colors.textMuted },
+  buyerActType: { fontSize: 15, fontWeight: '700', color: Colors.text },
+  buyerActWeather: { fontSize: 13, color: Colors.primaryDark, marginTop: 2 },
   root: {
     flex: 1,
     backgroundColor: Colors.background,

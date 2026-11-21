@@ -6,6 +6,14 @@
 export const en = {
   // Shared
   notRecorded: 'Not recorded',
+  plTitle: 'Profit and loss',
+  plProfit: 'Profit',
+  plLoss: 'Loss',
+  plMoneyIn: 'Money in (harvest value)',
+  plMoneyOut: 'Money out (costs)',
+  plEstimate: '{count} harvest(s) have no sale value, so the app price is used for them: about ${amount}. Enter the sale value on the harvest to make it exact.',
+  plOtherCurrency: '{count} entry(ies) in Liberian dollars are not counted here.',
+  plEmpty: 'Record a harvest or a cost to see your profit or loss.',
   close: 'Close',
   kg: 'kg',
 
@@ -87,6 +95,33 @@ export const en = {
   planRemoved: 'Your plan is removed.',
   ownRecordsNote: 'These figures come from your own records.',
   noPlanYet: 'You have not saved a plan for {year} yet.',
+
+  // Harvest photos for buyers
+  photosForBuyers: 'Photos for buyers',
+  photosForBuyersHelp: 'Take photos of your harvest. Buyers who scan the QR code of this harvest can see them, together with what you did on your farm.',
+  photoTake: 'Take a photo',
+  photoChoose: 'Choose a photo',
+  photoNone: 'No photos yet.',
+  photoOfProduct: 'Photo of the harvested product',
+  photoShared: 'Buyers can see this',
+  photoWaiting: 'Waiting for a connection',
+  photoRemove: 'Remove',
+  photoRemoveTitle: 'Remove this photo?',
+  photoRemoveAsk: 'Buyers will no longer see it.',
+  photoLimit: 'You can add up to {count} photos for one harvest.',
+  photoFailed: 'The photo could not be saved. Please try again.',
+  photoPermissionTitle: 'Permission needed',
+  photoPermissionCamera: 'Allow the camera so you can take a photo of your harvest.',
+  photoPermissionLibrary: 'Allow access to your photos so you can choose a picture of your harvest.',
+
+  // What a buyer sees
+  buyerPhotos: 'Product photos',
+  buyerNoPhotos: 'The farmer has not added photos yet.',
+  buyerActivities: 'What was done on the farm',
+  buyerNoActivities: 'No farm activities recorded for this harvest.',
+  buyerOwnCopy: 'This is the copy saved on this phone.',
+  buyerFarm: 'Farm',
+  buyerCounty: 'County',
 } as const;
 
 export type StringKey = keyof typeof en;

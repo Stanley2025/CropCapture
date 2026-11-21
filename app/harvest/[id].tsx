@@ -23,12 +23,13 @@ import { localDb } from '../../src/services/storage/localDatabase';
 import { useAppStore } from '../../src/store/useAppStore';
 import { HarvestBatch, QualityInspection, Farm } from '../../src/types/database';
 import { Chip } from '../../src/components/Chip';
+import { HarvestPhotos } from '../../src/components/harvest/HarvestPhotos';
 
 export default function HarvestDetailsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentRole, setRole } = useAppStore();
+  const { currentRole, setRole, isOfflineMode } = useAppStore();
 
   const [harvest, setHarvest] = useState<HarvestBatch | null>(null);
   const [farm, setFarm] = useState<Farm | null>(null);
@@ -222,6 +223,9 @@ export default function HarvestDetailsScreen() {
           </View>
 
           {/* Quality & Traceability Link Card */}
+          {/* Pictures of the product: buyers who scan this harvest's QR code can see them */}
+          {harvest ? <HarvestPhotos harvest={harvest} offline={isOfflineMode} /> : null}
+
           <TouchableOpacity
             style={styles.traceabilityCard}
             onPress={() => router.push(`/traceability/${activeBatch.qr_token || 'AGR-SEC-77491-VERIFIED'}` as any)}

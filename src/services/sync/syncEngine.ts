@@ -79,6 +79,7 @@ export class SyncEngine {
       season_weather: 4,
       harvest: 5,
       inspection: 6,
+      harvest_photo: 6,
     };
 
     pendingItems.sort((a, b) => {
@@ -192,6 +193,10 @@ export class SyncEngine {
       if (clean.crop_variety_id && !isValidUUID(clean.crop_variety_id)) {
         clean.crop_variety_id = null;
       }
+    } else if (entityType === 'harvest_photo') {
+      // phone-only fields: the file path on this phone and whether it has been uploaded
+      delete clean.local_uri;
+      delete clean.uploaded;
     } else if (entityType === 'inspection') {
       delete clean.batch;
       delete clean.results;
@@ -236,6 +241,7 @@ export class SyncEngine {
       farmer: 'farmers',
       season: 'farm_seasons',
       farm_plan: 'farm_plans',
+      harvest_photo: 'harvest_photos',
       activity: 'farm_activities',
       input: 'input_records',
       expense: 'expenses',

@@ -379,6 +379,7 @@ export interface AppNotification {
 }
 
 export type { FarmPlan } from '../shared/farmPlan';
+export type { HarvestPhoto } from '../shared/harvestPhotos';
 
 // Season record (field, planting, labour, problems, harvest outcomes) and per-season weather.
 // Defined in the shared modules so the app and tests use one set of rules.
