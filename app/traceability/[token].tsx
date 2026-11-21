@@ -66,7 +66,13 @@ export default function PublicTraceabilityScreen() {
     );
   }
 
-  const isApproved = harvest.status === 'approved';
+  const isServerVerified = Boolean(
+    harvest.is_server_verified ||
+    harvest.server_signature ||
+    (harvest.status === 'approved' && !harvest.is_offline_pending && !harvest.batch_reference.startsWith('PENDING-'))
+  );
+  const isApproved = harvest.status === 'approved' && isServerVerified;
+  const isUnsynced = Boolean(harvest.is_offline_pending || harvest.batch_reference.startsWith('PENDING-'));
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -85,17 +91,28 @@ export default function PublicTraceabilityScreen() {
           ]}
         >
           <Ionicons
-            name={isApproved ? 'checkmark-circle' : 'time-outline'}
+            name={isApproved ? 'checkmark-circle' : isUnsynced ? 'alert-circle' : 'time-outline'}
             size={36}
-            color={isApproved ? '#047857' : '#B45309'}
+            color={isApproved ? '#047857' : isUnsynced ? '#DC2626' : '#B45309'}
           />
           <View style={{ marginLeft: Spacing.sm, flex: 1 }}>
-            <Text style={[styles.statusBannerTitle, isApproved ? { color: '#047857' } : { color: '#B45309' }]}>
-              {isApproved ? 'VERIFIED QUALITY RECORD' : 'HARVEST RECORD PENDING VERIFICATION'}
+            <Text
+              style={[
+                styles.statusBannerTitle,
+                isApproved ? { color: '#047857' } : isUnsynced ? { color: '#DC2626' } : { color: '#B45309' },
+              ]}
+            >
+              {isApproved
+                ? 'VERIFIED QUALITY RECORD'
+                : isUnsynced
+                ? 'NOT VERIFIED YET (UNSYNCED BATCH)'
+                : 'HARVEST RECORD PENDING VERIFICATION'}
             </Text>
             <Text style={styles.statusBannerSub}>
               {isApproved
                 ? 'Inspected and certified in accordance with Republic of Liberia standard grading protocols.'
+                : isUnsynced
+                ? 'This harvest batch was created offline on a mobile device and has not yet synced to the national cloud registry. Official certification cannot be validated until synchronized.'
                 : 'Batch submitted by producer. Awaiting formal inspection by certified authority.'}
             </Text>
           </View>
@@ -105,12 +122,16 @@ export default function PublicTraceabilityScreen() {
         <Card style={styles.certCard}>
           <View style={styles.certHeader}>
             <View>
-              <Text style={styles.registryTag}>PUBLIC RECORD ARCHIVE</Text>
-              <Text style={styles.batchRef}>{harvest.batch_reference}</Text>
+              <Text style={styles.registryTag}>
+                {isUnsynced ? 'LOCAL OFFLINE RECORD' : 'PUBLIC RECORD ARCHIVE'}
+              </Text>
+              <Text style={styles.batchRef}>
+                {isUnsynced ? 'Pending number' : harvest.batch_reference}
+              </Text>
             </View>
             <Badge
-              label={harvest.status.toUpperCase()}
-              variant={isApproved ? 'success' : 'warning'}
+              label={isApproved ? 'VERIFIED' : isUnsynced ? 'NOT VERIFIED YET' : 'PENDING INSPECTION'}
+              variant={isApproved ? 'success' : isUnsynced ? 'danger' : 'warning'}
             />
           </View>
 
@@ -139,7 +160,9 @@ export default function PublicTraceabilityScreen() {
           </View>
 
           <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Certified Quantity</Text>
+            <Text style={styles.fieldLabel}>
+              {isApproved ? 'Certified Quantity' : 'Reported Quantity'}
+            </Text>
             <Text style={styles.fieldValue}>
               {harvest.quantity.toLocaleString()} {harvest.unit}
             </Text>
@@ -147,12 +170,21 @@ export default function PublicTraceabilityScreen() {
 
           <View style={styles.fieldRow}>
             <Text style={styles.fieldLabel}>Inspection Outcome</Text>
-            <Text style={[styles.fieldValue, { color: isApproved ? Colors.primaryDark : Colors.warning }]}>
-              {inspection ? inspection.final_grade.replace('_', ' ').toUpperCase() : 'PENDING REVIEW'}
+            <Text
+              style={[
+                styles.fieldValue,
+                { color: isApproved ? Colors.primaryDark : isUnsynced ? Colors.danger : Colors.warning },
+              ]}
+            >
+              {isApproved && inspection
+                ? inspection.final_grade.replace('_', ' ').toUpperCase()
+                : isUnsynced
+                ? 'NOT VERIFIED YET'
+                : 'PENDING REVIEW'}
             </Text>
           </View>
 
-          {inspection && (
+          {isApproved && inspection && (
             <View style={styles.fieldRow}>
               <Text style={styles.fieldLabel}>Date of Inspection</Text>
               <Text style={styles.fieldValue}>
@@ -164,9 +196,15 @@ export default function PublicTraceabilityScreen() {
           <View style={styles.divider} />
 
           <View style={styles.securitySeal}>
-            <Ionicons name="shield-checkmark" size={16} color={Colors.primary} />
+            <Ionicons
+              name={isApproved ? 'shield-checkmark' : 'warning-outline'}
+              size={16}
+              color={isApproved ? Colors.primary : Colors.warning}
+            />
             <Text style={styles.securityText}>
-              Digital Passport Token: {harvest.qr_token}
+              {isApproved
+                ? `Digital Passport Token: ${harvest.qr_token}`
+                : 'Offline Draft — Pending synchronization and official certificate signing'}
             </Text>
           </View>
         </Card>

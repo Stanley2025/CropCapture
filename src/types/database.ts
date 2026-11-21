@@ -213,6 +213,12 @@ export interface ExpenseRecord {
   expense_date: string;
   description?: string | null;
   created_at: string;
+  updated_at?: string;
+  revision_number?: number;
+  parent_record_id?: string | null;
+  is_latest?: boolean;
+  server_version?: number;
+  deleted_at?: string | null;
   farm?: Farm;
   season?: FarmSeason;
 }
@@ -237,6 +243,14 @@ export interface HarvestBatch {
   qr_token: string;
   created_at: string;
   updated_at: string;
+  is_offline_pending?: boolean;
+  is_server_verified?: boolean;
+  server_signature?: string | null;
+  revision_number?: number;
+  parent_record_id?: string | null;
+  is_latest?: boolean;
+  server_version?: number;
+  deleted_at?: string | null;
   crop?: Crop;
   variety?: CropVariety;
   farm?: Farm;
@@ -276,6 +290,9 @@ export interface QualityInspection {
   inspection_date: string;
   final_grade: QualityGrade;
   decision_status: 'approved' | 'rejected' | 'requires_reinspection' | 'pending';
+  certified_by?: string | null;
+  server_version?: number;
+  deleted_at?: string | null;
   observations?: string | null;
   report_url?: string | null;
   sync_status: SyncStatusType;

@@ -413,16 +413,24 @@ export class LocalDatabase {
   public async saveHarvest(harvest: HarvestBatch, queueSync = true): Promise<HarvestBatch> {
     const harvests = await this.getItems<HarvestBatch>(STORAGE_KEYS.HARVESTS);
     const index = harvests.findIndex((h) => h.id === harvest.id);
+    const isVerified = Boolean(harvest.is_server_verified || harvest.server_signature);
+    const enrichedHarvest: HarvestBatch = {
+      ...harvest,
+      is_offline_pending: queueSync ? !isVerified : Boolean(harvest.is_offline_pending),
+      is_server_verified: isVerified,
+      updated_at: new Date().toISOString(),
+    };
+
     if (index >= 0) {
-      harvests[index] = { ...harvest, updated_at: new Date().toISOString() };
+      harvests[index] = enrichedHarvest;
     } else {
-      harvests.unshift(harvest);
+      harvests.unshift(enrichedHarvest);
     }
     await this.setItems(STORAGE_KEYS.HARVESTS, harvests);
     if (queueSync) {
-      await this.addToSyncQueue('harvest', index >= 0 ? 'update' : 'create', harvest);
+      await this.addToSyncQueue('harvest', index >= 0 ? 'update' : 'create', enrichedHarvest);
     }
-    return harvest;
+    return enrichedHarvest;
   }
 
   // --- INSPECTIONS ---

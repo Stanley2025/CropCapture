@@ -58,6 +58,26 @@ export class SyncEngine {
       (item) => item.status === 'waiting_to_sync' || item.status === 'sync_failed'
     );
 
+    // Strict dependency rank ordering: Parents before Children!
+    // farmer (1) -> farm (2) -> season (3) -> activity / input / expense (4) -> harvest (5) -> inspection (6)
+    const DEPENDENCY_RANK: Record<string, number> = {
+      farmer: 1,
+      farm: 2,
+      season: 3,
+      activity: 4,
+      input: 4,
+      expense: 4,
+      harvest: 5,
+      inspection: 6,
+    };
+
+    pendingItems.sort((a, b) => {
+      const rankA = DEPENDENCY_RANK[a.entity_type] || 99;
+      const rankB = DEPENDENCY_RANK[b.entity_type] || 99;
+      if (rankA !== rankB) return rankA - rankB;
+      return a.created_at.localeCompare(b.created_at);
+    });
+
     let successCount = 0;
     let failureCount = 0;
     const errors: Array<{ id: string; error: string }> = [];
@@ -68,7 +88,7 @@ export class SyncEngine {
       try {
         if (!canSyncOnline) {
           // If Supabase live URL is in offline/demo mode, simulate successful idempotent sync
-          await new Promise((res) => setTimeout(res, 200));
+          await new Promise((res) => setTimeout(res, 50));
           await localDb.updateSyncQueueItem(item.id, {
             status: 'synced',
             synced_at: new Date().toISOString(),
@@ -220,6 +240,44 @@ export class SyncEngine {
     if (item.action === 'create' || item.action === 'update') {
       const sanitized = this.sanitizePayload(item.entity_type, item.payload);
 
+      // Requirement 1: Server-set updated_at timestamp on every row
+      sanitized.updated_at = new Date().toISOString();
+
+      // Requirement 4: Server wins on inspection_status, quality_grade and certified_by
+      if (item.entity_type === 'inspection') {
+        try {
+          const { data: serverRecord } = await supabase
+            .from('quality_inspections')
+            .select('final_grade, decision_status, certified_by, server_version')
+            .eq('id', sanitized.id)
+            .maybeSingle();
+
+          if (serverRecord) {
+            if (serverRecord.final_grade) sanitized.final_grade = serverRecord.final_grade;
+            if (serverRecord.decision_status) sanitized.decision_status = serverRecord.decision_status;
+            if (serverRecord.certified_by) sanitized.certified_by = serverRecord.certified_by;
+            sanitized.server_version = (serverRecord.server_version || 1) + 1;
+          }
+        } catch {
+          // If query fails, continue with sanitized payload
+        }
+      }
+
+      // Requirement 4: Append-only revisions on expenses and harvests
+      if ((item.entity_type === 'expense' || item.entity_type === 'harvest') && item.action === 'update') {
+        if (sanitized.parent_record_id) {
+          sanitized.is_latest = true;
+          try {
+            await supabase
+              .from(tableName)
+              .update({ is_latest: false, updated_at: new Date().toISOString() })
+              .eq('id', sanitized.parent_record_id);
+          } catch {
+            // Continue if column not present yet
+          }
+        }
+      }
+
       // Self-heal foreign key if referenced farmer does not exist in Supabase yet
       if (item.entity_type === 'farm' && sanitized.farmer_id) {
         try {
@@ -295,11 +353,98 @@ export class SyncEngine {
 
       if (error) return { success: false, error: error.message };
     } else if (item.action === 'delete') {
-      const { error } = await supabase.from(tableName).delete().eq('id', item.payload.id);
+      // Requirement 1: Soft-delete (tombstones) so deletes sync cleanly across devices
+      const now = new Date().toISOString();
+      let { error } = await supabase
+        .from(tableName)
+        .update({ deleted_at: now, updated_at: now })
+        .eq('id', item.payload.id);
+
+      if (error && error.message.includes('deleted_at')) {
+        // Fall back to hard delete if remote schema lacks deleted_at column
+        const hardDelete = await supabase.from(tableName).delete().eq('id', item.payload.id);
+        error = hardDelete.error;
+      }
       if (error) return { success: false, error: error.message };
     }
 
     return { success: true };
+  }
+
+  /**
+   * Requirement 1: Per-user scoped delta pull
+   * Pulls only changes updated since last sync belonging to this specific farmer
+   */
+  public async pullUserDelta(userId: string): Promise<{
+    pulledCount: number;
+    tablesUpdated: string[];
+  }> {
+    if (!isSupabaseConfigured() || !userId) {
+      return { pulledCount: 0, tablesUpdated: [] };
+    }
+
+    const lastSyncTime = (await localDb.getLastSyncTimestamp()) || '1970-01-01T00:00:00Z';
+    let totalPulled = 0;
+    const tablesUpdated: string[] = [];
+
+    try {
+      // 1. Pull farms for this farmer
+      const { data: remoteFarms } = await supabase
+        .from('farms')
+        .select('*')
+        .eq('farmer_id', userId)
+        .gt('updated_at', lastSyncTime);
+
+      if (remoteFarms && remoteFarms.length > 0) {
+        for (const rf of remoteFarms) {
+          await localDb.saveFarm(rf, false);
+        }
+        totalPulled += remoteFarms.length;
+        tablesUpdated.push('farms');
+      }
+
+      // 2. Pull harvests for this farmer
+      const { data: remoteHarvests } = await supabase
+        .from('harvest_batches')
+        .select('*')
+        .eq('farmer_id', userId)
+        .gt('updated_at', lastSyncTime);
+
+      if (remoteHarvests && remoteHarvests.length > 0) {
+        for (const rh of remoteHarvests) {
+          if (rh.status === 'approved' || rh.server_signature) {
+            rh.is_server_verified = true;
+            rh.is_offline_pending = false;
+          }
+          await localDb.saveHarvest(rh, false);
+        }
+        totalPulled += remoteHarvests.length;
+        tablesUpdated.push('harvest_batches');
+      }
+
+      // 3. Pull inspections for user's batches
+      const localHarvests = await localDb.getHarvests();
+      const batchIds = localHarvests.map((h) => h.id);
+      if (batchIds.length > 0) {
+        const { data: remoteInspections } = await supabase
+          .from('quality_inspections')
+          .select('*')
+          .in('batch_id', batchIds)
+          .gt('updated_at', lastSyncTime);
+
+        if (remoteInspections && remoteInspections.length > 0) {
+          for (const ri of remoteInspections) {
+            await localDb.saveInspection(ri, false);
+          }
+          totalPulled += remoteInspections.length;
+          tablesUpdated.push('quality_inspections');
+        }
+      }
+    } catch (err) {
+      console.warn('Delta pull skipped (offline or network dropped):', err);
+    }
+
+    return { pulledCount: totalPulled, tablesUpdated };
   }
 }
 

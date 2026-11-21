@@ -88,13 +88,19 @@ export default function HarvestDetailsScreen() {
     router.push(`/inspector/inspect/${harvest.id}` as any);
   };
 
-  const isApproved = harvest.status === 'approved';
+  const isServerVerified = Boolean(
+    harvest.is_server_verified ||
+    harvest.server_signature ||
+    (harvest.status === 'approved' && !harvest.is_offline_pending && !harvest.batch_reference.startsWith('PENDING-'))
+  );
+  const isApproved = harvest.status === 'approved' && isServerVerified;
   const isRejected = harvest.status === 'rejected';
+  const isPendingNumber = Boolean(harvest.is_offline_pending || harvest.batch_reference.startsWith('PENDING-'));
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <Header
-        title={harvest.batch_reference}
+        title={isPendingNumber ? 'Pending number' : harvest.batch_reference}
         subtitle="Batch specification & QR passport"
         showBack
         rightAction={
@@ -108,15 +114,29 @@ export default function HarvestDetailsScreen() {
         {/* QR Code Passport Hero */}
         <Card style={styles.qrCard}>
           <View style={styles.qrHeaderRow}>
-            <View>
-              <Text style={styles.passportLabel}>OFFICIAL QR PASSPORT</Text>
-              <Text style={styles.batchRefText}>{harvest.batch_reference}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.passportLabel, !isServerVerified && { color: '#B45309' }]}>
+                {isServerVerified ? 'OFFICIAL VERIFIED PASSPORT' : 'NOT VERIFIED YET'}
+              </Text>
+              <Text style={styles.batchRefText}>
+                {isPendingNumber ? 'Pending number' : harvest.batch_reference}
+              </Text>
             </View>
             <Badge
-              label={harvest.status.replace('_', ' ')}
-              variant={isApproved ? 'success' : isRejected ? 'danger' : 'warning'}
+              label={isServerVerified ? 'VERIFIED' : 'NOT VERIFIED YET'}
+              variant={isServerVerified ? 'success' : 'warning'}
             />
           </View>
+
+          {!isServerVerified && (
+            <View style={{ backgroundColor: '#FEF3C7', padding: Spacing.sm, borderRadius: Radius.sm, marginTop: Spacing.xs, marginBottom: Spacing.sm }}>
+              <Text style={{ fontSize: Typography.sizes.xs, color: '#92400E', fontWeight: '500' }}>
+                {isPendingNumber
+                  ? 'Recorded offline on this phone. A permanent batch number will be assigned upon synchronization.'
+                  : 'Pending national registry synchronization and official inspector certification.'}
+              </Text>
+            </View>
+          )}
 
           <View style={styles.qrWrapper}>
             <View style={styles.qrFrame}>
