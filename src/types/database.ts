@@ -180,6 +180,10 @@ export interface FarmActivity {
   labor_count: number;
   photo_url?: string | null;
   recorded_by?: string | null;
+  /** Weather the farmer saw that day. All three are optional and null on older records. */
+  weather_sky?: 'sunny' | 'cloudy' | 'rain' | 'heavy_rain' | null;
+  rain_mm?: number | null;
+  day_feel?: 'cool' | 'warm' | 'hot' | null;
   sync_status: SyncStatusType;
   created_at: string;
   updated_at: string;
@@ -236,6 +240,9 @@ export interface HarvestBatch {
   unit: string;
   total_value?: number | null;
   unit_price?: number | null;
+  /** Quantity in kg (local units such as cups and tins are converted when recorded). */
+  quantity_kg?: number | null;
+  kg_per_unit?: number | null;
   storage_location?: string | null;
   photo_url?: string | null;
   observations?: string | null;
@@ -370,3 +377,13 @@ export interface AppNotification {
   is_read: boolean;
   created_at: string;
 }
+
+// Season record (field, planting, labour, problems, harvest outcomes) and per-season weather.
+// Defined in the shared modules so the app and tests use one set of rules.
+export type {
+  SeasonDetails,
+  SeasonLabor,
+  SeasonProblem,
+  SeasonDisposal,
+} from '../shared/seasonRecord';
+export type { SeasonWeather } from '../shared/seasonWeather';

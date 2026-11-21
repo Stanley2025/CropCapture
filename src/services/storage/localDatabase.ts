@@ -14,6 +14,7 @@ import {
   County,
   District,
 } from '../../types/database';
+import { normalizeActivity } from '../../shared/activityWeather';
 import {
   COUNTIES,
   DISTRICTS,
@@ -23,7 +24,20 @@ import {
 
 export interface SyncQueueItem {
   id: string; // client uuid
-  entity_type: 'farm' | 'season' | 'activity' | 'input' | 'expense' | 'harvest' | 'inspection' | 'farmer';
+  entity_type:
+    | 'farm'
+    | 'season'
+    | 'activity'
+    | 'input'
+    | 'expense'
+    | 'harvest'
+    | 'inspection'
+    | 'farmer'
+    | 'season_details'
+    | 'season_labor'
+    | 'season_problem'
+    | 'season_disposal'
+    | 'season_weather';
   action: 'create' | 'update' | 'delete';
   payload: any;
   status: SyncStatusType;
@@ -47,6 +61,21 @@ const STORAGE_KEYS = {
   DISTRICTS: '@agritrack_districts',
   SYNC_QUEUE: '@agritrack_sync_queue',
   LAST_SYNC: '@agritrack_last_sync_time',
+  SEASON_DETAILS: '@agritrack_season_details',
+  SEASON_LABOR: '@agritrack_season_labor',
+  SEASON_PROBLEMS: '@agritrack_season_problems',
+  SEASON_DISPOSALS: '@agritrack_season_disposals',
+  SEASON_WEATHER: '@agritrack_season_weather',
+};
+
+/** The records that hang off a season (see src/shared/seasonRecord.js and seasonWeather.js). */
+export type SeasonRecordKind = 'details' | 'labor' | 'problem' | 'disposal' | 'weather';
+const SEASON_RECORD_STORE: Record<SeasonRecordKind, { key: string; entity: SyncQueueItem['entity_type'] }> = {
+  details: { key: STORAGE_KEYS.SEASON_DETAILS, entity: 'season_details' },
+  labor: { key: STORAGE_KEYS.SEASON_LABOR, entity: 'season_labor' },
+  problem: { key: STORAGE_KEYS.SEASON_PROBLEMS, entity: 'season_problem' },
+  disposal: { key: STORAGE_KEYS.SEASON_DISPOSALS, entity: 'season_disposal' },
+  weather: { key: STORAGE_KEYS.SEASON_WEATHER, entity: 'season_weather' },
 };
 
 // Generates cryptographically safe UUID v4
@@ -59,49 +88,11 @@ export function generateUUID(): string {
 }
 
 /**
- * Unified Official Batch ID Standard:
- * LR-[COUNTY 3]-[DISTRICT 3]-[CROP 4-6]-[YEAR 4]-[6-DIGIT-SEQ]
- * Example: LR-NIM-SAN-COCOA-2026-000124
- *
- * For offline creation before server synchronization, assigns a temporary pending reference:
- * PENDING-LR-[CROP]-[YEAR]-[HEX6]
- * (UI will display "Pending number" until server assigns official unique sequence)
+ * Unified Official Batch ID Standard (LR-[COUNTY]-[DISTRICT]-[CROP]-[YEAR]-[SEQ]).
+ * Implementation lives in the shared module so the USSD channel generates
+ * identical references. Re-exported here to keep existing imports working.
  */
-export function generateBatchReference(
-  cropCode: string,
-  optionsOrSeq?:
-    | number
-    | {
-        countyCode?: string;
-        districtCode?: string;
-        sequenceNum?: number;
-        isOfflinePending?: boolean;
-      }
-): string {
-  const year = new Date().getFullYear();
-  const cleanCrop = (cropCode || 'GEN').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
-
-  if (typeof optionsOrSeq === 'object' && optionsOrSeq.isOfflinePending) {
-    const randomHex = Math.floor(100000 + Math.random() * 900000).toString(16).slice(0, 6).toUpperCase();
-    return `PENDING-LR-${cleanCrop}-${year}-${randomHex}`;
-  }
-
-  const county = (typeof optionsOrSeq === 'object' && optionsOrSeq.countyCode ? optionsOrSeq.countyCode : 'GEN')
-    .toUpperCase()
-    .replace(/[^A-Z]/g, '')
-    .slice(0, 3)
-    .padEnd(3, 'X');
-  const district = (typeof optionsOrSeq === 'object' && optionsOrSeq.districtCode ? optionsOrSeq.districtCode : 'GEN')
-    .toUpperCase()
-    .replace(/[^A-Z]/g, '')
-    .slice(0, 3)
-    .padEnd(3, 'X');
-
-  const seq = typeof optionsOrSeq === 'number' ? optionsOrSeq : optionsOrSeq?.sequenceNum ?? Math.floor(100000 + Math.random() * 900000);
-  const formattedSeq = String(seq).padStart(6, '0');
-
-  return `LR-${county}-${district}-${cleanCrop}-${year}-${formattedSeq}`;
-}
+export { generateBatchReference } from '../../shared/farmRecords';
 
 /**
  * Migration helper: Converts legacy AGR-... and CRP-... batch references into unified LR-... format
@@ -314,8 +305,10 @@ export class LocalDatabase {
 
   // --- ACTIVITIES ---
   public async getActivities(farmerId?: string, farmIds?: string[]): Promise<FarmActivity[]> {
-    const activities = await this.getItems<FarmActivity>(STORAGE_KEYS.ACTIVITIES);
-    if (!activities || activities.length === 0) {
+    // Records saved before the weather fields existed read as null weather (nothing is written back).
+    const stored = await this.getItems<FarmActivity>(STORAGE_KEYS.ACTIVITIES);
+    const activities = (stored || []).map((a) => normalizeActivity(a) as FarmActivity);
+    if (activities.length === 0) {
       return [];
     }
 
@@ -431,6 +424,50 @@ export class LocalDatabase {
       await this.addToSyncQueue('harvest', index >= 0 ? 'update' : 'create', enrichedHarvest);
     }
     return enrichedHarvest;
+  }
+
+  // --- SEASON RECORD (details, labour, problems, harvest outcomes, weather summary) ---
+  public async getSeasonRecords<T extends { season_id: string }>(
+    kind: SeasonRecordKind,
+    seasonIds?: string | string[]
+  ): Promise<T[]> {
+    const rows = await this.getItems<T>(SEASON_RECORD_STORE[kind].key);
+    if (!seasonIds) return rows;
+    const set = new Set(Array.isArray(seasonIds) ? seasonIds : [seasonIds]);
+    return rows.filter((r) => set.has(r.season_id));
+  }
+
+  public async saveSeasonRecord<T extends { id: string }>(
+    kind: SeasonRecordKind,
+    record: T,
+    queueSync = true
+  ): Promise<T> {
+    const { key, entity } = SEASON_RECORD_STORE[kind];
+    const rows = await this.getItems<T>(key);
+    const index = rows.findIndex((r) => r.id === record.id);
+    if (index >= 0) rows[index] = record;
+    else rows.unshift(record);
+    await this.setItems(key, rows);
+    if (queueSync) await this.addToSyncQueue(entity, index >= 0 ? 'update' : 'create', record);
+    return record;
+  }
+
+  public async deleteSeasonRecord(kind: SeasonRecordKind, id: string, queueSync = true): Promise<void> {
+    const { key, entity } = SEASON_RECORD_STORE[kind];
+    const rows = await this.getItems<{ id: string }>(key);
+    await this.setItems(key, rows.filter((r) => r.id !== id));
+    if (queueSync) await this.addToSyncQueue(entity, 'delete', { id });
+  }
+
+  /** ids of records edited on this phone that have not reached the server yet */
+  public async getPendingEntityIds(): Promise<Set<string>> {
+    const queue = await this.getSyncQueue();
+    return new Set(
+      queue
+        .filter((q) => q.status === 'waiting_to_sync' || q.status === 'sync_failed')
+        .map((q) => q.payload && q.payload.id)
+        .filter(Boolean)
+    );
   }
 
   // --- INSPECTIONS ---
