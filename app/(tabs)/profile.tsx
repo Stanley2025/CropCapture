@@ -1,43 +1,93 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
-  Alert,
   Image,
   Modal,
+  Alert,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  Map,
+  Cloud,
+  Bell,
+  Globe,
+  HelpCircle,
+  LogOut,
+  ChevronRight,
+  Camera,
+  Image as ImageIcon,
+  Trash2,
+} from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { Colors, Radius, Spacing, Typography } from '../../src/constants/theme';
+import {
+  Colors,
+  FontFamily,
+  Spacing,
+  Typography,
+  Shadows,
+} from '../../src/constants/theme';
 import { useAppStore } from '../../src/store/useAppStore';
-import { Header } from '../../src/components/Header';
-import { OfflineBanner } from '../../src/components/OfflineBanner';
-import { Card } from '../../src/components/Card';
-import { Badge } from '../../src/components/Badge';
+import { localDb } from '../../src/services/storage/localDatabase';
+import { StatsCard } from '../../src/components/StatsCard';
 
 export default function ProfileScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const {
     currentFarmer,
     currentUserProfile,
     currentRole,
     pendingSyncCount,
-    isOfflineMode,
-    toggleOfflineMode,
     logout,
     updateProfilePhoto,
   } = useAppStore();
 
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [isProcessingPhoto, setIsProcessingPhoto] = useState(false);
+  const [stats, setStats] = useState({ farmsCount: 2, activitiesCount: 3, harvestsCount: 1 });
 
-  const photoUri = currentUserProfile.avatar_url || currentFarmer.photo_url;
+  useEffect(() => {
+    async function loadStats() {
+      try {
+        const [f, a, h] = await Promise.all([
+          localDb.getFarms(),
+          localDb.getActivities(),
+          localDb.getHarvests(),
+        ]);
+        const farmerFarms = currentFarmer?.id
+          ? f.filter((x) => x.farmer_id === currentFarmer.id)
+          : f;
+        setStats({
+          farmsCount: farmerFarms.length || 2,
+          activitiesCount: a.length || 3,
+          harvestsCount: h.length || 1,
+        });
+      } catch (e) {
+        console.warn('Failed to load profile stats:', e);
+      }
+    }
+    loadStats();
+  }, [currentFarmer?.id]);
+
+  const photoUri = currentUserProfile?.avatar_url || currentFarmer?.photo_url;
+  const fullName = currentUserProfile?.full_name || currentFarmer?.full_name || 'Emmanuel Gaye';
+  const farmerCode = currentFarmer?.farmer_id_code || 'AGR-F-000001';
+  const locationStr = `${currentUserProfile?.district || currentFarmer?.district || 'Gbehley'}, ${currentUserProfile?.county || currentFarmer?.county || 'Nimba'}`;
+  const roleName = currentRole.charAt(0).toUpperCase() + currentRole.slice(1).replace('_', ' ');
+
+  const initials = fullName
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'EG';
 
   const handleTakePhoto = async () => {
     try {
@@ -99,7 +149,7 @@ export default function ProfileScreen() {
   const handleRemovePhoto = () => {
     Alert.alert(
       'Remove Photo',
-      'Are you sure you want to remove your profile photo and reset to default?',
+      'Are you sure you want to remove your profile photo and reset to initials?',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -114,682 +164,418 @@ export default function ProfileScreen() {
     );
   };
 
+  const handleLogout = () => {
+    Alert.alert('Log Out', 'Are you sure you want to log out of CropCapture?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Log out',
+        style: 'destructive',
+        onPress: () => {
+          logout();
+          router.replace('/login' as any);
+        },
+      },
+    ]);
+  };
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <Header
-        title={currentRole === 'farmer' ? 'Farmer Profile' : 'Staff Profile'}
-        subtitle="Identification & account settings"
-      />
-      <OfflineBanner />
-
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-        {/* Profile Identity Card */}
-        <Card style={styles.profileCard}>
-          <View style={styles.avatarRow}>
-            <TouchableOpacity
-              style={styles.avatarTouchable}
-              onPress={() => setPhotoModalVisible(true)}
-              activeOpacity={0.8}
-              accessibilityLabel="Tap to change profile photo"
-            >
-              {photoUri ? (
-                <Image source={{ uri: photoUri }} style={styles.avatarImage} />
-              ) : (
-                <View style={styles.avatarCircle}>
-                  <Ionicons name="person" size={38} color={Colors.primary} />
-                </View>
-              )}
-              <View style={styles.cameraBadge}>
-                <Ionicons name="camera" size={12} color="#FFFFFF" />
-              </View>
-            </TouchableOpacity>
-
-            <View style={{ flex: 1, marginLeft: Spacing.md }}>
-              <Text style={styles.farmerName}>{currentUserProfile.full_name || currentFarmer.full_name}</Text>
-              <Text style={styles.farmerLocation}>
-                {currentUserProfile.community || currentFarmer.community}, {currentUserProfile.county || currentFarmer.county}
-              </Text>
-              <View style={styles.idBadgeRow}>
-                <Badge
-                  label={
-                    currentRole === 'farmer'
-                      ? currentFarmer.farmer_id_code
-                      : currentRole === 'extension_officer'
-                      ? 'EXT-LR-0042'
-                      : currentRole === 'quality_inspector'
-                      ? 'INSP-LR-0019'
-                      : 'COOP-MGR-003'
-                  }
-                  variant="gold"
-                  size="sm"
-                />
-                <Badge label={currentRole.replace('_', ' ').toUpperCase()} variant="success" size="sm" />
-              </View>
-
-              <TouchableOpacity
-                style={styles.photoActionBtn}
-                onPress={() => setPhotoModalVisible(true)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="camera-outline" size={13} color={Colors.primary} />
-                <Text style={styles.photoActionText}>
-                  {photoUri ? 'Change Photo' : '+ Add Farmer Photo'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Card>
-
-        {/* Farmer Photo & Digital Identity Card */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="id-card-outline" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Farmer Identity & Digital Passport</Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => setPhotoModalVisible(true)}
-            activeOpacity={0.7}
-          >
-            <View style={styles.actionLeft}>
-              <View style={styles.miniPhotoThumb}>
-                {photoUri ? (
-                  <Image source={{ uri: photoUri }} style={styles.miniThumbImage} />
-                ) : (
-                  <Ionicons name="camera-outline" size={18} color={Colors.primary} />
-                )}
-              </View>
-              <View>
-                <Text style={styles.actionTitle}>Profile Portrait</Text>
-                <Text style={styles.actionSub}>
-                  {photoUri
-                    ? 'Custom photo verified • Tap to update'
-                    : 'No portrait set • Tap to take or choose photo'}
-                </Text>
-              </View>
-            </View>
-            <Badge
-              label={photoUri ? 'ATTACHED' : 'ADD PHOTO'}
-              variant={photoUri ? 'success' : 'warning'}
-              size="sm"
-            />
-          </TouchableOpacity>
-        </Card>
-
-        {/* Cooperative Membership Card */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="people-circle-outline" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Cooperative Affiliation</Text>
-          </View>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Cooperative Name</Text>
-            <Text style={styles.fieldValue}>Nimba Farmers Multipurpose Cooperative</Text>
-          </View>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Member Code</Text>
-            <Text style={styles.fieldValue}>NFMC-01-0082</Text>
-          </View>
-          <View style={styles.fieldRow}>
-            <Text style={styles.fieldLabel}>Central Warehouse</Text>
-            <Text style={styles.fieldValue}>Sanniquellie-Mahn Regional Depot</Text>
-          </View>
-        </Card>
-
-        {/* Assigned Role Workspace */}
-        {(currentRole === 'quality_inspector' || currentRole === 'extension_officer') && (
-          <Card style={styles.sectionCard}>
-            <View style={styles.sectionHeaderRow}>
-              <Ionicons name="shield-outline" size={20} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>Assigned Role Workspace</Text>
-            </View>
-
-            {currentRole === 'quality_inspector' && (
-              <TouchableOpacity
-                style={styles.actionRow}
-                onPress={() => router.push('/inspector' as any)}
-              >
-                <View style={styles.actionLeft}>
-                  <Ionicons name="shield-checkmark" size={20} color={Colors.primary} />
-                  <View>
-                    <Text style={styles.actionTitle}>Inspector Workspace</Text>
-                    <Text style={styles.actionSub}>Conduct formal grading & certificate issuance</Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-              </TouchableOpacity>
-            )}
-
-            {currentRole === 'extension_officer' && (
-              <TouchableOpacity
-                style={styles.actionRow}
-                onPress={() => router.push('/extension' as any)}
-              >
-                <View style={styles.actionLeft}>
-                  <Ionicons name="navigate" size={20} color={Colors.primary} />
-                  <View>
-                    <Text style={styles.actionTitle}>Extension Officer Workspace</Text>
-                    <Text style={styles.actionSub}>Monitor assigned parcels & issue advisories</Text>
-                  </View>
-                </View>
-                <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-              </TouchableOpacity>
-            )}
-          </Card>
-        )}
-
-        {/* System & Offline Data Tools */}
-        <Card style={styles.sectionCard}>
-          <View style={styles.sectionHeaderRow}>
-            <Ionicons name="settings-outline" size={20} color={Colors.primary} />
-            <Text style={styles.sectionTitle}>Data Tools & Synchronization</Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => router.push('/splash' as any)}
-          >
-            <View style={styles.actionLeft}>
-              <Ionicons name="images-outline" size={20} color={Colors.primary} />
-              <View>
-                <Text style={styles.actionTitle}>App Story & Visual Tour</Text>
-                <Text style={styles.actionSub}>View the 4-part illustrated harvest walkthrough</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => router.push('/sync-center' as any)}
-          >
-            <View style={styles.actionLeft}>
-              <Ionicons name="cloud-done-outline" size={20} color={Colors.primary} />
-              <View>
-                <Text style={styles.actionTitle}>Offline Synchronization Center</Text>
-                <Text style={styles.actionSub}>
-                  {pendingSyncCount > 0 ? `${pendingSyncCount} record(s) queued` : 'Local SQLite synchronized'}
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => router.push('/inputs-expenses' as any)}
-          >
-            <View style={styles.actionLeft}>
-              <Ionicons name="wallet-outline" size={20} color={Colors.primary} />
-              <View>
-                <Text style={styles.actionTitle}>Inputs & Operating Expenses</Text>
-                <Text style={styles.actionSub}>USD and LRD cost ledgers</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={() => router.push('/reports' as any)}
-          >
-            <View style={styles.actionLeft}>
-              <Ionicons name="bar-chart-outline" size={20} color={Colors.primary} />
-              <View>
-                <Text style={styles.actionTitle}>Production Reports & Analytics</Text>
-                <Text style={styles.actionSub}>Exportable seasonal summaries</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.actionRow}
-            onPress={toggleOfflineMode}
-          >
-            <View style={styles.actionLeft}>
-              <Ionicons
-                name={isOfflineMode ? 'cloud-offline' : 'cloud-done'}
-                size={20}
-                color={isOfflineMode ? Colors.warning : Colors.accent}
-              />
-              <View>
-                <Text style={styles.actionTitle}>
-                  {isOfflineMode ? 'Disable Forced Offline Mode' : 'Enable Forced Offline Mode'}
-                </Text>
-                <Text style={styles.actionSub}>
-                  {isOfflineMode ? 'Currently operating offline' : 'Currently operating with online sync'}
-                </Text>
-              </View>
-            </View>
-            <Badge label={isOfflineMode ? 'OFFLINE' : 'ONLINE'} variant={isOfflineMode ? 'warning' : 'success'} size="sm" />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.actionRow, { borderBottomWidth: 0 }]}
-            onPress={() => {
-              Alert.alert('Sign Out', 'Are you sure you want to log out of CropCapture?', [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                  text: 'Sign Out',
-                  style: 'destructive',
-                  onPress: async () => {
-                    await logout();
-                    router.replace('/login');
-                  },
-                },
-              ]);
-            }}
-          >
-            <View style={styles.actionLeft}>
-              <Ionicons name="log-out-outline" size={20} color={Colors.danger} />
-              <View>
-                <Text style={[styles.actionTitle, { color: Colors.danger }]}>Sign Out</Text>
-                <Text style={styles.actionSub}>Log out and return to Login</Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={Colors.danger} />
-          </TouchableOpacity>
-        </Card>
-
-        {/* Application About & Build Info */}
-        <View style={styles.aboutBox}>
-          <Text style={styles.aboutTitle}>CropCapture Mobile App</Text>
-          <Text style={styles.aboutTagline}>Every Farm Recorded. Every Harvest Measured. Every Quality Verified.</Text>
-          <Text style={styles.aboutVersion}>Version 1.0.0 • React Native Expo • Offline-First Engine</Text>
+    <View style={styles.root}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Top Curved Green Header */}
+        <View style={[styles.headerCurve, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
+          <Text style={styles.headerTitle}>Profile</Text>
         </View>
 
-        <View style={{ height: Spacing.xxl }} />
+        {/* Circular Avatar Overlapping Green Header */}
+        <View style={styles.avatarOverlapContainer}>
+          <TouchableOpacity
+            style={styles.avatarBubble}
+            onPress={() => setPhotoModalVisible(true)}
+            activeOpacity={0.85}
+            accessibilityLabel="Profile photo"
+          >
+            {photoUri ? (
+              <Image source={{ uri: photoUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarInitials}>{initials}</Text>
+            )}
+            <View style={styles.cameraIconBadge}>
+              <Camera size={14} color="#FFFFFF" strokeWidth={2.4} />
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Farmer Name & Details */}
+        <View style={styles.farmerDetailsSection}>
+          <Text style={styles.farmerName}>{fullName}</Text>
+          <Text style={styles.farmerSubtitle}>
+            {roleName} • {farmerCode} • {locationStr}
+          </Text>
+        </View>
+
+        {/* 3-Column Stats Card */}
+        <View style={styles.statsCardWrapper}>
+          <StatsCard
+            stats={[
+              {
+                value: stats.farmsCount,
+                label: 'Farms',
+                onPress: () => router.push('/farms' as any),
+              },
+              {
+                value: stats.activitiesCount,
+                label: 'Activities',
+                onPress: () => router.push('/activities' as any),
+              },
+              {
+                value: stats.harvestsCount,
+                label: 'Harvest',
+                onPress: () => router.push('/harvests' as any),
+              },
+            ]}
+          />
+        </View>
+
+        {/* Settings / Options List Card */}
+        <View style={styles.listCardWrapper}>
+          <View style={styles.listCard}>
+            {/* Row 1: My farms */}
+            <TouchableOpacity
+              style={styles.listRow}
+              onPress={() => router.push('/farms' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.listIconBubble, { backgroundColor: Colors.tintSoft }]}>
+                <Map size={20} color={Colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.listRowTitle}>My farms</Text>
+              <Text style={styles.listRowValue}>{stats.farmsCount}</Text>
+              <ChevronRight size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* Row 2: Sync center */}
+            <TouchableOpacity
+              style={styles.listRow}
+              onPress={() => router.push('/sync-center' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.listIconBubble, { backgroundColor: Colors.tintSoft }]}>
+                <Cloud size={20} color={Colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.listRowTitle}>Sync center</Text>
+              <Text style={styles.listRowValue}>
+                {pendingSyncCount > 0 ? `${pendingSyncCount} waiting` : 'Synced'}
+              </Text>
+              <ChevronRight size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* Row 3: Weather alerts */}
+            <TouchableOpacity
+              style={styles.listRow}
+              onPress={() => router.push('/weather/alerts' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.listIconBubble, { backgroundColor: Colors.tintSoft }]}>
+                <Bell size={20} color={Colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.listRowTitle}>Weather alerts</Text>
+              <Text style={styles.listRowValue}>1 new</Text>
+              <ChevronRight size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* Row 4: Language */}
+            <TouchableOpacity
+              style={styles.listRow}
+              onPress={() => Alert.alert('Language', 'Current language: English (Liberia)')}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.listIconBubble, { backgroundColor: Colors.tintSoft }]}>
+                <Globe size={20} color={Colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.listRowTitle}>Language</Text>
+              <Text style={styles.listRowValue}>English</Text>
+              <ChevronRight size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* Row 5: Help and support */}
+            <TouchableOpacity
+              style={styles.listRow}
+              onPress={() =>
+                Alert.alert(
+                  'Help & Support',
+                  'Ministry of Agriculture Farmer Helpline: 4455\nLocal Extension Officer: Emmanuel Nimba Office\nCropCapture Offline Support: active.'
+                )
+              }
+              activeOpacity={0.7}
+            >
+              <View style={[styles.listIconBubble, { backgroundColor: Colors.tintSoft }]}>
+                <HelpCircle size={20} color={Colors.primary} strokeWidth={2.2} />
+              </View>
+              <Text style={styles.listRowTitle}>Help and support</Text>
+              <ChevronRight size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            {/* Row 6: Log out */}
+            <TouchableOpacity
+              style={styles.listRow}
+              onPress={handleLogout}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.listIconBubble, { backgroundColor: Colors.dangerBg }]}>
+                <LogOut size={20} color={Colors.danger} strokeWidth={2.2} />
+              </View>
+              <Text style={[styles.listRowTitle, { color: Colors.danger }]}>Log out</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </ScrollView>
 
-      {/* Photo Picker Modal */}
+      {/* Profile Photo Modal */}
       <Modal
         visible={photoModalVisible}
         transparent
         animationType="fade"
         onRequestClose={() => setPhotoModalVisible(false)}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={() => setPhotoModalVisible(false)}
-        >
-          <View style={styles.modalSheet} onStartShouldSetResponder={() => true}>
-            <View style={styles.modalDragHandle} />
-
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Profile Photo</Text>
-              <TouchableOpacity
-                onPress={() => setPhotoModalVisible(false)}
-                style={styles.modalCloseBtn}
-              >
-                <Ionicons name="close" size={20} color="#64748B" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.modalSubtitle}>
-              Take a new photo or select from your device gallery to personalize your farmer profile passport.
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Profile Photo</Text>
+            <Text style={styles.modalSub}>
+              Take a new photo or select one from your gallery.
             </Text>
 
             {isProcessingPhoto ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={Colors.primary} />
-                <Text style={styles.loadingText}>Saving profile photo...</Text>
-              </View>
+              <ActivityIndicator size="large" color={Colors.primary} style={{ marginVertical: 20 }} />
             ) : (
               <View style={styles.modalOptions}>
-                <TouchableOpacity
-                  style={styles.modalOptionRow}
-                  onPress={handleTakePhoto}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.modalOptionIcon, { backgroundColor: '#DCFCE7' }]}>
-                    <Ionicons name="camera" size={22} color="#15803D" />
-                  </View>
-                  <View style={styles.modalOptionTextWrapper}>
-                    <Text style={styles.modalOptionTitle}>Take Photo with Camera</Text>
-                    <Text style={styles.modalOptionDesc}>Use camera to capture portrait</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                <TouchableOpacity style={styles.modalOptionBtn} onPress={handleTakePhoto}>
+                  <Camera size={20} color={Colors.primary} />
+                  <Text style={styles.modalOptionText}>Take photo</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={[styles.modalOptionRow, !photoUri && { borderBottomWidth: 0 }]}
-                  onPress={handlePickFromGallery}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.modalOptionIcon, { backgroundColor: '#E0F2FE' }]}>
-                    <Ionicons name="images" size={22} color="#0369A1" />
-                  </View>
-                  <View style={styles.modalOptionTextWrapper}>
-                    <Text style={styles.modalOptionTitle}>Choose from Photo Gallery</Text>
-                    <Text style={styles.modalOptionDesc}>Pick an image from your device</Text>
-                  </View>
-                  <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                <TouchableOpacity style={styles.modalOptionBtn} onPress={handlePickFromGallery}>
+                  <ImageIcon size={20} color={Colors.primary} />
+                  <Text style={styles.modalOptionText}>Choose from gallery</Text>
                 </TouchableOpacity>
 
-                {photoUri ? (
-                  <TouchableOpacity
-                    style={[styles.modalOptionRow, { borderBottomWidth: 0 }]}
-                    onPress={handleRemovePhoto}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.modalOptionIcon, { backgroundColor: '#FEE2E2' }]}>
-                      <Ionicons name="trash-outline" size={20} color="#B91C1C" />
-                    </View>
-                    <View style={styles.modalOptionTextWrapper}>
-                      <Text style={[styles.modalOptionTitle, { color: '#B91C1C' }]}>
-                        Remove Photo
-                      </Text>
-                      <Text style={styles.modalOptionDesc}>Reset avatar to default icon</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                {photoUri && (
+                  <TouchableOpacity style={styles.modalOptionBtn} onPress={handleRemovePhoto}>
+                    <Trash2 size={20} color={Colors.danger} />
+                    <Text style={[styles.modalOptionText, { color: Colors.danger }]}>
+                      Remove photo
+                    </Text>
                   </TouchableOpacity>
-                ) : null}
+                )}
               </View>
             )}
 
             <TouchableOpacity
-              style={styles.cancelBtn}
+              style={styles.modalCancelBtn}
               onPress={() => setPhotoModalVisible(false)}
-              activeOpacity={0.7}
             >
-              <Text style={styles.cancelBtnText}>Cancel</Text>
+              <Text style={styles.modalCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
-        </TouchableOpacity>
+        </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: Colors.primaryDark,
-  },
-  container: {
+  root: {
     flex: 1,
     backgroundColor: Colors.background,
   },
-  content: {
-    padding: Spacing.md,
+  scrollView: {
+    flex: 1,
   },
-  profileCard: {
-    marginBottom: Spacing.md,
+  headerCurve: {
+    backgroundColor: Colors.primary,
+    borderBottomLeftRadius: 36,
+    borderBottomRightRadius: 36,
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: 64,
   },
-  avatarRow: {
-    flexDirection: 'row',
+  headerTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 28,
+    color: '#FFFFFF',
+    letterSpacing: -0.5,
+  },
+  avatarOverlapContainer: {
     alignItems: 'center',
+    marginTop: -48,
+    marginBottom: 12,
   },
-  avatarTouchable: {
-    position: 'relative',
-    width: 72,
-    height: 72,
-  },
-  avatarCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: Colors.primaryLight,
+  avatarBubble: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
+    position: 'relative',
+    ...Shadows.card,
   },
   avatarImage: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    backgroundColor: Colors.surfaceAlt,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
   },
-  cameraBadge: {
-    position: 'absolute',
-    bottom: -2,
-    right: -2,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: Colors.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-    elevation: 3,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.25,
-    shadowRadius: 2,
-  },
-  farmerName: {
-    fontSize: Typography.sizes.lg,
-    fontWeight: Typography.weights.bold,
-    color: Colors.text,
-  },
-  farmerLocation: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  idBadgeRow: {
-    flexDirection: 'row',
-    gap: Spacing.xs,
-    marginTop: 6,
-  },
-  photoActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 8,
-    alignSelf: 'flex-start',
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: '#F0FDF4',
-    borderRadius: Radius.sm,
-    borderWidth: 1,
-    borderColor: '#DCFCE7',
-  },
-  photoActionText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  sectionCard: {
-    marginBottom: Spacing.md,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.xs,
-    marginBottom: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-    paddingBottom: Spacing.xs,
-  },
-  sectionTitle: {
-    fontSize: Typography.sizes.sm,
-    fontWeight: Typography.weights.bold,
-    color: Colors.text,
-  },
-  fieldRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.surfaceAlt,
-  },
-  fieldLabel: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textMuted,
-  },
-  fieldValue: {
-    fontSize: Typography.sizes.xs,
-    fontWeight: '700',
-    color: Colors.text,
-    textAlign: 'right',
-    flex: 1,
-    marginLeft: Spacing.sm,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: Spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  actionLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: Spacing.sm,
-    flex: 1,
-  },
-  miniPhotoThumb: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  miniThumbImage: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-  },
-  actionTitle: {
-    fontSize: Typography.sizes.sm,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  actionSub: {
-    fontSize: 11,
-    color: Colors.textMuted,
-    marginTop: 1,
-  },
-  aboutBox: {
-    alignItems: 'center',
-    marginVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-  },
-  aboutTitle: {
-    fontSize: Typography.sizes.sm,
-    fontWeight: '700',
+  avatarInitials: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 32,
     color: Colors.primaryDark,
   },
-  aboutTagline: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textMuted,
-    textAlign: 'center',
-    fontStyle: 'italic',
-    marginTop: 2,
-  },
-  aboutVersion: {
-    fontSize: 10,
-    color: Colors.textMuted,
-    marginTop: 4,
-  },
-  /* Modal Sheet Styles */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.55)',
-    justifyContent: 'flex-end',
-  },
-  modalSheet: {
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: Spacing.lg,
-    paddingBottom: Spacing.xxl,
-  },
-  modalDragHandle: {
-    width: 40,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: '#E2E8F0',
-    alignSelf: 'center',
-    marginBottom: Spacing.md,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  cameraIconBadge: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  farmerDetailsSection: {
+    alignItems: 'center',
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.xl,
+  },
+  farmerName: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 22,
+    color: Colors.text,
+    letterSpacing: -0.3,
     marginBottom: 4,
   },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#0F172A',
+  farmerSubtitle: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.textMuted,
+    textAlign: 'center',
   },
-  modalCloseBtn: {
-    padding: 4,
+  statsCardWrapper: {
+    paddingHorizontal: Spacing.xl,
+    marginBottom: Spacing.xl,
   },
-  modalSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    lineHeight: 18,
-    marginBottom: Spacing.md,
+  listCardWrapper: {
+    paddingHorizontal: Spacing.xl,
   },
-  modalOptions: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: Radius.md,
+  listCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    overflow: 'hidden',
+    borderColor: Colors.border,
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+    ...Shadows.card,
   },
-  modalOptionRow: {
+  listRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    paddingVertical: 14,
+    gap: 14,
   },
-  modalOptionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+  listIconBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 18,
     alignItems: 'center',
-    marginRight: Spacing.md,
+    justifyContent: 'center',
   },
-  modalOptionTextWrapper: {
+  listRowTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: Typography.sizes.base,
+    color: Colors.text,
     flex: 1,
   },
-  modalOptionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
+  listRowValue: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.textMuted,
+    marginRight: 4,
   },
-  modalOptionDesc: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
   },
-  loadingContainer: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: Spacing.xl,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 360,
+    backgroundColor: Colors.card,
+    borderRadius: 24,
+    padding: 24,
+    ...Shadows.card,
+  },
+  modalTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 20,
+    color: Colors.text,
+    marginBottom: 4,
+  },
+  modalSub: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.textMuted,
+    marginBottom: 20,
+  },
+  modalOptions: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  modalOptionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: Colors.inputBg,
+    borderWidth: 1,
+    borderColor: Colors.inputBorder,
+  },
+  modalOptionText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: Colors.text,
+  },
+  modalCancelBtn: {
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loadingText: {
-    marginTop: Spacing.sm,
-    fontSize: 13,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  cancelBtn: {
-    marginTop: Spacing.md,
-    paddingVertical: 12,
-    borderRadius: Radius.md,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-  },
-  cancelBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#475569',
+  modalCancelText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: Colors.textMuted,
   },
 });
