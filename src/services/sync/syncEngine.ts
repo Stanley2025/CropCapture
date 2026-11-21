@@ -1,6 +1,8 @@
-import { localDb, SyncQueueItem } from '../storage/localDatabase';
+import { localDb, SyncQueueItem, SeasonRecordKind } from '../storage/localDatabase';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { SyncStatusType } from '../../types/database';
+import { findCropById } from '../../shared/farmRecords';
+import { upsertDroppingMissingColumns } from '../../shared/columnFallback';
 
 export interface SyncResult {
   totalProcessed: number;
@@ -13,6 +15,8 @@ export interface SyncResult {
 export class SyncEngine {
   private static instance: SyncEngine;
   private isSyncing = false;
+  /** Columns the remote database does not have yet, per table (learned from its errors). */
+  private skippedColumns = new Map<string, Set<string>>();
   private listeners: Array<(status: SyncStatusType) => void> = [];
 
   private constructor() {}
@@ -64,9 +68,15 @@ export class SyncEngine {
       farmer: 1,
       farm: 2,
       season: 3,
+      farm_plan: 3,
       activity: 4,
       input: 4,
       expense: 4,
+      season_details: 4,
+      season_labor: 4,
+      season_problem: 4,
+      season_disposal: 4,
+      season_weather: 4,
       harvest: 5,
       inspection: 6,
     };
@@ -225,11 +235,17 @@ export class SyncEngine {
       farm: 'farms',
       farmer: 'farmers',
       season: 'farm_seasons',
+      farm_plan: 'farm_plans',
       activity: 'farm_activities',
       input: 'input_records',
       expense: 'expenses',
       harvest: 'harvest_batches',
       inspection: 'quality_inspections',
+      season_details: 'season_details',
+      season_labor: 'season_labor',
+      season_problem: 'season_problems',
+      season_disposal: 'season_disposals',
+      season_weather: 'season_weather',
     };
 
     const tableName = tableMap[item.entity_type];
@@ -327,28 +343,18 @@ export class SyncEngine {
         }
       }
 
-      let { error } = await supabase.from(tableName).upsert(sanitized, {
-        onConflict: 'id',
-      });
-
-      // Gracefully retry without status if status column does not exist in remote schema yet
-      if (error && item.entity_type === 'farmer' && error.message.includes('status')) {
-        const withoutStatus = { ...sanitized };
-        delete withoutStatus.status;
-        const retryResult = await supabase.from(tableName).upsert(withoutStatus, {
-          onConflict: 'id',
-        });
-        error = retryResult.error;
-      }
-
-      // Gracefully retry without farming_type if remote Supabase schema has not run migration yet
-      if (error && item.entity_type === 'farm' && error.message.includes('farming_type')) {
-        const withoutFarmingType = { ...sanitized };
-        delete withoutFarmingType.farming_type;
-        const retryResult = await supabase.from(tableName).upsert(withoutFarmingType, {
-          onConflict: 'id',
-        });
-        error = retryResult.error;
+      // If the remote database has not had every migration applied yet, leave out the columns it
+      // does not have and save the rest (instead of failing the whole record). Columns are only
+      // dropped when the database itself says it does not have them.
+      const skip = this.skippedColumns.get(tableName) || new Set<string>();
+      this.skippedColumns.set(tableName, skip);
+      const { error, dropped } = await upsertDroppingMissingColumns(
+        (rows) => supabase.from(tableName).upsert(rows, { onConflict: 'id' }),
+        [sanitized],
+        skip
+      );
+      for (const col of dropped) {
+        console.warn(`Sync: ${tableName}.${col} is not in the remote database yet; saved without it. Apply the pending migrations.`);
       }
 
       if (error) return { success: false, error: error.message };
@@ -372,8 +378,11 @@ export class SyncEngine {
   }
 
   /**
-   * Requirement 1: Per-user scoped delta pull
-   * Pulls only changes updated since last sync belonging to this specific farmer
+   * Per-farmer pull of records written by other channels (USSD, admin, other devices).
+   * Farmer-scoped data is small, so farms/seasons/harvests/expenses are pulled in full
+   * (lastSyncTime is advanced by the push step, so a delta here would miss records).
+   * Remote rows are merged OVER local rows so client-only fields (nested crop/farm,
+   * farming_type, livestock_details...) survive.
    */
   public async pullUserDelta(userId: string): Promise<{
     pulledCount: number;
@@ -386,32 +395,121 @@ export class SyncEngine {
     const lastSyncTime = (await localDb.getLastSyncTimestamp()) || '1970-01-01T00:00:00Z';
     let totalPulled = 0;
     const tablesUpdated: string[] = [];
+    const byId = <T extends { id: string }>(rows: T[]) => new Map(rows.map((r) => [r.id, r]));
 
     try {
-      // 1. Pull farms for this farmer
-      const { data: remoteFarms } = await supabase
-        .from('farms')
-        .select('*')
-        .eq('farmer_id', userId)
-        .gt('updated_at', lastSyncTime);
+      // Records edited on this phone but not uploaded yet must not be overwritten by the server copy.
+      const pending = await localDb.getPendingEntityIds();
 
+      // 1. Farms for this farmer
+      const { data: remoteFarms } = await supabase.from('farms').select('*').eq('farmer_id', userId);
+      const localFarms = await localDb.getFarms();
+      const localFarmMap = byId(localFarms);
       if (remoteFarms && remoteFarms.length > 0) {
         for (const rf of remoteFarms) {
-          await localDb.saveFarm(rf, false);
+          if (pending.has(rf.id)) continue;
+          const local = localFarmMap.get(rf.id);
+          await localDb.saveFarm(
+            { ...local, ...rf, farming_type: rf.farming_type || local?.farming_type || 'crops' },
+            false
+          );
         }
         totalPulled += remoteFarms.length;
         tablesUpdated.push('farms');
       }
 
-      // 2. Pull harvests for this farmer
+      const farmIds = Array.from(
+        new Set([
+          ...(remoteFarms || []).map((f: any) => f.id as string),
+          ...localFarms.filter((f) => f.farmer_id === userId).map((f) => f.id),
+        ])
+      );
+
+      if (farmIds.length > 0) {
+        // 2. Seasons on those farms
+        const { data: remoteSeasons } = await supabase.from('farm_seasons').select('*').in('farm_id', farmIds);
+        if (remoteSeasons && remoteSeasons.length > 0) {
+          const localSeasonMap = byId(await localDb.getSeasons());
+          for (const rs of remoteSeasons) {
+            if (pending.has(rs.id)) continue;
+            const local = localSeasonMap.get(rs.id);
+            await localDb.saveSeason({ crop: findCropById(rs.crop_id) || undefined, ...local, ...rs }, false);
+          }
+          totalPulled += remoteSeasons.length;
+          tablesUpdated.push('farm_seasons');
+        }
+
+        // 2b. The farmer's plans for those farms (a tombstone removes the plan here too)
+        const { data: remotePlans } = await supabase.from('farm_plans').select('*').in('farm_id', farmIds);
+        if (remotePlans && remotePlans.length > 0) {
+          for (const rp of remotePlans) {
+            if (pending.has(rp.id)) continue;
+            if (rp.deleted_at) await localDb.deleteFarmPlan(rp.id, false);
+            else await localDb.saveFarmPlan(rp, false);
+          }
+          totalPulled += remotePlans.length;
+          tablesUpdated.push('farm_plans');
+        }
+
+        // 3. Expenses on those farms
+        const { data: remoteExpenses } = await supabase.from('expenses').select('*').in('farm_id', farmIds);
+        if (remoteExpenses && remoteExpenses.length > 0) {
+          const localExpenseMap = byId(await localDb.getExpenses());
+          for (const re of remoteExpenses) {
+            if (pending.has(re.id)) continue;
+            await localDb.saveExpense({ ...localExpenseMap.get(re.id), ...re }, false);
+          }
+          totalPulled += remoteExpenses.length;
+          tablesUpdated.push('expenses');
+        }
+
+        // 3b. Season record: details, labour, problems, harvest outcomes and the weather SUMMARY
+        const seasonIds = Array.from(
+          new Set([
+            ...(remoteSeasons || []).map((x: any) => x.id as string),
+            ...(await localDb.getSeasons(farmIds)).map((x) => x.id),
+          ])
+        );
+        if (seasonIds.length > 0) {
+          const kinds: Array<[SeasonRecordKind, string]> = [
+            ['details', 'season_details'],
+            ['labor', 'season_labor'],
+            ['problem', 'season_problems'],
+            ['disposal', 'season_disposals'],
+            ['weather', 'season_weather'],
+          ];
+          for (const [kind, table] of kinds) {
+            const { data: rows } = await supabase.from(table).select('*').in('season_id', seasonIds);
+            if (!rows || rows.length === 0) continue;
+            for (const row of rows) {
+              if (pending.has(row.id)) continue;
+              if (row.deleted_at) await localDb.deleteSeasonRecord(kind, row.id, false);
+              else await localDb.saveSeasonRecord(kind, row, false);
+            }
+            totalPulled += rows.length;
+            tablesUpdated.push(table);
+          }
+        }
+      }
+
+      // 4. Harvests for this farmer
       const { data: remoteHarvests } = await supabase
         .from('harvest_batches')
         .select('*')
-        .eq('farmer_id', userId)
-        .gt('updated_at', lastSyncTime);
+        .eq('farmer_id', userId);
 
       if (remoteHarvests && remoteHarvests.length > 0) {
-        for (const rh of remoteHarvests) {
+        const localHarvestMap = byId(await localDb.getHarvests());
+        const farmMap = byId(await localDb.getFarms());
+        for (const remote of remoteHarvests) {
+          if (pending.has(remote.id)) continue;
+          const local = localHarvestMap.get(remote.id);
+          const rh: any = {
+            crop: findCropById(remote.crop_id) || undefined,
+            farm: farmMap.get(remote.farm_id),
+            ...local,
+            ...remote,
+          };
           if (rh.status === 'approved' || rh.server_signature) {
             rh.is_server_verified = true;
             rh.is_offline_pending = false;
@@ -422,7 +520,7 @@ export class SyncEngine {
         tablesUpdated.push('harvest_batches');
       }
 
-      // 3. Pull inspections for user's batches
+      // 5. Pull inspections for user's batches
       const localHarvests = await localDb.getHarvests();
       const batchIds = localHarvests.map((h) => h.id);
       if (batchIds.length > 0) {

@@ -71,6 +71,7 @@ export default function RootLayout() {
         <Stack.Screen name="season/create" options={{ presentation: 'card' }} />
         <Stack.Screen name="season/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="farm-record/[id]" options={{ presentation: 'card' }} />
+        <Stack.Screen name="farm-plan/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="season/compare" options={{ presentation: 'card' }} />
         <Stack.Screen name="activity/record" options={{ presentation: 'card' }} />
         <Stack.Screen name="harvest/register" options={{ presentation: 'card' }} />

@@ -13,6 +13,7 @@ import {
   Profile,
   County,
   District,
+  FarmPlan,
 } from '../../types/database';
 import { normalizeActivity } from '../../shared/activityWeather';
 import {
@@ -37,7 +38,8 @@ export interface SyncQueueItem {
     | 'season_labor'
     | 'season_problem'
     | 'season_disposal'
-    | 'season_weather';
+    | 'season_weather'
+    | 'farm_plan';
   action: 'create' | 'update' | 'delete';
   payload: any;
   status: SyncStatusType;
@@ -66,6 +68,7 @@ const STORAGE_KEYS = {
   SEASON_PROBLEMS: '@agritrack_season_problems',
   SEASON_DISPOSALS: '@agritrack_season_disposals',
   SEASON_WEATHER: '@agritrack_season_weather',
+  FARM_PLANS: '@agritrack_farm_plans',
 };
 
 /** The records that hang off a season (see src/shared/seasonRecord.js and seasonWeather.js). */
@@ -468,6 +471,30 @@ export class LocalDatabase {
         .map((q) => q.payload && q.payload.id)
         .filter(Boolean)
     );
+  }
+
+  // --- FARM PLANS (the farmer's plan for a coming year; one per farm per year) ---
+  public async getFarmPlans(farmId?: string): Promise<FarmPlan[]> {
+    const plans = await this.getItems<FarmPlan>(STORAGE_KEYS.FARM_PLANS);
+    return plans.filter((p) => !p.deleted_at && (!farmId || p.farm_id === farmId));
+  }
+
+  /** Saves the plan on the phone first, then queues it for upload (create the first time, update after). */
+  public async saveFarmPlan(plan: FarmPlan, queueSync = true): Promise<FarmPlan> {
+    const plans = await this.getItems<FarmPlan>(STORAGE_KEYS.FARM_PLANS);
+    const index = plans.findIndex((p) => p.id === plan.id);
+    if (index >= 0) plans[index] = plan;
+    else plans.unshift(plan);
+    await this.setItems(STORAGE_KEYS.FARM_PLANS, plans);
+    if (queueSync) await this.addToSyncQueue('farm_plan', index >= 0 ? 'update' : 'create', plan);
+    return plan;
+  }
+
+  /** Removes the plan here and queues a delete, which the server records as a tombstone (deleted_at). */
+  public async deleteFarmPlan(id: string, queueSync = true): Promise<void> {
+    const plans = await this.getItems<FarmPlan>(STORAGE_KEYS.FARM_PLANS);
+    await this.setItems(STORAGE_KEYS.FARM_PLANS, plans.filter((p) => p.id !== id));
+    if (queueSync) await this.addToSyncQueue('farm_plan', 'delete', { id });
   }
 
   // --- INSPECTIONS ---
