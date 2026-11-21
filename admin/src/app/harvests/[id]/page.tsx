@@ -22,6 +22,7 @@ import {
   FileCheck2,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
+import { HarvestPhotosPanel } from '@/components/harvest/HarvestPhotosPanel';
 import { getHarvestBatches, getQualityInspections } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { HarvestBatch, QualityInspection } from '@/types/database';
@@ -43,8 +44,8 @@ export default function HarvestDetailPage() {
           getHarvestBatches(),
           getQualityInspections(),
         ]);
-        const currentBatch = batches.find((b) => b.id === id) || batches[0];
-        setHarvest(currentBatch);
+        const currentBatch = batches.find((b) => b.id === id);
+        setHarvest(currentBatch || null);
         const relatedInspection = inspections.find((i) => i.batch_id === currentBatch?.id);
         setInspection(relatedInspection || null);
       } finally {
@@ -253,6 +254,8 @@ export default function HarvestDetailPage() {
             )}
           </div>
         </div>
+
+        <HarvestPhotosPanel harvestId={harvest.id} />
       </div>
     </AdminLayout>
   );

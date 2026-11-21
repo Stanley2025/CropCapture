@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { KeyboardAwareScrollView } from '../src/components/KeyboardAwareScrollView';
 import {
   View,
   Text,
@@ -19,6 +20,7 @@ import {
   Shadows,
 } from '../src/constants/theme';
 import { localDb } from '../src/services/storage/localDatabase';
+import { parseScanned } from '../src/shared/buyerLink';
 
 export default function QRScannerScreen() {
   const router = useRouter();
@@ -31,7 +33,7 @@ export default function QRScannerScreen() {
       setRecentBatches(
         all.slice(0, 3).map((h) => ({
           ref: h.batch_reference,
-          token: h.qr_token,
+          token: h.public_code || h.qr_token,
           crop: h.crop?.name || 'Produce',
         }))
       );
@@ -41,11 +43,11 @@ export default function QRScannerScreen() {
   const handleVerify = (tokenToVerify?: string) => {
     const raw = tokenToVerify || manualToken.trim();
     if (!raw) {
-      Alert.alert('Input Required', 'Please enter a batch reference or QR verification token.');
+      Alert.alert('Input Required', 'Please enter a batch reference or the code from the QR link.');
       return;
     }
-    const cleaned = raw.includes('/verify/') ? raw.split('/verify/')[1] : raw;
-    router.push(`/traceability/${cleaned}` as any);
+    // a buyer link (/b/{code}), an older /verify/ link, or a code or batch reference typed by hand
+    router.push(`/traceability/${encodeURIComponent(parseScanned(raw).value)}` as any);
   };
 
   return (
@@ -64,12 +66,12 @@ export default function QRScannerScreen() {
           </TouchableOpacity>
           <View style={{ flex: 1, paddingLeft: 12 }}>
             <Text style={styles.headerTitle}>Scan QR passport</Text>
-            <Text style={styles.headerSub}>Verify batch provenance & quality grade</Text>
+            <Text style={styles.headerSub}>See a harvest's photos and farm activity</Text>
           </View>
         </View>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
@@ -109,14 +111,14 @@ export default function QRScannerScreen() {
             onPress={() => handleVerify()}
             activeOpacity={0.85}
           >
-            <Text style={styles.verifyBtnText}>Verify batch passport</Text>
+            <Text style={styles.verifyBtnText}>Open harvest details</Text>
           </TouchableOpacity>
         </View>
 
         {/* Recent Batches List */}
         {recentBatches.length > 0 && (
           <View style={styles.recentSection}>
-            <Text style={styles.recentSectionTitle}>Recent verified batches</Text>
+            <Text style={styles.recentSectionTitle}>Recent batches</Text>
             <View style={styles.recentCard}>
               {recentBatches.map((b, idx) => {
                 const isLast = idx === recentBatches.length - 1;
@@ -129,7 +131,7 @@ export default function QRScannerScreen() {
                   >
                     <View style={{ flex: 1 }}>
                       <Text style={styles.recentRef}>{b.ref}</Text>
-                      <Text style={styles.recentCrop}>{b.crop} • Verified batch</Text>
+                      <Text style={styles.recentCrop}>{b.crop} • Batch</Text>
                     </View>
                     <ArrowRight size={18} color={Colors.primary} />
                   </TouchableOpacity>
@@ -138,7 +140,7 @@ export default function QRScannerScreen() {
             </View>
           </View>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

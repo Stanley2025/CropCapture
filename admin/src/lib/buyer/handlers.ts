@@ -15,7 +15,7 @@ export const SIGNED_URL_SECONDS = 600;
 export interface ServerClient {
   rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: any; error: any }>;
   from(table: string): any;
-  storage: { from(bucket: string): { createSignedUrls(paths: string[], seconds: number): PromiseLike<{ data: any; error: any }> } };
+  storage: { from(bucket: string): { createSignedUrls(paths: string[], seconds: number): PromiseLike<{ data: any; error: any }>; remove(paths: string[]): PromiseLike<any> } };
 }
 
 /** The server-side database client. Needs SUPABASE_SERVICE_ROLE_KEY, which is never sent to a browser. */
