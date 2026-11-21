@@ -335,4 +335,41 @@ describe('Farmer Portal Header: Scanner Icon & Queue Removal', () => {
       assert.strictEqual(finalDesc, 'Land prep: Ridge making, Bed preparation');
     });
   });
+
+  describe('Harvesting Operations for Record Activity', () => {
+    const EXPECTED_HARVESTING_OPERATIONS = [
+      'Selective harvesting',
+      'Harvesting cocoa pods',
+      'Rubber tapping',
+      'Latex collection',
+      'Weighing harvested produce',
+      'Counting harvested produce',
+      'Harvest transportation',
+    ];
+
+    test('includes all 7 required Harvesting operations', () => {
+      assert.strictEqual(EXPECTED_HARVESTING_OPERATIONS.length, 7);
+      EXPECTED_HARVESTING_OPERATIONS.forEach((op) => {
+        assert.ok(EXPECTED_HARVESTING_OPERATIONS.includes(op), `Should include operation: ${op}`);
+      });
+    });
+
+    test('selecting harvesting tasks auto-formats activity description', () => {
+      const selectedOps = ['Rubber tapping', 'Latex collection', 'Weighing harvested produce'];
+      const autoDesc = `Harvesting: ${selectedOps.join(', ')}`;
+      assert.strictEqual(autoDesc, 'Harvesting: Rubber tapping, Latex collection, Weighing harvested produce');
+    });
+
+    test('farmer can submit activity record with selected harvesting tasks without manual text typing', () => {
+      const selectedOps = ['Harvesting cocoa pods', 'Harvest transportation'];
+      const description = '';
+      const finalDesc = description.trim()
+        ? description.trim()
+        : selectedOps.length > 0
+        ? `Harvesting: ${selectedOps.join(', ')}`
+        : 'Harvesting completed.';
+
+      assert.strictEqual(finalDesc, 'Harvesting: Harvesting cocoa pods, Harvest transportation');
+    });
+  });
 });

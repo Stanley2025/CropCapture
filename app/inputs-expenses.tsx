@@ -24,7 +24,7 @@ import { Card } from '../src/components/Card';
 import { Button } from '../src/components/Button';
 import { Badge } from '../src/components/Badge';
 import { DatePickerField } from '../src/components/DatePickerField';
-import { LAND_PREPARATION_OPERATIONS } from './activity/record';
+import { LAND_PREPARATION_OPERATIONS, HARVESTING_OPERATIONS } from './activity/record';
 
 // ============================================================================
 // ENTERPRISE CATEGORIES: CROPS vs. LIVESTOCK vs. ALL
@@ -1652,6 +1652,43 @@ export default function InputsExpensesScreen() {
                             onPress={() => {
                               if (!expenseDesc.trim()) {
                                 setExpenseDesc(`Land prep: ${op}`);
+                              } else if (!expenseDesc.includes(op)) {
+                                setExpenseDesc(`${expenseDesc}, ${op}`);
+                              }
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.chipText,
+                                isSelected && styles.chipTextActive,
+                              ]}
+                            >
+                              {op}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+                {(expenseCat === 'Harvest preparation' || expenseCat === 'Harvesting' || expenseCat.toLowerCase().includes('harvest')) && (
+                  <View style={{ marginTop: Spacing.xs }}>
+                    <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>
+                      SPECIFIC HARVESTING TASK (OPTIONAL):
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                      {HARVESTING_OPERATIONS.map((op) => {
+                        const isSelected = expenseDesc.includes(op);
+                        return (
+                          <TouchableOpacity
+                            key={op}
+                            style={[
+                              styles.chip,
+                              isSelected && styles.chipActive,
+                            ]}
+                            onPress={() => {
+                              if (!expenseDesc.trim()) {
+                                setExpenseDesc(`Harvesting: ${op}`);
                               } else if (!expenseDesc.includes(op)) {
                                 setExpenseDesc(`${expenseDesc}, ${op}`);
                               }

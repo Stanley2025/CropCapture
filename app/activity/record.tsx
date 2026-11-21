@@ -32,6 +32,38 @@ import {
 // The list lives in src/shared/activityTypes.js so the activity log and the tabs filter use the same groups.
 export { CROP_ACTIVITY_TYPES };
 
+// The 17 specific land preparation operations offered when "Land preparation" is selected.
+export const LAND_PREPARATION_OPERATIONS = [
+  'Bush clearing',
+  'Brushing',
+  'Tree felling',
+  'Destumping',
+  'Gathering cleared vegetation',
+  'Burning cleared vegetation',
+  'Land tilling',
+  'Soil digging',
+  'Bed preparation',
+  'Ridge making',
+  'Mound making',
+  'Drainage preparation',
+  'Irrigation channel preparation',
+  'Field leveling',
+  'Plot demarcation',
+  'Farm layout',
+  'Lowland preparation',
+];
+
+// The 7 specific harvesting operations offered when "Harvesting" or "Harvest preparation" is selected.
+export const HARVESTING_OPERATIONS = [
+  'Selective harvesting',
+  'Harvesting cocoa pods',
+  'Rubber tapping',
+  'Latex collection',
+  'Weighing harvested produce',
+  'Counting harvested produce',
+  'Harvest transportation',
+];
+
 export const LIVESTOCK_ACTIVITY_TYPES = [
   'Feeding & Nutrition',
   'Veterinary Care & Vaccination',
@@ -73,8 +105,18 @@ export default function RecordActivityScreen() {
   const [cost, setCost] = useState('');
   const [laborCount, setLaborCount] = useState('2');
   const [selectedLandPrepOps, setSelectedLandPrepOps] = useState<string[]>([]);
+  const [selectedHarvestOps, setSelectedHarvestOps] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [logFilterCategory, setLogFilterCategory] = useState('All');
+
+  const isHarvestingActivity = (type: string) => {
+    const norm = (type || '').toLowerCase();
+    return (
+      norm === 'harvesting' ||
+      norm === 'harvest preparation' ||
+      HARVESTING_OPERATIONS.some((op) => op.toLowerCase() === norm)
+    );
+  };
 
   const toggleLandPrepOp = (op: string) => {
     setSelectedLandPrepOps((prev) => {
@@ -87,6 +129,23 @@ export default function RecordActivityScreen() {
           setDescription(autoText);
         }
       } else if (description.startsWith('Land prep:')) {
+        setDescription('');
+      }
+      return next;
+    });
+  };
+
+  const toggleHarvestOp = (op: string) => {
+    setSelectedHarvestOps((prev) => {
+      const exists = prev.includes(op);
+      const next = exists ? prev.filter((item) => item !== op) : [...prev, op];
+
+      if (next.length > 0) {
+        const autoText = `Harvesting: ${next.join(', ')}`;
+        if (!description.trim() || description.startsWith('Harvesting:')) {
+          setDescription(autoText);
+        }
+      } else if (description.startsWith('Harvesting:')) {
         setDescription('');
       }
       return next;
@@ -204,11 +263,13 @@ export default function RecordActivityScreen() {
       Alert.alert('Farm Required', 'Please select a registered farm.');
       return;
     }
-    if (!description.trim() && selectedLandPrepOps.length === 0) {
+    if (!description.trim() && selectedLandPrepOps.length === 0 && selectedHarvestOps.length === 0) {
       Alert.alert(
         'Details Required',
         activityType === 'Land preparation'
           ? 'Please select at least one land preparation task or enter field observations.'
+          : isHarvestingActivity(activityType)
+          ? 'Please select at least one harvesting task or enter field observations.'
           : 'Please provide notes or details for this activity.'
       );
       return;
@@ -220,7 +281,9 @@ export default function RecordActivityScreen() {
         ? description.trim()
         : selectedLandPrepOps.length > 0
         ? `Land prep: ${selectedLandPrepOps.join(', ')}`
-        : 'Land preparation completed.';
+        : selectedHarvestOps.length > 0
+        ? `Harvesting: ${selectedHarvestOps.join(', ')}`
+        : `${activityType} completed.`;
 
       const newActivity: FarmActivity = {
         id: generateUUID(),
@@ -249,6 +312,7 @@ export default function RecordActivityScreen() {
       // Clear form inputs
       setDescription('');
       setSelectedLandPrepOps([]);
+      setSelectedHarvestOps([]);
       setQuantity('');
       setCost('');
 
@@ -650,6 +714,52 @@ export default function RecordActivityScreen() {
                                 style={[
                                   styles.landPrepChipText,
                                   isSelected && styles.landPrepChipTextActive,
+                                ]}
+                              >
+                                {op}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+
+                  {/* Specific Harvesting Operations (when Harvesting or Harvest preparation is selected) */}
+                  {isHarvestingActivity(activityType) && (
+                    <View style={styles.harvestContainer}>
+                      <View style={styles.harvestHeaderRow}>
+                        <Ionicons name="basket-outline" size={16} color="#92400E" />
+                        <Text style={styles.harvestTitle}>
+                          Harvesting Operations *
+                        </Text>
+                      </View>
+                      <Text style={styles.harvestSubtitle}>
+                        Select one or more harvesting tasks completed for this parcel:
+                      </Text>
+                      <View style={styles.harvestGrid}>
+                        {HARVESTING_OPERATIONS.map((op) => {
+                          const isSelected = selectedHarvestOps.includes(op);
+                          return (
+                            <TouchableOpacity
+                              key={op}
+                              style={[
+                                styles.harvestChip,
+                                isSelected && styles.harvestChipActive,
+                              ]}
+                              onPress={() => toggleHarvestOp(op)}
+                              activeOpacity={0.75}
+                            >
+                              <Ionicons
+                                name={isSelected ? 'checkbox' : 'square-outline'}
+                                size={15}
+                                color={isSelected ? '#FFFFFF' : '#92400E'}
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text
+                                style={[
+                                  styles.harvestChipText,
+                                  isSelected && styles.harvestChipTextActive,
                                 ]}
                               >
                                 {op}
@@ -1392,6 +1502,61 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   landPrepChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  harvestContainer: {
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+    padding: Spacing.md,
+    backgroundColor: '#FFFDF0',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  harvestHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  harvestTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: '#92400E',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  harvestSubtitle: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginBottom: Spacing.sm,
+  },
+  harvestGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  harvestChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  harvestChipActive: {
+    backgroundColor: '#D97706',
+    borderColor: '#B45309',
+  },
+  harvestChipText: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  harvestChipTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
   },
