@@ -21,21 +21,16 @@ import { Button } from '../../src/components/Button';
 import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { DatePickerField } from '../../src/components/DatePickerField';
+import {
+  CROP_ACTIVITY_SECTIONS,
+  CROP_ACTIVITY_TYPES,
+  CROP_ACTIVITY_FILTERS,
+  matchesCategory,
+} from '../../src/shared/activityTypes';
 
-export const CROP_ACTIVITY_TYPES = [
-  'Land preparation',
-  'Planting',
-  'Fertilizer application',
-  'Pesticide application',
-  'Weeding',
-  'Irrigation',
-  'Pest management',
-  'Disease management',
-  'Pruning',
-  'Field inspection',
-  'Harvest preparation',
-  'Other crop activity',
-];
+// Crop activities are grouped (Fertilizer application, Weeding, Irrigation and watering, Pest management).
+// The list lives in src/shared/activityTypes.js so the activity log and the tabs filter use the same groups.
+export { CROP_ACTIVITY_TYPES };
 
 export const LIVESTOCK_ACTIVITY_TYPES = [
   'Feeding & Nutrition',
@@ -77,8 +72,26 @@ export default function RecordActivityScreen() {
   const [unit, setUnit] = useState('kg');
   const [cost, setCost] = useState('');
   const [laborCount, setLaborCount] = useState('2');
+  const [selectedLandPrepOps, setSelectedLandPrepOps] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [logFilterCategory, setLogFilterCategory] = useState('All');
+
+  const toggleLandPrepOp = (op: string) => {
+    setSelectedLandPrepOps((prev) => {
+      const exists = prev.includes(op);
+      const next = exists ? prev.filter((item) => item !== op) : [...prev, op];
+
+      if (next.length > 0) {
+        const autoText = `Land prep: ${next.join(', ')}`;
+        if (!description.trim() || description.startsWith('Land prep:')) {
+          setDescription(autoText);
+        }
+      } else if (description.startsWith('Land prep:')) {
+        setDescription('');
+      }
+      return next;
+    });
+  };
 
   const loadData = async () => {
     try {
@@ -191,13 +204,24 @@ export default function RecordActivityScreen() {
       Alert.alert('Farm Required', 'Please select a registered farm.');
       return;
     }
-    if (!description.trim()) {
-      Alert.alert('Description Required', 'Please provide notes or details for this activity.');
+    if (!description.trim() && selectedLandPrepOps.length === 0) {
+      Alert.alert(
+        'Details Required',
+        activityType === 'Land preparation'
+          ? 'Please select at least one land preparation task or enter field observations.'
+          : 'Please provide notes or details for this activity.'
+      );
       return;
     }
 
     setIsSubmitting(true);
     try {
+      const finalDesc = description.trim()
+        ? description.trim()
+        : selectedLandPrepOps.length > 0
+        ? `Land prep: ${selectedLandPrepOps.join(', ')}`
+        : 'Land preparation completed.';
+
       const newActivity: FarmActivity = {
         id: generateUUID(),
         farmer_id: currentFarmer.id,
@@ -205,7 +229,7 @@ export default function RecordActivityScreen() {
         season_id: selectedSeasonId || null,
         activity_type: activityType,
         activity_date: activityDate,
-        description: description.trim(),
+        description: finalDesc,
         quantity: quantity ? parseFloat(quantity) : null,
         unit: quantity ? unit : null,
         cost: cost ? parseFloat(cost) : 0,
@@ -224,6 +248,7 @@ export default function RecordActivityScreen() {
 
       // Clear form inputs
       setDescription('');
+      setSelectedLandPrepOps([]);
       setQuantity('');
       setCost('');
 
@@ -252,7 +277,9 @@ export default function RecordActivityScreen() {
 
   const filteredActivities = activities.filter((a) => {
     if (logFilterCategory === 'All') return true;
-    return a.activity_type.toLowerCase() === logFilterCategory.toLowerCase();
+    return isLivestock
+      ? a.activity_type.toLowerCase() === logFilterCategory.toLowerCase()
+      : matchesCategory(a.activity_type, logFilterCategory);
   });
 
   return (
@@ -526,6 +553,7 @@ export default function RecordActivityScreen() {
                   <Text style={styles.label}>
                     {isLivestock ? 'Livestock Operation Classification *' : 'Activity Classification *'}
                   </Text>
+                  {isLivestock ? (
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
@@ -564,6 +592,74 @@ export default function RecordActivityScreen() {
                       </TouchableOpacity>
                     ))}
                   </ScrollView>
+                  ) : (
+                    <View>
+                      {CROP_ACTIVITY_SECTIONS.map((section) => (
+                        <View key={section.title || section.items[0]}>
+                          {section.title ? <Text style={styles.groupTitle}>{section.title}</Text> : null}
+                          <View style={styles.groupChips}>
+                            {section.items.map((type) => (
+                              <TouchableOpacity
+                                key={type}
+                                style={[styles.chip, activityType === type && styles.chipActive]}
+                                onPress={() => setActivityType(type)}
+                              >
+                                <Text style={[styles.chipText, activityType === type && styles.chipTextActive]}>
+                                  {type}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+                  {/* Specific Land Preparation Operations (when Land preparation is selected) */}
+                  {activityType === 'Land preparation' && (
+                    <View style={styles.landPrepContainer}>
+                      <View style={styles.landPrepHeaderRow}>
+                        <Ionicons name="construct-outline" size={16} color={Colors.primaryDark} />
+                        <Text style={styles.landPrepTitle}>
+                          Land Preparation Operations *
+                        </Text>
+                      </View>
+                      <Text style={styles.landPrepSubtitle}>
+                        Select one or more land preparation tasks completed for this parcel:
+                      </Text>
+                      <View style={styles.landPrepGrid}>
+                        {LAND_PREPARATION_OPERATIONS.map((op) => {
+                          const isSelected = selectedLandPrepOps.includes(op);
+                          return (
+                            <TouchableOpacity
+                              key={op}
+                              style={[
+                                styles.landPrepChip,
+                                isSelected && styles.landPrepChipActive,
+                              ]}
+                              onPress={() => toggleLandPrepOp(op)}
+                              activeOpacity={0.75}
+                            >
+                              <Ionicons
+                                name={isSelected ? 'checkbox' : 'square-outline'}
+                                size={15}
+                                color={isSelected ? '#FFFFFF' : Colors.primaryDark}
+                                style={{ marginRight: 6 }}
+                              />
+                              <Text
+                                style={[
+                                  styles.landPrepChipText,
+                                  isSelected && styles.landPrepChipTextActive,
+                                ]}
+                              >
+                                {op}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
 
                   <View style={{ marginTop: Spacing.sm }}>
                     <DatePickerField
@@ -736,7 +832,7 @@ export default function RecordActivityScreen() {
               showsHorizontalScrollIndicator={false}
               style={[styles.chipRow, { marginBottom: Spacing.md }]}
             >
-              {['All', ...currentActivityTypes].map((cat) => (
+              {['All', ...(isLivestock ? currentActivityTypes : CROP_ACTIVITY_FILTERS)].map((cat) => (
                 <TouchableOpacity
                   key={cat}
                   style={[
@@ -965,6 +1061,19 @@ const styles = StyleSheet.create({
   chipRow: {
     flexDirection: 'row',
     marginBottom: Spacing.xs,
+  },
+  groupTitle: {
+    marginTop: Spacing.md,
+    marginBottom: Spacing.xs,
+    fontSize: 13,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    letterSpacing: 0.3,
+  },
+  groupChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: Spacing.xs,
   },
   chip: {
     flexDirection: 'row',
@@ -1230,5 +1339,60 @@ const styles = StyleSheet.create({
   syncStatusText: {
     fontSize: 10,
     fontWeight: '600',
+  },
+  landPrepContainer: {
+    marginTop: Spacing.sm,
+    marginBottom: Spacing.xs,
+    padding: Spacing.md,
+    backgroundColor: '#F3F8F1',
+    borderRadius: Radius.md,
+    borderWidth: 1,
+    borderColor: '#E1ECDD',
+  },
+  landPrepHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 4,
+  },
+  landPrepTitle: {
+    fontSize: Typography.sizes.xs,
+    fontWeight: '700',
+    color: Colors.primaryDark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  landPrepSubtitle: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginBottom: Spacing.sm,
+  },
+  landPrepGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  landPrepChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#C9DBC4',
+    borderRadius: Radius.full,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+  },
+  landPrepChipActive: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primaryDark,
+  },
+  landPrepChipText: {
+    fontSize: 12,
+    color: Colors.text,
+    fontWeight: '500',
+  },
+  landPrepChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

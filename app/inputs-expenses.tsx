@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing, Typography } from '../src/constants/theme';
 import { localDb, generateUUID } from '../src/services/storage/localDatabase';
+import { buildExpenseRecord, estimateHarvestRevenue } from '../src/shared/farmRecords';
 import { useAppStore } from '../src/store/useAppStore';
 import { InputRecord, ExpenseRecord, Farm, HarvestBatch } from '../src/types/database';
 import { Header } from '../src/components/Header';
@@ -23,6 +24,7 @@ import { Card } from '../src/components/Card';
 import { Button } from '../src/components/Button';
 import { Badge } from '../src/components/Badge';
 import { DatePickerField } from '../src/components/DatePickerField';
+import { LAND_PREPARATION_OPERATIONS } from './activity/record';
 
 // ============================================================================
 // ENTERPRISE CATEGORIES: CROPS vs. LIVESTOCK vs. ALL
@@ -243,6 +245,7 @@ export default function InputsExpensesScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await useAppStore.getState().pullRemoteChanges();
     await loadData();
     setRefreshing(false);
   };
@@ -443,17 +446,7 @@ export default function InputsExpensesScreen() {
       return true;
     });
 
-    const totalHarvestRevenue = filteredHarvests.reduce((sum, h) => {
-      if (h.total_value && !isNaN(Number(h.total_value))) {
-        return sum + Number(h.total_value);
-      }
-      const isLivestock =
-        (h as any).animal_type ||
-        (h.unit || '').toLowerCase().includes('head') ||
-        (h.unit || '').toLowerCase().includes('animal');
-      const rate = isLivestock ? 50 : 0.45;
-      return sum + (Number(h.quantity) || 0) * rate;
-    }, 0);
+    const totalHarvestRevenue = estimateHarvestRevenue(filteredHarvests);
 
     const netProfit = totalHarvestRevenue - spentUSD;
     const isProfitable = netProfit >= 0;
@@ -549,16 +542,17 @@ export default function InputsExpensesScreen() {
     try {
       const targetFarm = farmMap.get(expenseFarmId);
       const record: ExpenseRecord = {
-        id: generateUUID(),
-        farm_id: expenseFarmId,
-        category: expenseCat,
-        amount: parseFloat(expenseAmount),
+        ...buildExpenseRecord({
+          farmId: expenseFarmId,
+          category: expenseCat,
+          amount: parseFloat(expenseAmount),
+          currency: expenseCurrency,
+          expenseDate,
+          description:
+            expenseDesc.trim() ||
+            `${expenseCat} operations on ${targetFarm?.name || 'farm'}.`,
+        }),
         currency: expenseCurrency,
-        expense_date: expenseDate,
-        description:
-          expenseDesc.trim() ||
-          `${expenseCat} operations on ${targetFarm?.name || 'farm'}.`,
-        created_at: new Date().toISOString(),
       };
 
       await localDb.saveExpense(record, true);
@@ -1640,6 +1634,43 @@ export default function InputsExpensesScreen() {
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
+                {expenseCat === 'Land Preparation' && (
+                  <View style={{ marginTop: Spacing.xs }}>
+                    <Text style={[styles.label, { fontSize: 11, marginBottom: 4 }]}>
+                      SPECIFIC LAND PREPARATION TASK (OPTIONAL):
+                    </Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                      {LAND_PREPARATION_OPERATIONS.map((op) => {
+                        const isSelected = expenseDesc.includes(op);
+                        return (
+                          <TouchableOpacity
+                            key={op}
+                            style={[
+                              styles.chip,
+                              isSelected && styles.chipActive,
+                            ]}
+                            onPress={() => {
+                              if (!expenseDesc.trim()) {
+                                setExpenseDesc(`Land prep: ${op}`);
+                              } else if (!expenseDesc.includes(op)) {
+                                setExpenseDesc(`${expenseDesc}, ${op}`);
+                              }
+                            }}
+                          >
+                            <Text
+                              style={[
+                                styles.chipText,
+                                isSelected && styles.chipTextActive,
+                              ]}
+                            >
+                              {op}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
               </View>
 
               <View style={styles.inputRow}>

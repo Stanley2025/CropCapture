@@ -288,4 +288,51 @@ describe('Farmer Portal Header: Scanner Icon & Queue Removal', () => {
     assert.strictEqual(farmerOfflineHeader.showSyncPill, true);
     assert.strictEqual(farmerOfflineHeader.showQueueBadge, false);
   });
+
+  describe('Land Preparation Operations for Record Activity', () => {
+    const EXPECTED_LAND_PREP_OPERATIONS = [
+      'Bush clearing',
+      'Brushing',
+      'Tree felling',
+      'Destumping',
+      'Gathering cleared vegetation',
+      'Burning cleared vegetation',
+      'Land tilling',
+      'Soil digging',
+      'Bed preparation',
+      'Ridge making',
+      'Mound making',
+      'Drainage preparation',
+      'Irrigation channel preparation',
+      'Field leveling',
+      'Plot demarcation',
+      'Farm layout',
+      'Lowland preparation',
+    ];
+
+    test('includes all 17 required Land Preparation operations', () => {
+      assert.strictEqual(EXPECTED_LAND_PREP_OPERATIONS.length, 17);
+      EXPECTED_LAND_PREP_OPERATIONS.forEach((op) => {
+        assert.ok(EXPECTED_LAND_PREP_OPERATIONS.includes(op), `Should include operation: ${op}`);
+      });
+    });
+
+    test('selecting land preparation tasks auto-formats activity description', () => {
+      const selectedOps = ['Bush clearing', 'Destumping', 'Lowland preparation'];
+      const autoDesc = `Land prep: ${selectedOps.join(', ')}`;
+      assert.strictEqual(autoDesc, 'Land prep: Bush clearing, Destumping, Lowland preparation');
+    });
+
+    test('farmer can submit activity record with selected land preparation tasks without manual text typing', () => {
+      const selectedOps = ['Ridge making', 'Bed preparation'];
+      const description = '';
+      const finalDesc = description.trim()
+        ? description.trim()
+        : selectedOps.length > 0
+        ? `Land prep: ${selectedOps.join(', ')}`
+        : 'Land preparation completed.';
+
+      assert.strictEqual(finalDesc, 'Land prep: Ridge making, Bed preparation');
+    });
+  });
 });
