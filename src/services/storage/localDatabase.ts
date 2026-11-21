@@ -58,13 +58,73 @@ export function generateUUID(): string {
   });
 }
 
-// Generate batch reference in CropCapture format: CRP-2026-CROP-000001
-export function generateBatchReference(cropCode: string, sequenceNum?: number): string {
+/**
+ * Unified Official Batch ID Standard:
+ * LR-[COUNTY 3]-[DISTRICT 3]-[CROP 4-6]-[YEAR 4]-[6-DIGIT-SEQ]
+ * Example: LR-NIM-SAN-COCOA-2026-000124
+ *
+ * For offline creation before server synchronization, assigns a temporary pending reference:
+ * PENDING-LR-[CROP]-[YEAR]-[HEX6]
+ * (UI will display "Pending number" until server assigns official unique sequence)
+ */
+export function generateBatchReference(
+  cropCode: string,
+  optionsOrSeq?:
+    | number
+    | {
+        countyCode?: string;
+        districtCode?: string;
+        sequenceNum?: number;
+        isOfflinePending?: boolean;
+      }
+): string {
   const year = new Date().getFullYear();
-  const cleanCode = (cropCode || 'GEN').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
-  const seq = sequenceNum ?? Math.floor(100000 + Math.random() * 900000);
+  const cleanCrop = (cropCode || 'GEN').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+
+  if (typeof optionsOrSeq === 'object' && optionsOrSeq.isOfflinePending) {
+    const randomHex = Math.floor(100000 + Math.random() * 900000).toString(16).slice(0, 6).toUpperCase();
+    return `PENDING-LR-${cleanCrop}-${year}-${randomHex}`;
+  }
+
+  const county = (typeof optionsOrSeq === 'object' && optionsOrSeq.countyCode ? optionsOrSeq.countyCode : 'GEN')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 3)
+    .padEnd(3, 'X');
+  const district = (typeof optionsOrSeq === 'object' && optionsOrSeq.districtCode ? optionsOrSeq.districtCode : 'GEN')
+    .toUpperCase()
+    .replace(/[^A-Z]/g, '')
+    .slice(0, 3)
+    .padEnd(3, 'X');
+
+  const seq = typeof optionsOrSeq === 'number' ? optionsOrSeq : optionsOrSeq?.sequenceNum ?? Math.floor(100000 + Math.random() * 900000);
   const formattedSeq = String(seq).padStart(6, '0');
-  return `CRP-${year}-${cleanCode}-${formattedSeq}`;
+
+  return `LR-${county}-${district}-${cleanCrop}-${year}-${formattedSeq}`;
+}
+
+/**
+ * Migration helper: Converts legacy AGR-... and CRP-... batch references into unified LR-... format
+ */
+export function migrateLegacyBatchId(
+  legacyId: string,
+  metadata?: { countyCode?: string; districtCode?: string; cropCode?: string; year?: number }
+): string {
+  if (!legacyId) return legacyId;
+  if (legacyId.startsWith('LR-')) return legacyId;
+
+  const county = (metadata?.countyCode || 'GEN').toUpperCase().slice(0, 3).padEnd(3, 'X');
+  const district = (metadata?.districtCode || 'GEN').toUpperCase().slice(0, 3).padEnd(3, 'X');
+
+  // Match AGR-2026-RICE-000001 or CRP-2026-COCO-000001
+  const match = legacyId.match(/(?:AGR|CRP)-(\d{4})-([A-Z0-9]+)-(\d+)/i);
+  if (match) {
+    const [, yr, crop, seq] = match;
+    const formattedSeq = seq.padStart(6, '0');
+    return `LR-${county}-${district}-${crop.toUpperCase()}-${yr}-${formattedSeq}`;
+  }
+
+  return legacyId;
 }
 
 export class LocalDatabase {
@@ -385,7 +445,7 @@ export class LocalDatabase {
     return inspection;
   }
 
-  // Purge any residual mock/demo records so device shows strictly real data
+  // Purge strictly legacy demo records only if they have NO pending unsynced changes
   public async purgeMockData(): Promise<void> {
     try {
       const demoFarmerId = 'f0000000-0000-0000-0000-000000000001';
@@ -398,62 +458,93 @@ export class LocalDatabase {
         's1111111-1111-1111-1111-111111111102',
       ]);
 
+      // Check sync queue: NEVER touch or delete any record with unsynced changes
+      const queue = await this.getSyncQueue();
+      const unsyncedPendingIds = new Set(
+        queue
+          .filter((q) => q.status === 'waiting_to_sync' || q.status === 'sync_failed')
+          .map((q) => q.record_id || (q.payload && (q.payload.id || q.payload.farm_id)))
+          .filter(Boolean)
+      );
+
       // Filter farms
       const farms = await this.getItems<Farm>(STORAGE_KEYS.FARMS);
-      const cleanFarms = farms.filter((f) => f.farmer_id !== demoFarmerId && !demoFarmIds.has(f.id));
+      const cleanFarms = farms.filter((f) => {
+        if (unsyncedPendingIds.has(f.id)) return true; // Keep unsynced data safe!
+        return f.farmer_id !== demoFarmerId && !demoFarmIds.has(f.id);
+      });
       if (cleanFarms.length !== farms.length) {
         await this.setItems(STORAGE_KEYS.FARMS, cleanFarms);
       }
 
       // Filter seasons
       const seasons = await this.getItems<FarmSeason>(STORAGE_KEYS.SEASONS);
-      const cleanSeasons = seasons.filter((s) => !demoFarmIds.has(s.farm_id) && !demoSeasonIds.has(s.id));
+      const cleanSeasons = seasons.filter((s) => {
+        if (unsyncedPendingIds.has(s.id) || unsyncedPendingIds.has(s.farm_id)) return true;
+        return !demoFarmIds.has(s.farm_id) && !demoSeasonIds.has(s.id);
+      });
       if (cleanSeasons.length !== seasons.length) {
         await this.setItems(STORAGE_KEYS.SEASONS, cleanSeasons);
       }
 
       // Filter activities
       const activities = await this.getItems<FarmActivity>(STORAGE_KEYS.ACTIVITIES);
-      const cleanActivities = activities.filter(
-        (a) =>
+      const cleanActivities = activities.filter((a) => {
+        if (unsyncedPendingIds.has(a.id) || unsyncedPendingIds.has(a.farm_id)) return true;
+        return (
           a.farmer_id !== demoFarmerId &&
           !demoFarmIds.has(a.farm_id) &&
           a.id !== 'act-landprep-001'
-      );
+        );
+      });
       if (cleanActivities.length !== activities.length) {
         await this.setItems(STORAGE_KEYS.ACTIVITIES, cleanActivities);
       }
 
       // Filter inputs
       const inputs = await this.getItems<InputRecord>(STORAGE_KEYS.INPUTS);
-      const cleanInputs = inputs.filter((i) => !demoFarmIds.has(i.farm_id));
+      const cleanInputs = inputs.filter((i) => {
+        if (unsyncedPendingIds.has(i.id) || unsyncedPendingIds.has(i.farm_id)) return true;
+        return !demoFarmIds.has(i.farm_id);
+      });
       if (cleanInputs.length !== inputs.length) {
         await this.setItems(STORAGE_KEYS.INPUTS, cleanInputs);
       }
 
       // Filter expenses
       const expenses = await this.getItems<ExpenseRecord>(STORAGE_KEYS.EXPENSES);
-      const cleanExpenses = expenses.filter((e) => !demoFarmIds.has(e.farm_id));
+      const cleanExpenses = expenses.filter((e) => {
+        if (unsyncedPendingIds.has(e.id) || unsyncedPendingIds.has(e.farm_id)) return true;
+        return !demoFarmIds.has(e.farm_id);
+      });
       if (cleanExpenses.length !== expenses.length) {
         await this.setItems(STORAGE_KEYS.EXPENSES, cleanExpenses);
       }
 
       // Filter harvests
       const harvests = await this.getItems<HarvestBatch>(STORAGE_KEYS.HARVESTS);
-      const cleanHarvests = harvests.filter(
-        (h) =>
+      const cleanHarvests = harvests.filter((h) => {
+        if (unsyncedPendingIds.has(h.id) || unsyncedPendingIds.has(h.farm_id)) return true;
+        return (
           h.farmer_id !== demoFarmerId &&
           !demoFarmIds.has(h.farm_id) &&
           h.id !== 'h1111111-1111-1111-1111-111111111101' &&
           h.batch_reference !== 'AGR-2026-RICE-000001'
-      );
+        );
+      });
       if (cleanHarvests.length !== harvests.length) {
         await this.setItems(STORAGE_KEYS.HARVESTS, cleanHarvests);
       }
 
-      // Filter sync queue of stale demo payloads
-      const queue = await this.getSyncQueue();
+      // Safe clean sync queue: ONLY remove mock queue items that belong to the demo account, NEVER unsynced farmer data
       const cleanQueue = queue.filter((item) => {
+        if (item.status === 'waiting_to_sync' || item.status === 'sync_failed') {
+          // If it was created by real user, preserve it
+          const p = item.payload;
+          if (p && p.farmer_id && p.farmer_id !== demoFarmerId && !demoFarmIds.has(p.farm_id)) {
+            return true;
+          }
+        }
         const p = item.payload;
         if (!p) return true;
         if (p.farmer_id === demoFarmerId) return false;
@@ -465,7 +556,7 @@ export class LocalDatabase {
         await this.setItems(STORAGE_KEYS.SYNC_QUEUE, cleanQueue);
       }
     } catch (e) {
-      console.warn('Error purging mock data:', e);
+      console.warn('Error safely purging mock data:', e);
     }
   }
 

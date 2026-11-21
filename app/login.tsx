@@ -68,10 +68,12 @@ export default function LoginScreen() {
   // Mode: Sign In or Create Account
   const [authMode, setAuthMode] = useState<'signin' | 'create_account'>('signin');
 
+  const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
+
   // Sign In State
   const [selectedRole, setSelectedRole] = useState<UserRole>('farmer');
-  const [email, setEmail] = useState(ROLE_TABS[0].defaultEmail);
-  const [password, setPassword] = useState('••••••••');
+  const [email, setEmail] = useState(isDev ? ROLE_TABS[0].defaultEmail : '');
+  const [password, setPassword] = useState(isDev ? '••••••••' : '');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -95,7 +97,10 @@ export default function LoginScreen() {
 
   const handleSelectRole = (tab: RoleTab) => {
     setSelectedRole(tab.key);
-    setEmail(tab.defaultEmail);
+    if (isDev) {
+      setEmail(tab.defaultEmail);
+      setPassword('••••••••');
+    }
   };
 
   const handleRegularLogin = async () => {

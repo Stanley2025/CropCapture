@@ -70,7 +70,12 @@
       ],
       "expo-router",
       "expo-secure-store",
-      "expo-sqlite",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
       [
         "expo-camera",
         {

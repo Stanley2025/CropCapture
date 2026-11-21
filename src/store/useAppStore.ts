@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserRole, Farmer, Profile, SyncStatusType, AppNotification } from '../types/database';
 import { localDb, generateUUID } from '../services/storage/localDatabase';
 import { syncEngine } from '../services/sync/syncEngine';
+import { secureSessionManager } from '../services/auth/secureSessionManager';
 
 export interface PersonaDetails {
   title: string;
@@ -166,43 +167,40 @@ export const useAppStore = create<AppState>((set, get) => ({
         (i) => i.status === 'waiting_to_sync' || i.status === 'sync_failed'
       ).length;
 
-      // Check stored auth session
-      const savedAuth = await AsyncStorage.getItem('@cropcapture_auth_session');
+      // Check stored auth session from SecureStore (hardware-backed keychain)
+      const savedAuth = await secureSessionManager.getSession();
       let isAuth = false;
       let activeRole: UserRole = 'farmer';
       let activeProfile = PERSONAS.farmer.profile;
       let activeFarmer = PERSONAS.farmer.farmer!;
 
-      if (savedAuth) {
+      if (savedAuth && savedAuth.role) {
         try {
-          const parsed = JSON.parse(savedAuth);
-          if (parsed && parsed.role) {
-            isAuth = true;
-            activeRole = parsed.role;
-            if (parsed.role === 'farmer' && (parsed.farmId || parsed.email)) {
-              const allFarmers = await localDb.getFarmers();
-              const matchedFarmer = allFarmers.find(
-                (f) =>
-                  (parsed.farmId && f.farmer_id_code === parsed.farmId) ||
-                  (parsed.email && f.email === parsed.email)
-              );
-              if (matchedFarmer) {
-                activeFarmer = matchedFarmer;
-                activeProfile = {
-                  id: matchedFarmer.id,
-                  full_name: matchedFarmer.full_name,
-                  role: 'farmer',
-                  county: matchedFarmer.county,
-                  district: matchedFarmer.district,
-                  community: matchedFarmer.community,
-                  created_at: matchedFarmer.created_at,
-                };
-              }
-            } else if (PERSONAS[parsed.role]) {
-              activeProfile = PERSONAS[parsed.role].profile;
-              if (PERSONAS[parsed.role].farmer) {
-                activeFarmer = PERSONAS[parsed.role].farmer!;
-              }
+          isAuth = true;
+          activeRole = savedAuth.role;
+          if (savedAuth.role === 'farmer' && (savedAuth.farmId || savedAuth.email)) {
+            const allFarmers = await localDb.getFarmers();
+            const matchedFarmer = allFarmers.find(
+              (f) =>
+                (savedAuth.farmId && f.farmer_id_code === savedAuth.farmId) ||
+                (savedAuth.email && f.email === savedAuth.email)
+            );
+            if (matchedFarmer) {
+              activeFarmer = matchedFarmer;
+              activeProfile = {
+                id: matchedFarmer.id,
+                full_name: matchedFarmer.full_name,
+                role: 'farmer',
+                county: matchedFarmer.county,
+                district: matchedFarmer.district,
+                community: matchedFarmer.community,
+                created_at: matchedFarmer.created_at,
+              };
+            }
+          } else if (PERSONAS[savedAuth.role]) {
+            activeProfile = PERSONAS[savedAuth.role].profile;
+            if (PERSONAS[savedAuth.role].farmer) {
+              activeFarmer = PERSONAS[savedAuth.role].farmer!;
             }
           }
         } catch (e) {
@@ -278,15 +276,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       }
     }
 
-    await AsyncStorage.setItem(
-      '@cropcapture_auth_session',
-      JSON.stringify({
-        role: targetRole,
-        email: email || activeProfile.email,
-        farmId: activeFarmer?.farmer_id_code,
-        loggedInAt: new Date().toISOString(),
-      })
-    );
+    await secureSessionManager.saveSession({
+      role: targetRole as UserRole,
+      email: email || activeProfile.email,
+      farmId: activeFarmer?.farmer_id_code,
+      loggedInAt: new Date().toISOString(),
+    });
+    await secureSessionManager.recordOnlineLoginSuccess();
 
     const savedPhoto = await AsyncStorage.getItem(`@cropcapture_user_photo_${targetRole}`);
 
@@ -308,17 +304,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   loginAsRole: async (role: UserRole) => {
+    // Disable demo personas in production builds
+    if (typeof __DEV__ !== 'undefined' && !__DEV__) {
+      console.warn('Demo persona auto-login is disabled in production builds');
+      return;
+    }
+
     const roleKey = role === 'agricultural_admin' || role === 'super_admin' ? 'cooperative_manager' : role;
     const persona = PERSONAS[roleKey] || PERSONAS.farmer;
 
-    await AsyncStorage.setItem(
-      '@cropcapture_auth_session',
-      JSON.stringify({
-        role: persona.profile.role,
-        email: persona.profile.email,
-        loggedInAt: new Date().toISOString(),
-      })
-    );
+    await secureSessionManager.saveSession({
+      role: persona.profile.role,
+      email: persona.profile.email,
+      loggedInAt: new Date().toISOString(),
+    });
 
     set({
       isAuthenticated: true,
@@ -329,7 +328,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   logout: async () => {
-    await AsyncStorage.removeItem('@cropcapture_auth_session');
+    await secureSessionManager.clearSession();
     set({
       isAuthenticated: false,
       currentRole: 'farmer',
