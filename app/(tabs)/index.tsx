@@ -28,6 +28,7 @@ import {
   Compass,
   FileText,
   Clock,
+  CircleDollarSign,
 } from 'lucide-react-native';
 import {
   Colors,
@@ -105,6 +106,7 @@ export default function HomeScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await useAppStore.getState().pullRemoteChanges();
     await loadData();
     setRefreshing(false);
   };
@@ -258,10 +260,10 @@ export default function HomeScreen() {
                 onPress={() => router.push('/harvest/register' as any)}
               />
               <QuickAction
-                icon={ScanLine}
-                label="Scan QR"
+                icon={CircleDollarSign}
+                label="Inputs & Costs"
                 variant="sky"
-                onPress={() => router.push('/qr-scanner' as any)}
+                onPress={() => router.push('/inputs-expenses' as any)}
               />
             </View>
 

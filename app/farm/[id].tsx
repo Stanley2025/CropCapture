@@ -37,6 +37,7 @@ import {
   InputRecord,
 } from '../../src/types/database';
 import { FieldIllustration } from '../../src/components/FieldIllustration';
+import { estimateHarvestRevenue } from '../../src/shared/farmRecords';
 import { Button } from '../../src/components/Button';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -55,17 +56,7 @@ export default function FarmDetailsScreen() {
 
   // Calculate Real Farm Financial Profit & Loss (P&L)
   const financialSummary = useMemo(() => {
-    const harvestRevenue = harvests.reduce((acc, h) => {
-      if (h.total_value && Number(h.total_value) > 0) {
-        return acc + Number(h.total_value);
-      }
-      const isLivestock =
-        (h as any).animal_type ||
-        (h.unit || '').toLowerCase().includes('head') ||
-        (h.unit || '').toLowerCase().includes('animal');
-      const rate = isLivestock ? 50 : 0.45;
-      return acc + (Number(h.quantity) || 0) * rate;
-    }, 0);
+    const harvestRevenue = estimateHarvestRevenue(harvests);
 
     const totalInputsCost = inputs.reduce((acc, i) => acc + (Number(i.cost) || 0), 0);
     const totalActivitiesCost = activities.reduce((acc, a) => acc + (Number(a.cost) || 0), 0);
@@ -221,10 +212,16 @@ export default function FarmDetailsScreen() {
                 <Text style={styles.metricValue}>{areaDisplay}</Text>
               </View>
 
-              <View style={styles.metricBox}>
+              <TouchableOpacity
+                style={styles.metricBox}
+                activeOpacity={0.7}
+                onPress={() => router.push('/inputs-expenses' as any)}
+                accessibilityRole="button"
+                accessibilityLabel="View Inputs and Costs"
+              >
                 <Text style={styles.metricLabel}>Costs</Text>
                 <Text style={styles.metricValue}>{costDisplay}</Text>
-              </View>
+              </TouchableOpacity>
 
               <View style={styles.metricBox}>
                 <Text style={styles.metricLabel}>Harvest</Text>
