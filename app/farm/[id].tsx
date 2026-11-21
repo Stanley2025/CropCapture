@@ -37,7 +37,8 @@ import {
   InputRecord,
 } from '../../src/types/database';
 import { FieldIllustration } from '../../src/components/FieldIllustration';
-import { estimateHarvestRevenue } from '../../src/shared/farmRecords';
+import { estimateHarvestRevenue, findCropById } from '../../src/shared/farmRecords';
+import { t } from '../../src/i18n/en';
 import { Button } from '../../src/components/Button';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -107,57 +108,41 @@ export default function FarmDetailsScreen() {
     loadFarmData();
   }, [loadFarmData]);
 
-  // Fallback demo data if id is not in localDb
+  // While the farm loads there is nothing to show yet; never invent a farm.
   const activeFarm: Farm =
     farm ||
     ({
-      id: id || 'demo-farm-01',
-      name: 'Gbehley Rice Plot',
-      crop_type: 'rice',
-      size: 4.1,
-      size_unit: 'ac',
-      community: 'Gbehley',
-      district: 'Nimba',
-      county: 'Nimba',
-      registration_date: '2026-06-15',
+      id: id || '',
+      name: '',
+      size: 0,
+      size_unit: 'acres',
     } as unknown as Farm);
 
-  const cropRaw = ((activeFarm as any).crop_type || activeFarm.farming_type || 'rice').toLowerCase();
-  const cropType = cropRaw.includes('cass')
-    ? 'cassava'
-    : cropRaw.includes('cocoa')
-    ? 'cocoa'
-    : 'rice';
-  const cropDisplay = cropType.charAt(0).toUpperCase() + cropType.slice(1);
-  const varietyDisplay = (activeFarm as any).variety || (cropType === 'rice' ? 'Suakoko 8' : 'CARICASS 2');
-  const locationStr = `${activeFarm.community || 'Gbehley'}, ${activeFarm.county || 'Nimba'}`;
+  const seasonCropName = seasons[0] ? (findCropById(seasons[0].crop_id)?.name || '') : '';
+  const cropRaw = (seasonCropName || (activeFarm as any).crop_type || '').toLowerCase();
+  const cropType = cropRaw.includes('cass') ? 'cassava' : cropRaw.includes('cocoa') ? 'cocoa' : 'rice'; // picture only
+  const farmTypeLabel =
+    activeFarm.farming_type === 'livestock' ? 'Livestock' : activeFarm.farming_type === 'both' ? 'Crops & livestock' : 'Crops';
+  const cropDisplay = seasonCropName || farmTypeLabel;
+  const varietyDisplay = seasons[0]?.crop_variety_id || '';
+  const locationStr = [activeFarm.community, activeFarm.county].filter((x) => x && String(x).trim()).join(', ');
 
-  // Metrics
-  const areaDisplay = `${activeFarm.size || 4.1} ac`;
-  const costDisplay = `$${financialSummary.totalExpenses > 0 ? financialSummary.totalExpenses : 190}`;
+  // Metrics: only what has really been recorded
+  const areaDisplay = `${activeFarm.size || 0} ${activeFarm.size_unit === 'hectares' ? 'ha' : 'ac'}`;
+  const costDisplay = `$${financialSummary.totalExpenses}`;
   const totalHarvestQty = harvests.reduce((acc, h) => acc + (Number(h.quantity) || 0), 0);
-  const harvestDisplay = `${totalHarvestQty > 0 ? totalHarvestQty.toLocaleString() : '2,450'} kg`;
+  const harvestDisplay = `${totalHarvestQty.toLocaleString()} kg`;
 
-  // Season Timeline
-  const activeSeason = seasons[0] || {
-    id: 'season-demo-01',
-    season_name: '2026 Main Swamp Rice Season',
-  };
+  // Season timeline: the farm's own activities (none yet is fine)
+  const activeSeason = seasons[0] || null;
 
-  const timelineSteps = activities.length > 0
-    ? activities.slice(0, 4).map((a) => ({
-        id: a.id,
-        title: a.activity_type,
-        dateCost: `${a.activity_date || 'Active'} • $${a.cost || 45}`,
-      }))
-    : [
-        { id: '1', title: 'Planting', dateCost: '15 Jun • $65' },
-        { id: '2', title: 'Fertilizer', dateCost: '20 Jul • $85' },
-        { id: '3', title: 'Weeding', dateCost: '15 Aug • $40' },
-        { id: '4', title: 'Harvest', dateCost: '22 Oct • 2,450 kg' },
-      ];
+  const timelineSteps = activities.slice(0, 4).map((a) => ({
+    id: a.id,
+    title: a.activity_type,
+    dateCost: `${a.activity_date || 'Active'} • $${a.cost || 0}`,
+  }));
 
-  const latestBatchId = harvests[0]?.id || 'demo-batch-rice';
+  const latestBatchId = harvests[0]?.id || null;
 
   return (
     <View style={styles.root}>
@@ -202,7 +187,7 @@ export default function FarmDetailsScreen() {
           <View style={styles.mainParcelCard}>
             <Text style={styles.parcelTitle}>{activeFarm.name}</Text>
             <Text style={styles.parcelSubtitle}>
-              {cropDisplay} • {varietyDisplay} • {locationStr}
+              {[cropDisplay, varietyDisplay, locationStr].filter(Boolean).join(' • ')}
             </Text>
 
             {/* 3 Metric Stat Boxes */}
@@ -233,8 +218,14 @@ export default function FarmDetailsScreen() {
           {/* Season Timeline Card */}
           <View style={styles.timelineCard}>
             <Text style={styles.timelineTitle}>
-              {activeSeason.season_name || '2026 Main Swamp Rice Season'}
+              {activeSeason ? activeSeason.season_name : 'No season yet'}
             </Text>
+
+            {timelineSteps.length === 0 ? (
+              <Text style={styles.emptyTimeline}>
+                Nothing recorded on this farm yet. Tap "Record activity" to add your first one.
+              </Text>
+            ) : null}
 
             <View style={styles.timelineStepsContainer}>
               {timelineSteps.map((step, idx) => {
@@ -258,6 +249,26 @@ export default function FarmDetailsScreen() {
                 );
               })}
             </View>
+
+            <TouchableOpacity
+              style={styles.seasonRecordLink}
+              onPress={() => router.push(`/farm-record/${activeFarm.id}` as any)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={t('openFarmRecord')}
+            >
+              <Text style={styles.seasonRecordLinkText}>{t('openFarmRecord')}</Text>
+            </TouchableOpacity>
+
+            {seasons[0] ? (
+              <TouchableOpacity
+                style={styles.seasonRecordLink}
+                onPress={() => router.push(`/season/${seasons[0].id}` as any)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.seasonRecordLinkText}>Open season record</Text>
+              </TouchableOpacity>
+            ) : null}
           </View>
 
           {/* P&L Financial Detail Card */}
@@ -294,13 +305,15 @@ export default function FarmDetailsScreen() {
           { paddingBottom: Math.max(insets.bottom, 16) + 8 },
         ]}
       >
-        <TouchableOpacity
-          style={styles.btnOutline}
-          onPress={() => router.push(`/harvest/${latestBatchId}` as any)}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.btnOutlineText}>View passport</Text>
-        </TouchableOpacity>
+        {latestBatchId ? (
+          <TouchableOpacity
+            style={styles.btnOutline}
+            onPress={() => router.push(`/harvest/${latestBatchId}` as any)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.btnOutlineText}>View passport</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <TouchableOpacity
           style={styles.btnPrimary}
@@ -315,6 +328,21 @@ export default function FarmDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
+  emptyTimeline: { color: Colors.textMuted, fontSize: 14, lineHeight: 20, marginTop: 4 },
+  seasonRecordLink: {
+    marginTop: 14,
+    alignSelf: 'flex-start',
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  seasonRecordLinkText: {
+    color: Colors.primary,
+    fontFamily: FontFamily.bold,
+    fontSize: 14,
+  },
   root: {
     flex: 1,
     backgroundColor: Colors.background,
