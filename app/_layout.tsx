@@ -1,8 +1,16 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
+import {
+  useFonts,
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from '@expo-google-fonts/plus-jakarta-sans';
 import { useAppStore } from '../src/store/useAppStore';
 import { Colors } from '../src/constants/theme';
 
@@ -11,6 +19,15 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const { initialize } = useAppStore();
+  const [appReady, setAppReady] = useState(false);
+
+  const [fontsLoaded] = useFonts({
+    'PlusJakartaSans-Regular': PlusJakartaSans_400Regular,
+    'PlusJakartaSans-Medium': PlusJakartaSans_500Medium,
+    'PlusJakartaSans-SemiBold': PlusJakartaSans_600SemiBold,
+    'PlusJakartaSans-Bold': PlusJakartaSans_700Bold,
+    'PlusJakartaSans-ExtraBold': PlusJakartaSans_800ExtraBold,
+  });
 
   useEffect(() => {
     async function prepare() {
@@ -19,19 +36,29 @@ export default function RootLayout() {
       } catch (e) {
         console.warn('App initialization error:', e);
       } finally {
-        await SplashScreen.hideAsync().catch(() => {});
+        setAppReady(true);
       }
     }
     prepare();
   }, []);
 
+  useEffect(() => {
+    if (fontsLoaded && appReady) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [fontsLoaded, appReady]);
+
+  if (!fontsLoaded && !appReady) {
+    return null;
+  }
+
   return (
     <SafeAreaProvider>
-      <StatusBar style="light" />
+      <StatusBar style="dark" />
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: '#0D221A' },
+          contentStyle: { backgroundColor: Colors.background },
           animation: 'slide_from_right',
         }}
       >

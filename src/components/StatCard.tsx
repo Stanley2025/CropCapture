@@ -1,110 +1,75 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { Colors, Radius, Spacing, Typography } from '../constants/theme';
+import { View, Text, StyleSheet, ViewStyle } from 'react-native';
+import { Card } from './Card';
+import { Colors, FontFamily, Spacing } from '../constants/theme';
 
-interface StatCardProps {
-  label: string;
+export interface StatItem {
   value: string | number;
-  unit?: string;
-  subtitle?: string;
-  icon: React.ReactNode;
-  color?: string;
-  onPress?: () => void;
+  label: string;
 }
 
-export const StatCard: React.FC<StatCardProps> = ({
-  label,
-  value,
-  unit,
-  subtitle,
-  icon,
-  color = Colors.primary,
-  onPress,
-}) => {
-  const content = (
-    <View style={styles.card}>
-      <View style={styles.topRow}>
-        <View style={[styles.iconBox, { backgroundColor: `${color}18` }]}>
-          {icon}
-        </View>
-        {unit && <Text style={styles.unitText}>{unit}</Text>}
+interface StatsCardProps {
+  stats: StatItem[];
+  style?: ViewStyle;
+}
+
+export const StatsCard: React.FC<StatsCardProps> = ({ stats, style }) => {
+  return (
+    <Card style={[styles.card, style]}>
+      <View style={styles.statsRow}>
+        {stats.map((item, idx) => (
+          <React.Fragment key={idx}>
+            <View style={styles.statColumn}>
+              <Text style={styles.statValue}>{item.value}</Text>
+              <Text style={styles.statLabel} numberOfLines={1}>
+                {item.label}
+              </Text>
+            </View>
+            {idx < stats.length - 1 && <View style={styles.divider} />}
+          </React.Fragment>
+        ))}
       </View>
-      <Text style={styles.valueText}>{value}</Text>
-      <Text style={styles.labelText} numberOfLines={1}>
-        {label}
-      </Text>
-      {subtitle && <Text style={styles.subtitleText}>{subtitle}</Text>}
-    </View>
+    </Card>
   );
-
-  if (onPress) {
-    return (
-      <TouchableOpacity
-        style={styles.container}
-        onPress={onPress}
-        activeOpacity={0.7}
-      >
-        {content}
-      </TouchableOpacity>
-    );
-  }
-
-  return <View style={styles.container}>{content}</View>;
 };
 
+// Compatibility export
+export const StatCard = StatsCard;
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    minWidth: '45%',
-    margin: Spacing.xs,
-  },
   card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: Spacing.md,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.md,
   },
-  topRow: {
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.xs,
+    justifyContent: 'space-around',
   },
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: Radius.md,
+  statColumn: {
+    flex: 1,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
+    paddingHorizontal: Spacing.xs,
   },
-  unitText: {
-    fontSize: Typography.sizes.xs,
-    color: Colors.textMuted,
-    fontWeight: '600',
-  },
-  valueText: {
-    fontSize: Typography.sizes.xl,
-    fontWeight: Typography.weights.bold,
+  statValue: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 22,
+    lineHeight: 28,
     color: Colors.text,
-    marginVertical: 2,
+    fontVariant: ['tabular-nums'],
+    marginBottom: 2,
   },
-  labelText: {
-    fontSize: Typography.sizes.xs,
+  statLabel: {
+    fontFamily: FontFamily.medium,
+    fontSize: 12,
+    lineHeight: 16,
     color: Colors.textMuted,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
+    textAlign: 'center',
   },
-  subtitleText: {
-    fontSize: 10,
-    color: Colors.accent,
-    fontWeight: '600',
-    marginTop: 2,
+  divider: {
+    width: 1,
+    height: 36,
+    backgroundColor: Colors.border,
   },
 });
