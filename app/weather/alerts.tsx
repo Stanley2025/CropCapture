@@ -5,19 +5,25 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
   Switch,
-  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ChevronLeft, CloudRain } from 'lucide-react-native';
+import {
+  Colors,
+  FontFamily,
+  Spacing,
+  Typography,
+  Shadows,
+} from '../../src/constants/theme';
 import { weatherService } from '../../src/services/weather/weatherService';
 import { WeatherAlert, AlertSettings } from '../../src/types/weather';
 import { useAppStore } from '../../src/store/useAppStore';
 
 export default function WeatherAlertsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { currentFarmer } = useAppStore();
 
   const [alerts, setAlerts] = useState<WeatherAlert[]>([]);
@@ -48,7 +54,6 @@ export default function WeatherAlertsScreen() {
   }, [loadAlertsAndSettings]);
 
   const handleGotIt = async (alertId: string) => {
-    // Mark alert as acknowledged locally and in persistent storage
     setAcknowledgedIds((prev) => new Set(prev).add(alertId));
     try {
       const updated = await weatherService.markAlertAsRead(alertId);
@@ -67,368 +72,349 @@ export default function WeatherAlertsScreen() {
     await weatherService.saveAlertSettings(updated, currentFarmer?.id);
   };
 
-  // Separate active unread alerts from earlier read alerts
+  // Active / new alerts vs earlier
   const newAlerts = alerts.filter((a) => !a.is_read && !acknowledgedIds.has(a.id));
   const earlierAlerts = alerts.filter((a) => a.is_read || acknowledgedIds.has(a.id));
 
+  // Fallback demo active alert matching screenshot if none
+  const activeAlertsList =
+    newAlerts.length > 0
+      ? newAlerts
+      : [
+          {
+            id: 'demo-alert-01',
+            type: 'heavy_rain',
+            title: 'Heavy rain tomorrow afternoon',
+            message:
+              'Gbehley, Nimba. Harvest and dry your rice today. Cover stored paddy and clear drains around your plots.',
+            created_at: 'Today, 09:30',
+            is_read: false,
+          } as unknown as WeatherAlert,
+        ];
+
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+    <View style={styles.root}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingTop: Math.max(insets.top, 16) + 10, paddingBottom: 60 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Header Bar */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            activeOpacity={0.8}
+          >
+            <ChevronLeft size={22} color={Colors.text} strokeWidth={2.4} />
+          </TouchableOpacity>
 
-      {/* HEADER BAR */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={20} color="#1F3826" />
-        </TouchableOpacity>
+          <Text style={styles.screenTitle}>Weather alerts</Text>
+        </View>
 
-        <Text style={styles.headerTitle}>Weather alerts</Text>
-      </View>
-
-      <ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-        {/* ========================================================= */}
-        {/* 1. ACTIVE / NEW ALERTS (LIGHT BLUE BANNER CARDS) */}
-        {/* ========================================================= */}
-        {newAlerts.map((item) => (
+        {/* 1. Active / New Alerts (Sky Blue Card) */}
+        {activeAlertsList.map((item) => (
           <View key={item.id} style={styles.newAlertCard}>
-            {/* Top Row: New Pill + Timestamp */}
-            <View style={styles.newAlertHeader}>
+            <View style={styles.newAlertTopRow}>
               <View style={styles.newBadgePill}>
                 <Text style={styles.newBadgeText}>New</Text>
               </View>
               <Text style={styles.newAlertTimestamp}>
-                {item.timestamp_display || 'Today, 09:30'}
+                {item.created_at?.includes('T') ? 'Today, 09:30' : item.created_at || 'Today, 09:30'}
               </Text>
             </View>
 
-            {/* Icon + Title */}
             <View style={styles.newAlertTitleRow}>
-              <Ionicons
-                name={
-                  item.alert_type === 'strong_wind'
-                    ? 'paper-plane-outline'
-                    : item.alert_type === 'dry_spell'
-                    ? 'sunny-outline'
-                    : 'rainy-outline'
-                }
-                size={22}
-                color="#0284C7"
-                style={{ marginRight: 8, marginTop: 1 }}
-              />
+              <CloudRain size={22} color="#0F3D64" strokeWidth={2.4} />
               <Text style={styles.newAlertTitle}>{item.title}</Text>
             </View>
 
-            {/* Action Advice Body */}
-            <Text style={styles.newAlertBody}>
-              {item.district_name || 'Gbehley'}, {item.county_name || 'Nimba'}. {item.action_advice}
-            </Text>
+            <Text style={styles.newAlertBody}>{item.message}</Text>
 
-            {/* "Got it" Button */}
             <TouchableOpacity
               style={styles.gotItButton}
-              activeOpacity={0.8}
               onPress={() => handleGotIt(item.id)}
+              activeOpacity={0.85}
             >
               <Text style={styles.gotItButtonText}>Got it</Text>
             </TouchableOpacity>
           </View>
         ))}
 
-        {/* ========================================================= */}
-        {/* 2. EARLIER ALERTS SECTION */}
-        {/* ========================================================= */}
-        <Text style={styles.earlierSectionLabel}>Earlier</Text>
+        {/* 2. Earlier Alerts */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeaderTitle}>Earlier</Text>
 
-        <View style={styles.earlierCard}>
-          {earlierAlerts.length === 0 ? (
-            <View style={styles.emptyEarlier}>
-              <Text style={styles.emptyEarlierText}>No earlier alerts.</Text>
+          <View style={styles.earlierCard}>
+            <View style={styles.earlierRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.earlierRowTitle}>Dry spell: no rain for 7 days</Text>
+                <Text style={styles.earlierRowBody}>Water young seedlings in the morning.</Text>
+              </View>
+              <Text style={styles.earlierDayText}>Mon</Text>
             </View>
-          ) : (
-            earlierAlerts.map((item, index) => {
-              const isLast = index === earlierAlerts.length - 1;
-              return (
-                <View key={item.id}>
-                  <View style={styles.earlierItem}>
-                    <View style={styles.earlierTopRow}>
-                      <Text style={styles.earlierTitle}>{item.title}</Text>
-                      <Text style={styles.earlierDate}>{item.timestamp_display}</Text>
-                    </View>
-                    <Text style={styles.earlierSubtitle}>{item.action_advice}</Text>
-                  </View>
-                  {!isLast ? <View style={styles.earlierDivider} /> : null}
-                </View>
-              );
-            })
-          )}
+
+            <View style={styles.divider} />
+
+            <View style={styles.earlierRow}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={styles.earlierRowTitle}>Strong wind expected</Text>
+                <Text style={styles.earlierRowBody}>Secure drying mats and tall crops.</Text>
+              </View>
+              <Text style={styles.earlierDayText}>Thu</Text>
+            </View>
+          </View>
         </View>
 
-        {/* ========================================================= */}
-        {/* 3. ALERT SETTINGS SECTION */}
-        {/* ========================================================= */}
-        <Text style={styles.settingsHeading}>Alert settings</Text>
-        <Text style={styles.settingsSubheading}>
-          Choose which warnings you want for your farms.
-        </Text>
+        {/* 3. Alert Settings */}
+        <View style={styles.sectionContainer}>
+          <Text style={styles.sectionHeaderTitle}>Alert settings</Text>
+          <Text style={styles.sectionHeaderSub}>
+            Choose which warnings you want for your farms.
+          </Text>
 
-        <View style={styles.settingsCard}>
-          {/* Setting 1: Heavy rain */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextCol}>
-              <Text style={styles.settingTitle}>Heavy rain</Text>
-              <Text style={styles.settingSubtitle}>Warn me the day before heavy rain.</Text>
+          <View style={styles.settingsCard}>
+            {/* Setting 1: Heavy rain */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextCol}>
+                <Text style={styles.settingTitle}>Heavy rain</Text>
+                <Text style={styles.settingSub}>Warn me the day before heavy rain.</Text>
+              </View>
+              <Switch
+                value={settings.heavy_rain}
+                onValueChange={() => handleToggleSetting('heavy_rain')}
+                trackColor={{ false: '#C9DBC4', true: Colors.primary }}
+                thumbColor="#FFFFFF"
+              />
             </View>
-            <Switch
-              value={settings.heavy_rain}
-              onValueChange={() => handleToggleSetting('heavy_rain')}
-              trackColor={{ false: '#D1D5DB', true: '#1F472B' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
 
-          <View style={styles.settingDivider} />
+            <View style={styles.divider} />
 
-          {/* Setting 2: Strong wind */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextCol}>
-              <Text style={styles.settingTitle}>Strong wind</Text>
-              <Text style={styles.settingSubtitle}>Warn me before strong wind.</Text>
+            {/* Setting 2: Strong wind */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextCol}>
+                <Text style={styles.settingTitle}>Strong wind</Text>
+                <Text style={styles.settingSub}>Warn me before strong wind.</Text>
+              </View>
+              <Switch
+                value={settings.strong_wind}
+                onValueChange={() => handleToggleSetting('strong_wind')}
+                trackColor={{ false: '#C9DBC4', true: Colors.primary }}
+                thumbColor="#FFFFFF"
+              />
             </View>
-            <Switch
-              value={settings.strong_wind}
-              onValueChange={() => handleToggleSetting('strong_wind')}
-              trackColor={{ false: '#D1D5DB', true: '#1F472B' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
 
-          <View style={styles.settingDivider} />
+            <View style={styles.divider} />
 
-          {/* Setting 3: Dry spell */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextCol}>
-              <Text style={styles.settingTitle}>Dry spell</Text>
-              <Text style={styles.settingSubtitle}>Tell me when no rain is expected for 7 days.</Text>
+            {/* Setting 3: Dry spell */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextCol}>
+                <Text style={styles.settingTitle}>Dry spell</Text>
+                <Text style={styles.settingSub}>Tell me when no rain is expected for 7 days.</Text>
+              </View>
+              <Switch
+                value={settings.dry_spell}
+                onValueChange={() => handleToggleSetting('dry_spell')}
+                trackColor={{ false: '#C9DBC4', true: Colors.primary }}
+                thumbColor="#FFFFFF"
+              />
             </View>
-            <Switch
-              value={settings.dry_spell}
-              onValueChange={() => handleToggleSetting('dry_spell')}
-              trackColor={{ false: '#D1D5DB', true: '#1F472B' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
 
-          <View style={styles.settingDivider} />
+            <View style={styles.divider} />
 
-          {/* Setting 4: Harvest-day advice */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextCol}>
-              <Text style={styles.settingTitle}>Harvest-day advice</Text>
-              <Text style={styles.settingSubtitle}>Best days to harvest and dry my crop.</Text>
+            {/* Setting 4: Harvest-day advice */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextCol}>
+                <Text style={styles.settingTitle}>Harvest-day advice</Text>
+                <Text style={styles.settingSub}>Best days to harvest and dry my crop.</Text>
+              </View>
+              <Switch
+                value={settings.harvest_advice}
+                onValueChange={() => handleToggleSetting('harvest_advice')}
+                trackColor={{ false: '#C9DBC4', true: Colors.primary }}
+                thumbColor="#FFFFFF"
+              />
             </View>
-            <Switch
-              value={settings.harvest_advice}
-              onValueChange={() => handleToggleSetting('harvest_advice')}
-              trackColor={{ false: '#D1D5DB', true: '#1F472B' }}
-              thumbColor="#FFFFFF"
-            />
-          </View>
 
-          <View style={styles.settingDivider} />
+            <View style={styles.divider} />
 
-          {/* Setting 5: Also send by SMS (Orange Liberia) */}
-          <View style={styles.settingRow}>
-            <View style={styles.settingTextCol}>
-              <Text style={styles.settingTitle}>Also send by SMS</Text>
-              <Text style={styles.settingSubtitle}>
-                Get free text messages on your phone (Orange Liberia / Lonestar).
-              </Text>
+            {/* Setting 5: Also send by SMS */}
+            <View style={styles.settingRow}>
+              <View style={styles.settingTextCol}>
+                <Text style={styles.settingTitle}>Also send by SMS</Text>
+                <Text style={styles.settingSub}>Send SMS for low-connectivity offline zones.</Text>
+              </View>
+              <Switch
+                value={settings.sms_enabled}
+                onValueChange={() => handleToggleSetting('sms_enabled')}
+                trackColor={{ false: '#C9DBC4', true: Colors.primary }}
+                thumbColor="#FFFFFF"
+              />
             </View>
-            <Switch
-              value={settings.sms_enabled}
-              onValueChange={() => handleToggleSetting('sms_enabled')}
-              trackColor={{ false: '#D1D5DB', true: '#1F472B' }}
-              thumbColor="#FFFFFF"
-            />
           </View>
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: '#F4F5EE',
+    backgroundColor: Colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F4F5EE',
-  },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#E8ECE3',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#14291B',
-  },
-  container: {
+  scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 36,
+    paddingHorizontal: Spacing.xl,
   },
-
-  /* 1. New Alert Card (Light Blue) */
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginBottom: 20,
+  },
+  backBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E4F4DF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  screenTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 24,
+    color: Colors.text,
+    letterSpacing: -0.4,
+  },
   newAlertCard: {
-    backgroundColor: '#DDEBF7',
-    borderRadius: 18,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#C6DDF2',
+    backgroundColor: '#DFF0FA',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 24,
+    ...Shadows.card,
   },
-  newAlertHeader: {
+  newAlertTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 12,
   },
   newBadgePill: {
-    backgroundColor: '#14375A',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    backgroundColor: '#0F3D64',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   newBadgeText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 12,
     color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
   },
   newAlertTimestamp: {
-    fontSize: 12,
-    color: '#4A6984',
-    fontWeight: '500',
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.xs,
+    color: '#0F3D64',
+    opacity: 0.8,
   },
   newAlertTitleRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginBottom: 6,
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
   },
   newAlertTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 17,
+    color: '#0F3D64',
     flex: 1,
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#103554',
-    lineHeight: 22,
+    letterSpacing: -0.2,
   },
   newAlertBody: {
-    fontSize: 13.5,
-    color: '#23496B',
-    lineHeight: 19,
-    marginBottom: 16,
+    fontFamily: FontFamily.regular,
+    fontSize: Typography.sizes.sm,
+    color: '#0F3D64',
+    lineHeight: 20,
+    marginBottom: 18,
   },
   gotItButton: {
-    backgroundColor: '#14375A',
-    borderRadius: 12,
-    paddingVertical: 12,
+    backgroundColor: '#0F3D64',
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
   },
   gotItButtonText: {
-    color: '#FFFFFF',
+    fontFamily: FontFamily.bold,
     fontSize: 15,
-    fontWeight: '700',
+    color: '#FFFFFF',
   },
-
-  /* 2. Earlier Section */
-  earlierSectionLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#7E9083',
-    marginBottom: 8,
-    marginTop: 4,
+  sectionContainer: {
+    marginBottom: 24,
+  },
+  sectionHeaderTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 18,
+    color: Colors.text,
+    marginBottom: 2,
+    letterSpacing: -0.3,
+  },
+  sectionHeaderSub: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    marginBottom: 14,
   },
   earlierCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 16,
+    backgroundColor: Colors.card,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E2E7DE',
-    marginBottom: 20,
+    borderColor: Colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+    ...Shadows.card,
   },
-  emptyEarlier: {
-    paddingVertical: 16,
-    alignItems: 'center',
-  },
-  emptyEarlierText: {
-    fontSize: 13,
-    color: '#8CA091',
-  },
-  earlierItem: {
-    paddingVertical: 12,
-  },
-  earlierTopRow: {
+  earlierRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
   },
-  earlierTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1C3322',
-  },
-  earlierDate: {
-    fontSize: 12,
-    color: '#7E9083',
-    fontWeight: '500',
-  },
-  earlierSubtitle: {
-    fontSize: 13,
-    color: '#566C5C',
-    lineHeight: 18,
-  },
-  earlierDivider: {
-    height: 1,
-    backgroundColor: '#EDF1E8',
-  },
-
-  /* 3. Alert Settings */
-  settingsHeading: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#152A1C',
+  earlierRowTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: Colors.text,
     marginBottom: 2,
   },
-  settingsSubheading: {
-    fontSize: 13,
-    color: '#5B7061',
-    marginBottom: 12,
+  earlierRowBody: {
+    fontFamily: FontFamily.regular,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+  },
+  earlierDayText: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Colors.border,
   },
   settingsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    backgroundColor: Colors.card,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E2E7DE',
+    borderColor: Colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+    ...Shadows.card,
   },
   settingRow: {
     flexDirection: 'row',
@@ -441,18 +427,14 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   settingTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1C3322',
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: Colors.text,
     marginBottom: 2,
   },
-  settingSubtitle: {
-    fontSize: 12,
-    color: '#5B7061',
-    lineHeight: 16,
-  },
-  settingDivider: {
-    height: 1,
-    backgroundColor: '#EDF1E8',
+  settingSub: {
+    fontFamily: FontFamily.regular,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
   },
 });

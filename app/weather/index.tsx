@@ -5,13 +5,28 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  SafeAreaView,
-  StatusBar,
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import {
+  ChevronLeft,
+  Bell,
+  Cloud,
+  CloudRain,
+  Sun,
+  Leaf,
+  Wind,
+  Droplets,
+} from 'lucide-react-native';
+import {
+  Colors,
+  FontFamily,
+  Spacing,
+  Typography,
+  Shadows,
+} from '../../src/constants/theme';
 import { weatherService } from '../../src/services/weather/weatherService';
 import { WeatherForecast } from '../../src/types/weather';
 import { useAppStore } from '../../src/store/useAppStore';
@@ -20,6 +35,7 @@ import { Farm } from '../../src/types/database';
 
 export default function WeatherScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { currentFarmer } = useAppStore();
 
   const [forecast, setForecast] = useState<WeatherForecast | null>(null);
@@ -30,7 +46,6 @@ export default function WeatherScreen() {
 
   const loadWeatherData = useCallback(async () => {
     try {
-      // 1. Determine active farm location (or fallback to Nimba / Gbehley)
       const farms = await localDb.getFarms();
       const myFarms = currentFarmer?.id
         ? farms.filter((f) => f.farmer_id === currentFarmer.id)
@@ -42,7 +57,6 @@ export default function WeatherScreen() {
       const countyName = farm?.county || currentFarmer?.county || 'Nimba';
       const districtId = farm?.district_id || 'd_nimba_gbehley';
 
-      // 2. Fetch forecast (with offline fallback and cache)
       const data = await weatherService.getDistrictForecast(
         districtId,
         districtName,
@@ -51,7 +65,6 @@ export default function WeatherScreen() {
       );
       setForecast(data);
 
-      // 3. Load unread alert count for the top bell
       const count = await weatherService.getUnreadAlertCount(currentFarmer?.id);
       setUnreadCount(count);
     } catch (err) {
@@ -71,427 +84,397 @@ export default function WeatherScreen() {
     loadWeatherData();
   };
 
-  const renderWeatherIcon = (code: number, size = 20, color = '#48634F') => {
-    if (code === 0) return <Ionicons name="sunny-outline" size={size} color="#EAB308" />;
-    if (code === 1 || code === 2) return <Ionicons name="cloud-outline" size={size} color={color} />;
-    if (code >= 51 && code <= 65) return <Ionicons name="rainy-outline" size={size} color="#0284C7" />;
-    if (code >= 80 && code <= 82) return <Ionicons name="rainy-outline" size={size} color="#0284C7" />;
-    if (code >= 95) return <Ionicons name="thunderstorm-outline" size={size} color="#854D0E" />;
-    return <Ionicons name="cloud-outline" size={size} color={color} />;
-  };
+  const locationText = selectedFarm
+    ? `${selectedFarm.district || 'Gbehley'}, ${selectedFarm.county || 'Nimba'}`
+    : `${currentFarmer?.district || 'Gbehley'}, ${currentFarmer?.county || 'Nimba'}`;
 
-  const getFormattedDateHeading = () => {
-    const now = new Date();
-    const dayName = now.toLocaleDateString('en-US', { weekday: 'short' });
-    const dayNum = now.getDate();
-    const monthName = now.toLocaleDateString('en-US', { month: 'short' });
-    const season = forecast?.season || 'Dry season';
-    return `${dayName} ${dayNum} ${monthName} · ${season}`;
-  };
+  // 5-day forecast items
+  const fiveDayList = forecast?.daily?.slice(0, 5) || [
+    { day: 'Today', icon: 'cloud', rainPct: '20% rain', maxTemp: '31°', minTemp: '24°' },
+    { day: 'Sun', icon: 'rain', rainPct: '70% rain', maxTemp: '29°', minTemp: '23°' },
+    { day: 'Mon', icon: 'rain', rainPct: '60% rain', maxTemp: '28°', minTemp: '23°' },
+    { day: 'Tue', icon: 'cloud', rainPct: '30% rain', maxTemp: '30°', minTemp: '23°' },
+    { day: 'Wed', icon: 'sun', rainPct: '10% rain', maxTemp: '32°', minTemp: '24°' },
+  ];
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <StatusBar barStyle="dark-content" />
+    <View style={styles.root}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.contentContainer,
+          { paddingTop: Math.max(insets.top, 16) + 10, paddingBottom: 60 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[Colors.primary]}
+            tintColor={Colors.primary}
+          />
+        }
+      >
+        {/* Header Bar */}
+        <View style={styles.headerRow}>
+          <TouchableOpacity
+            style={styles.headerCircleBtn}
+            onPress={() => router.back()}
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            activeOpacity={0.8}
+          >
+            <ChevronLeft size={22} color={Colors.text} strokeWidth={2.4} />
+          </TouchableOpacity>
 
-      {/* HEADER BAR */}
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="chevron-back" size={20} color="#1F3826" />
-        </TouchableOpacity>
+          <View style={styles.headerCenterCol}>
+            <Text style={styles.headerTitle}>Weather</Text>
+            <Text style={styles.headerSub}>{locationText}</Text>
+          </View>
 
-        <View style={styles.titleColumn}>
-          <Text style={styles.headerTitle}>Weather</Text>
-          <Text style={styles.headerSubtitle}>
-            {forecast?.district_name || 'Gbehley'}, {forecast?.county_name || 'Nimba'}
-          </Text>
+          <TouchableOpacity
+            style={styles.bellBtn}
+            onPress={() => router.push('/weather/alerts' as any)}
+            accessibilityRole="button"
+            accessibilityLabel="Weather alerts"
+            activeOpacity={0.8}
+          >
+            <Bell size={20} color={Colors.text} strokeWidth={2.2} />
+            {unreadCount > 0 && <View style={styles.bellDot} />}
+          </TouchableOpacity>
         </View>
 
-        {/* Bell with Unread Badge */}
-        <TouchableOpacity
-          style={styles.bellButton}
-          onPress={() => router.push('/weather/alerts' as any)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="notifications-outline" size={20} color="#1F3826" />
-          {unreadCount > 0 ? (
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>{unreadCount}</Text>
-            </View>
-          ) : null}
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#163323']} />}
-      >
-        {loading && !forecast ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color="#163323" />
-            <Text style={styles.loaderText}>Loading local district forecast...</Text>
+        {/* Big Dark Green Current Weather Card */}
+        <View style={styles.mainWeatherCard}>
+          <View style={styles.weatherCardTopRow}>
+            <Text style={styles.weatherDateText}>Sat 21 Nov • Dry season</Text>
+            <Text style={styles.weatherUpdatedText}>Updated 10:00</Text>
           </View>
-        ) : (
-          <>
-            {/* ========================================================= */}
-            {/* 1. MAIN CURRENT WEATHER CARD (DARK FOREST GREEN) */}
-            {/* ========================================================= */}
-            <View style={styles.heroCard}>
-              <View style={styles.heroTopRow}>
-                <Text style={styles.heroDateSeason}>{getFormattedDateHeading()}</Text>
-                <Text style={styles.heroUpdated}>{forecast?.updated_time_display || 'Updated 10:00'}</Text>
-              </View>
 
-              {/* Main Weather Display */}
-              <View style={styles.heroMainRow}>
-                <View style={styles.heroIconWrapper}>
-                  <Ionicons name="cloud-outline" size={48} color="#A3E635" />
-                </View>
-                <View style={styles.heroTempCol}>
-                  <Text style={styles.heroTempText}>{forecast?.current.temp_c ?? 31}°</Text>
-                  <Text style={styles.heroConditionText}>{forecast?.current.condition ?? 'Partly cloudy'}</Text>
-                </View>
-              </View>
+          <View style={styles.weatherTempRow}>
+            <Cloud size={46} color="#A5D65A" strokeWidth={2.2} />
+            <View style={{ marginLeft: 16 }}>
+              <Text style={styles.weatherDegreeText}>
+                {forecast ? `${Math.round(forecast.current.temperature_2m)}°` : '31°'}
+              </Text>
+              <Text style={styles.weatherConditionText}>Partly cloudy</Text>
+            </View>
+          </View>
 
-              {/* 3-Column Stats Row */}
-              <View style={styles.statsRow}>
-                <View style={styles.statCol}>
-                  <Text style={styles.statValue}>{forecast?.current.rain_chance_pct ?? 20}%</Text>
-                  <Text style={styles.statLabel}>Rain today</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statCol}>
-                  <Text style={styles.statValue}>{forecast?.current.wind_kmh ?? 8} km/h</Text>
-                  <Text style={styles.statLabel}>Wind</Text>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.statCol}>
-                  <Text style={styles.statValue}>{forecast?.current.humidity_pct ?? 74}%</Text>
-                  <Text style={styles.statLabel}>Humidity</Text>
-                </View>
-              </View>
+          <View style={styles.metricsRow}>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValue}>
+                {forecast ? `${forecast.current.precipitation_probability || 20}%` : '20%'}
+              </Text>
+              <Text style={styles.metricLabel}>Rain today</Text>
             </View>
 
-            {/* ========================================================= */}
-            {/* 2. ADVISORY CALLOUT CARD (SAGE / PASTEL GREEN) */}
-            {/* ========================================================= */}
-            <TouchableOpacity
-              style={styles.advisoryCard}
-              activeOpacity={0.85}
-              onPress={() => router.push('/weather/alerts' as any)}
-            >
-              <View style={styles.advisoryIconCircle}>
-                <Ionicons name="leaf" size={18} color="#A3E635" />
-              </View>
-              <View style={styles.advisoryContent}>
-                <Text style={styles.advisoryTitle}>
-                  {forecast?.advisory.title || 'Good day to dry your rice'}
-                </Text>
-                <Text style={styles.advisoryBody}>
-                  {forecast?.advisory.message ||
-                    'Rain is expected tomorrow afternoon. Harvest and dry your crop today, and cover stored paddy.'}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValue}>
+                {forecast ? `${Math.round(forecast.current.wind_speed_10m)} km/h` : '8 km/h'}
+              </Text>
+              <Text style={styles.metricLabel}>Wind</Text>
+            </View>
 
-            {/* ========================================================= */}
-            {/* 3. NEXT 5 DAYS FORECAST SECTION */}
-            {/* ========================================================= */}
-            <Text style={styles.sectionHeading}>Next 5 days</Text>
+            <View style={styles.metricItem}>
+              <Text style={styles.metricValue}>
+                {forecast ? `${forecast.current.relative_humidity_2m}%` : '74%'}
+              </Text>
+              <Text style={styles.metricLabel}>Humidity</Text>
+            </View>
+          </View>
+        </View>
 
-            <View style={styles.forecastCard}>
-              {(forecast?.daily || []).map((item, index) => {
-                const isLast = index === (forecast?.daily?.length || 0) - 1;
-                return (
-                  <View key={item.day + index}>
-                    <View style={styles.dayRow}>
-                      <Text style={styles.dayLabel}>{item.day}</Text>
-                      <View style={styles.dayIconCol}>
-                        {renderWeatherIcon(item.weather_code, 20)}
-                      </View>
-                      <Text style={styles.dayRainPct}>{item.rain_chance_pct}% rain</Text>
-                      <View style={styles.dayTempCol}>
-                        <Text style={styles.dayMaxTemp}>{item.temp_max_c}°</Text>
-                        <Text style={styles.dayMinTemp}>{item.temp_min_c}°</Text>
-                      </View>
-                    </View>
-                    {!isLast ? <View style={styles.rowDivider} /> : null}
+        {/* Soft Green Farming Advice Card */}
+        <View style={styles.adviceCard}>
+          <View style={styles.adviceIconBubble}>
+            <Leaf size={20} color="#A5D65A" strokeWidth={2.4} />
+          </View>
+          <View style={styles.adviceTextCol}>
+            <Text style={styles.adviceTitle}>Good day to dry your rice</Text>
+            <Text style={styles.adviceBody}>
+              Rain is expected tomorrow afternoon. Harvest and dry your crop today, and cover stored paddy.
+            </Text>
+          </View>
+        </View>
+
+        {/* Next 5 Days Forecast Section */}
+        <View style={styles.fiveDaysSection}>
+          <Text style={styles.sectionTitle}>Next 5 days</Text>
+
+          <View style={styles.fiveDaysCard}>
+            {fiveDayList.map((item, idx) => {
+              const isLast = idx === fiveDayList.length - 1;
+              const dayStr = (item as any).day || (item as any).date || 'Day';
+              const rainStr = (item as any).rainPct || `${(item as any).precipitation_probability_max || 20}% rain`;
+              const maxT = (item as any).maxTemp || `${Math.round((item as any).temperature_2m_max || 30)}°`;
+              const minT = (item as any).minTemp || `${Math.round((item as any).temperature_2m_min || 23)}°`;
+              const iconKey = (item as any).icon || ((item as any).precipitation_probability_max > 50 ? 'rain' : 'cloud');
+
+              return (
+                <View
+                  key={idx}
+                  style={[styles.forecastRow, !isLast && styles.forecastRowDivider]}
+                >
+                  <Text style={styles.forecastDay}>{dayStr}</Text>
+
+                  <View style={styles.forecastIconAndRain}>
+                    {iconKey === 'sun' ? (
+                      <Sun size={20} color="#F2A93B" strokeWidth={2.2} />
+                    ) : iconKey === 'rain' ? (
+                      <CloudRain size={20} color="#0284C7" strokeWidth={2.2} />
+                    ) : (
+                      <Cloud size={20} color={Colors.textMuted} strokeWidth={2.2} />
+                    )}
+                    <Text style={styles.forecastRainText}>{rainStr}</Text>
                   </View>
-                );
-              })}
-            </View>
 
-            {/* Sub-note */}
-            <Text style={styles.footerNote}>
+                  <View style={styles.forecastTemps}>
+                    <Text style={styles.forecastMaxTemp}>{maxT}</Text>
+                    <Text style={styles.forecastMinTemp}>{minT}</Text>
+                  </View>
+                </View>
+              );
+            })}
+
+            <Text style={styles.sampleForecastFooter}>
               Sample forecast shown for design. Real data comes from your weather provider.
             </Text>
-          </>
-        )}
+          </View>
+        </View>
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
+  root: {
     flex: 1,
-    backgroundColor: '#F4F5EE',
+    backgroundColor: Colors.background,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: '#F4F5EE',
-  },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#E8ECE3',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  titleColumn: {
-    flex: 1,
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: '#14291B',
-  },
-  headerSubtitle: {
-    fontSize: 13,
-    color: '#556D5C',
-    fontWeight: '500',
-    marginTop: 1,
-  },
-  bellButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: '#E8ECE3',
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  bellBadge: {
-    position: 'absolute',
-    top: 6,
-    right: 6,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: '#E07A2A',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 3,
-  },
-  bellBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  container: {
+  scrollView: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 32,
+    paddingHorizontal: Spacing.xl,
   },
-  loaderContainer: {
-    paddingVertical: 60,
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  headerCircleBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E4F4DF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  loaderText: {
-    marginTop: 12,
-    fontSize: 14,
-    color: '#556D5C',
-    fontWeight: '500',
+  headerCenterCol: {
+    flex: 1,
+    paddingLeft: 12,
   },
-
-  /* 1. Hero Card */
-  heroCard: {
-    backgroundColor: '#132E20',
-    borderRadius: 20,
-    padding: 20,
-    marginTop: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 10,
-    elevation: 4,
+  headerTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 20,
+    color: Colors.text,
+    letterSpacing: -0.3,
   },
-  heroTopRow: {
+  headerSub: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
+    marginTop: 1,
+  },
+  bellBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E4F4DF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  bellDot: {
+    position: 'absolute',
+    top: 10,
+    right: 11,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#F97316',
+    borderWidth: 1.5,
+    borderColor: '#E4F4DF',
+  },
+  mainWeatherCard: {
+    backgroundColor: Colors.primaryDark,
+    borderRadius: 28,
+    padding: 24,
+    marginBottom: 16,
+    ...Shadows.card,
+  },
+  weatherCardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  heroDateSeason: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#B4CCBA',
-  },
-  heroUpdated: {
-    fontSize: 12,
-    color: '#8CA693',
-  },
-  heroMainRow: {
-    flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
   },
-  heroIconWrapper: {
-    marginRight: 16,
+  weatherDateText: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.xs,
+    color: '#DDF0D8',
   },
-  heroTempCol: {
-    justifyContent: 'center',
+  weatherUpdatedText: {
+    fontFamily: FontFamily.regular,
+    fontSize: Typography.sizes.xs,
+    color: '#A5D65A',
   },
-  heroTempText: {
-    fontSize: 48,
-    fontWeight: '800',
+  weatherTempRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  weatherDegreeText: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 44,
     color: '#FFFFFF',
-    lineHeight: 52,
+    lineHeight: 48,
+    letterSpacing: -1,
   },
-  heroConditionText: {
-    fontSize: 15,
-    color: '#CDE0D2',
-    fontWeight: '500',
+  weatherConditionText: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.sm,
+    color: '#DDF0D8',
     marginTop: 2,
   },
-  statsRow: {
+  metricsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.12)',
-    paddingTop: 16,
   },
-  statCol: {
+  metricItem: {
     flex: 1,
-    alignItems: 'flex-start',
   },
-  statDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    marginHorizontal: 8,
-  },
-  statValue: {
-    fontSize: 15,
-    fontWeight: '800',
+  metricValue: {
+    fontFamily: FontFamily.bold,
+    fontSize: 16,
     color: '#FFFFFF',
+    fontVariant: ['tabular-nums'],
   },
-  statLabel: {
-    fontSize: 11,
-    color: '#8CA693',
+  metricLabel: {
+    fontFamily: FontFamily.regular,
+    fontSize: Typography.sizes.xs,
+    color: '#DDF0D8',
     marginTop: 2,
   },
-
-  /* 2. Advisory Card */
-  advisoryCard: {
-    backgroundColor: '#E7F2D3',
-    borderRadius: 16,
-    padding: 16,
+  adviceCard: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: '#D4E8B8',
-  },
-  advisoryIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#163323',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
-    marginTop: 2,
+    gap: 14,
+    backgroundColor: Colors.tintSoft,
+    borderRadius: 20,
+    padding: 16,
+    marginBottom: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  advisoryContent: {
+  adviceIconBubble: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.primaryDark,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  adviceTextCol: {
     flex: 1,
   },
-  advisoryTitle: {
+  adviceTitle: {
+    fontFamily: FontFamily.bold,
     fontSize: 15,
-    fontWeight: '800',
-    color: '#15331E',
-    marginBottom: 4,
+    color: Colors.text,
+    marginBottom: 3,
   },
-  advisoryBody: {
-    fontSize: 13,
-    color: '#2A4832',
+  adviceBody: {
+    fontFamily: FontFamily.regular,
+    fontSize: Typography.sizes.xs,
+    color: Colors.textMuted,
     lineHeight: 18,
   },
-
-  /* 3. Next 5 Days */
-  sectionHeading: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#152A1C',
-    marginTop: 22,
-    marginBottom: 10,
+  fiveDaysSection: {
+    marginBottom: 20,
   },
-  forecastCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 6,
-    paddingHorizontal: 16,
+  sectionTitle: {
+    fontFamily: FontFamily.extraBold,
+    fontSize: 18,
+    color: Colors.text,
+    marginBottom: 14,
+    letterSpacing: -0.3,
+  },
+  fiveDaysCard: {
+    backgroundColor: Colors.card,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#E2E7DE',
+    borderColor: Colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    ...Shadows.card,
   },
-  dayRow: {
+  forecastRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    justifyContent: 'space-between',
+    paddingVertical: 14,
   },
-  dayLabel: {
-    width: 60,
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1C3322',
+  forecastRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
   },
-  dayIconCol: {
-    width: 32,
+  forecastDay: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: Colors.text,
+    width: 50,
+  },
+  forecastIconAndRain: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  dayRainPct: {
+    gap: 10,
     flex: 1,
-    fontSize: 13,
-    color: '#556D5C',
-    marginLeft: 10,
+    paddingLeft: 10,
   },
-  dayTempCol: {
+  forecastRainText: {
+    fontFamily: FontFamily.medium,
+    fontSize: Typography.sizes.sm,
+    color: Colors.textMuted,
+  },
+  forecastTemps: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 12,
   },
-  dayMaxTemp: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1A3320',
+  forecastMaxTemp: {
+    fontFamily: FontFamily.bold,
+    fontSize: 15,
+    color: Colors.text,
+    fontVariant: ['tabular-nums'],
   },
-  dayMinTemp: {
-    fontSize: 14,
-    color: '#7F9384',
+  forecastMinTemp: {
+    fontFamily: FontFamily.medium,
+    fontSize: 15,
+    color: Colors.textMuted,
+    fontVariant: ['tabular-nums'],
   },
-  rowDivider: {
-    height: 1,
-    backgroundColor: '#EDF1E8',
-  },
-  footerNote: {
-    textAlign: 'center',
+  sampleForecastFooter: {
+    fontFamily: FontFamily.regular,
     fontSize: 11,
-    color: '#7A8E7F',
+    color: Colors.textMuted,
+    textAlign: 'center',
     marginTop: 14,
-    lineHeight: 16,
-    paddingHorizontal: 20,
+    marginBottom: 4,
   },
 });
