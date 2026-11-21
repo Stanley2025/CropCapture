@@ -8,6 +8,12 @@ export async function proxy(request: NextRequest) {
     },
   });
 
+  // The public buyer page and the older scan address need no login: anyone who scans a QR code opens them.
+  const path = request.nextUrl.pathname;
+  if (path.startsWith('/b/') || path.startsWith('/verify/')) {
+    return NextResponse.next();
+  }
+
   const isLoginPage = request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/';
   const adminSession = request.cookies.get('agritrack_admin_session')?.value;
 
