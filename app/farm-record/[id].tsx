@@ -14,6 +14,8 @@ import { RainChart } from '../../src/components/farmYear/RainChart';
 import { ActivityWeatherLine } from '../../src/components/activity/ActivityWeatherLine';
 import { t, StringKey } from '../../src/i18n/en';
 import { weatherLabel } from '../../src/shared/activityWeather';
+import { ProfitLossCard } from '../../src/components/ProfitLossCard';
+import { profitAndLoss } from '../../src/shared/farmFinance';
 import { yearsWithData, summarizeYear, activitiesInYear, showMeasure, buildYearPdfHtml } from '../../src/shared/farmYear';
 
 const monthNames = () => Array.from({ length: 12 }, (_, i) => t(`month${i + 1}` as StringKey));
@@ -26,6 +28,8 @@ export default function FarmRecordScreen() {
   const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
   const [year, setYear] = useState(new Date().getFullYear());
   const [making, setMaking] = useState(false);
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [inputs, setInputs] = useState<any[]>([]);
 
   // Read from the local database every time the screen is shown, so a new activity appears at once.
   const load = useCallback(async () => {
@@ -34,6 +38,8 @@ export default function FarmRecordScreen() {
     setFarm(farms.find((f) => f.id === id) || null);
     setActivities(await localDb.getActivities(undefined, [id]));
     setHarvests(await localDb.getHarvests(undefined, [id]));
+    setExpenses(await localDb.getExpenses([id]));
+    setInputs(await localDb.getInputs([id]));
   }, [id]);
   useFocusEffect(
     useCallback(() => {
@@ -45,6 +51,7 @@ export default function FarmRecordScreen() {
   }, [load]);
 
   const years = useMemo(() => yearsWithData({ activities, harvests }), [activities, harvests]);
+  const pl = useMemo(() => profitAndLoss({ harvests, expenses, inputs, activities, year, farmIds: [id as string] }), [harvests, expenses, inputs, activities, year, id]);
   const summary = useMemo(() => summarizeYear({ activities, harvests, year }), [activities, harvests, year]);
   const yearActivities = useMemo(
     () => [...activitiesInYear(activities, year)].sort((a, b) => String(a.activity_date).localeCompare(String(b.activity_date))),
@@ -143,6 +150,8 @@ export default function FarmRecordScreen() {
                 </View>
               ))}
             </View>
+
+            <ProfitLossCard pl={pl} />
 
             <RainChart year={year} months={summary.months} />
 

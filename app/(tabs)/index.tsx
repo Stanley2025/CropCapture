@@ -39,6 +39,8 @@ import {
   Shadows,
 } from '../../src/constants/theme';
 import { useAppStore, PERSONAS } from '../../src/store/useAppStore';
+import { ProfitLossCard } from '../../src/components/ProfitLossCard';
+import { profitAndLoss } from '../../src/shared/farmFinance';
 import { localDb } from '../../src/services/storage/localDatabase';
 import { Farm, FarmActivity, FarmSeason, HarvestBatch } from '../../src/types/database';
 import {
@@ -73,6 +75,8 @@ export default function HomeScreen() {
   const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [expenses, setExpenses] = useState<any[]>([]);
+  const [inputRows, setInputRows] = useState<any[]>([]);
   const loadData = useCallback(async () => {
     try {
       let [f, s, a, h] = await Promise.all([
@@ -90,6 +94,10 @@ export default function HomeScreen() {
         h = h.filter((harv) => harv.farmer_id === currentFarmer.id || myFarmIds.has(harv.farm_id));
       }
 
+      const ids = f.map((x) => x.id);
+      const [ex, inp] = await Promise.all([localDb.getExpenses(ids), localDb.getInputs(ids)]);
+      setExpenses(ex);
+      setInputRows(inp);
       setFarms(f);
       setSeasons(s);
       setActivities(a);
@@ -222,16 +230,16 @@ export default function HomeScreen() {
               <StatsCard
                 stats={[
                   {
-                    value: totalFarms || 2,
+                    value: totalFarms,
                     label: 'Farms',
                     onPress: () => router.push('/farms' as any),
                   },
                   {
-                    value: totalCultivatedArea > 0 ? totalCultivatedArea.toFixed(1) : '7.3',
+                    value: totalCultivatedArea.toFixed(1),
                     label: 'Acres',
                   },
                   {
-                    value: totalHarvestWeight > 0 ? totalHarvestWeight.toLocaleString() : '2,450',
+                    value: totalHarvestWeight.toLocaleString(),
                     label: 'kg harvested',
                     onPress: () => router.push('/harvests' as any),
                   },
@@ -267,6 +275,55 @@ export default function HomeScreen() {
               />
             </View>
 
+            <ProfitLossCard
+              pl={profitAndLoss({ harvests, expenses, inputs: inputRows, activities, year: new Date().getFullYear(), farmIds: farms.map((x) => x.id) })}
+              title={`Profit and loss ${new Date().getFullYear()}`}
+            />
+
+            {/* Season records: field, planting, labour, problems, harvest outcomes, profit and rain */}
+            <View style={styles.sectionWrapper}>
+              <SectionHeader title="Season records" />
+              {seasons.filter((x) => x.cycle_type !== 'livestock').length === 0 ? (
+                <View style={styles.seasonEmpty}>
+                  <Text style={styles.seasonEmptyText}>
+                    Start a season to keep its record: field, planting, labour, problems, harvest, sales and rain.
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.seasonOpenBtn}
+                    activeOpacity={0.85}
+                    onPress={() => router.push('/season/create' as any)}
+                  >
+                    <Text style={styles.seasonOpenText}>Start a season</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                seasons
+                  .filter((x) => x.cycle_type !== 'livestock')
+                  .slice(0, 4)
+                  .map((season) => {
+                    const farmName = farms.find((f) => f.id === season.farm_id)?.name;
+                    return (
+                      <TouchableOpacity
+                        key={season.id}
+                        style={styles.seasonRow}
+                        activeOpacity={0.85}
+                        onPress={() => router.push(`/season/${season.id}` as any)}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.seasonRowTitle} numberOfLines={1}>
+                            {season.season_name}
+                          </Text>
+                          <Text style={styles.seasonRowSub} numberOfLines={1}>
+                            {[farmName, season.planting_date ? `planted ${season.planting_date}` : null].filter(Boolean).join(' • ')}
+                          </Text>
+                        </View>
+                        <Text style={styles.seasonOpenText}>Open record</Text>
+                      </TouchableOpacity>
+                    );
+                  })
+              )}
+            </View>
+
             {/* My Farms Carousel */}
             <View style={styles.sectionWrapper}>
               <SectionHeader
@@ -275,39 +332,12 @@ export default function HomeScreen() {
                 onAction={() => router.push('/farms' as any)}
               />
               {farms.length === 0 ? (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.farmsScrollContent}
-                >
-                  <TouchableOpacity
-                    style={styles.farmCard}
-                    activeOpacity={0.9}
-                    onPress={() => router.push('/farms' as any)}
-                  >
-                    <View style={styles.farmIllustrationBox}>
-                      <FieldIllustration height={96} cropType="rice" />
-                    </View>
-                    <View style={styles.farmCardContent}>
-                      <Text style={styles.farmCardTitle}>Gbehley Rice Plot</Text>
-                      <Text style={styles.farmCardSub}>Rice • 4.1 acres</Text>
-                    </View>
+                <View style={styles.seasonEmpty}>
+                  <Text style={styles.seasonEmptyText}>You have not registered a farm yet. Add your first farm to start recording.</Text>
+                  <TouchableOpacity style={styles.seasonOpenBtn} activeOpacity={0.85} onPress={() => router.push('/farm/register' as any)}>
+                    <Text style={styles.seasonOpenText}>Add your farm</Text>
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={styles.farmCard}
-                    activeOpacity={0.9}
-                    onPress={() => router.push('/farms' as any)}
-                  >
-                    <View style={styles.farmIllustrationBox}>
-                      <FieldIllustration height={96} cropType="cassava" />
-                    </View>
-                    <View style={styles.farmCardContent}>
-                      <Text style={styles.farmCardTitle}>Upland Farm</Text>
-                      <Text style={styles.farmCardSub}>Cassava • 3.2 acres</Text>
-                    </View>
-                  </TouchableOpacity>
-                </ScrollView>
+                </View>
               ) : (
                 <ScrollView
                   horizontal
@@ -685,6 +715,54 @@ const styles = StyleSheet.create({
   },
   sectionWrapper: {
     marginBottom: Spacing.xxl,
+  },
+  seasonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: Colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 10,
+  },
+  seasonRowTitle: {
+    fontFamily: FontFamily.bold,
+    fontSize: Typography.sizes.md,
+    color: Colors.text,
+  },
+  seasonRowSub: {
+    fontSize: 13,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  seasonOpenText: {
+    fontFamily: FontFamily.bold,
+    fontSize: 14,
+    color: Colors.primary,
+  },
+  seasonOpenBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+  },
+  seasonEmpty: {
+    backgroundColor: Colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: 16,
+  },
+  seasonEmptyText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: Colors.textMuted,
   },
   farmsScrollContent: {
     gap: 14,
