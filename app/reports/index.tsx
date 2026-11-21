@@ -28,6 +28,7 @@ import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { Button } from '../../src/components/Button';
 import { EmptyState } from '../../src/components/EmptyState';
+import { estimateHarvestRevenue } from '../../src/shared/farmRecords';
 
 // Helper to extract numeric year safely from ISO strings or YYYY-MM-DD
 function extractYear(dateStr?: string | null): number | null {
@@ -214,19 +215,7 @@ export default function ReportsScreen() {
 
   // Real gross revenue: prioritizes recorded harvest total_value ($ USD),
   // falling back to commodity rates ($50/head for livestock or $0.45/kg for crops)
-  const estimatedRevenue = useMemo(() => {
-    return filteredHarvests.reduce((acc, h) => {
-      if (h.total_value && Number(h.total_value) > 0) {
-        return acc + Number(h.total_value);
-      }
-      const isLivestock =
-        (h as any).crop?.category === 'Livestock Offtake' ||
-        (h.unit || '').toLowerCase().includes('head') ||
-        (h.unit || '').toLowerCase().includes('animal');
-      const rate = isLivestock ? 50 : 0.45;
-      return acc + (Number(h.quantity) || 0) * rate;
-    }, 0);
-  }, [filteredHarvests]);
+  const estimatedRevenue = useMemo(() => estimateHarvestRevenue(filteredHarvests), [filteredHarvests]);
   const netReturn = estimatedRevenue - grandTotalCost;
 
   // Average yield productivity per acre
@@ -310,7 +299,7 @@ export default function ReportsScreen() {
       const farmLabel = selectedFarmObj ? selectedFarmObj.name.replace(/\s+/g, '_') : 'All_Farms';
 
       const csvContent = [
-        `# CROPCAPTURE HISTORICAL FARM REPORT - ${yearLabel.toUpperCase()}`,
+        `# FARMTORI HISTORICAL FARM REPORT - ${yearLabel.toUpperCase()}`,
         `# Farmer: ${currentFarmer?.full_name || 'Farmer'}, Parcel: ${selectedFarmObj?.name || 'All Parcels'}`,
         `# Generated: ${new Date().toISOString()}`,
         '',
@@ -335,7 +324,7 @@ export default function ReportsScreen() {
       ].join('\n');
 
       await Share.share({
-        title: `CropCapture_${farmLabel}_${yearLabel}_Report`,
+        title: `FarmTori_${farmLabel}_${yearLabel}_Report`,
         message: csvContent,
       });
     } catch (e: any) {

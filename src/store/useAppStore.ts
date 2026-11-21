@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { UserRole, Farmer, Profile, SyncStatusType, AppNotification } from '../types/database';
 import { localDb, generateUUID } from '../services/storage/localDatabase';
 import { syncEngine } from '../services/sync/syncEngine';
+import { refreshAllSeasonWeather } from '../services/season/seasonWeatherService';
 import { secureSessionManager } from '../services/auth/secureSessionManager';
 
 export interface PersonaDetails {
@@ -128,6 +129,8 @@ interface AppState {
   setRole: (role: UserRole) => void;
   toggleOfflineMode: () => void;
   triggerManualSync: () => Promise<void>;
+  /** Pull this farmer's records written by other channels (e.g. USSD). Safe to call offline. */
+  pullRemoteChanges: () => Promise<void>;
   refreshPendingSyncCount: () => Promise<void>;
   markNotificationRead: (id: string) => void;
   updateProfilePhoto: (photoUri: string | null) => Promise<void>;
@@ -383,7 +386,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const welcomeNotification: AppNotification = {
       id: generateUUID(),
       user_id: newFarmer.id,
-      title: 'Welcome to CropCapture!',
+      title: 'Welcome to FarmTori!',
       message: `Your account has been registered with Farm ID: ${newFarmer.farmer_id_code}. Register your farm parcel to begin recording crop and livestock activities.`,
       type: 'system',
       is_read: false,
@@ -434,6 +437,9 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
     set({ syncStatus: 'synchronizing' });
     const result = await syncEngine.syncQueue();
+    await get().pullRemoteChanges();
+    // Quietly record the weather for each season (no screen of its own; shown inside the season record).
+    refreshAllSeasonWeather(get().isOfflineMode).catch((e) => console.warn('Season weather refresh skipped:', e));
     const queue = await localDb.getSyncQueue();
     const pendingCount = queue.filter(
       (i) => i.status === 'waiting_to_sync' || i.status === 'sync_failed'
@@ -444,6 +450,16 @@ export const useAppStore = create<AppState>((set, get) => ({
       pendingSyncCount: pendingCount,
       syncStatus: result.failureCount > 0 ? 'sync_failed' : 'synced',
     });
+  },
+
+  pullRemoteChanges: async () => {
+    const { isOfflineMode, currentRole, currentFarmer } = get();
+    if (isOfflineMode || currentRole !== 'farmer' || !currentFarmer?.id) return;
+    try {
+      await syncEngine.pullUserDelta(currentFarmer.id);
+    } catch (e) {
+      console.warn('Pull of remote changes skipped:', e);
+    }
   },
 
   refreshPendingSyncCount: async () => {

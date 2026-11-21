@@ -63,7 +63,7 @@ export default function PublicTraceabilityScreen() {
         <AlertCircle size={44} color={Colors.danger} />
         <Text style={styles.errorTitle}>Traceability Record Not Found</Text>
         <Text style={styles.errorSub}>
-          The scanned QR token does not match an active CropCapture passport.
+          The scanned QR token does not match an active FarmTori passport.
         </Text>
         <TouchableOpacity style={styles.returnBtn} onPress={() => router.back()}>
           <Text style={styles.returnBtnText}>Return to scanner</Text>
@@ -99,7 +99,7 @@ export default function PublicTraceabilityScreen() {
             <ChevronLeft size={22} color="#FFFFFF" strokeWidth={2.4} />
           </TouchableOpacity>
           <View style={{ flex: 1, paddingLeft: 12 }}>
-            <Text style={styles.headerTitle}>CropCapture certificate</Text>
+            <Text style={styles.headerTitle}>FarmTori certificate</Text>
             <Text style={styles.headerSub}>Public agricultural verification record</Text>
           </View>
         </View>

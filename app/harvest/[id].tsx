@@ -80,13 +80,13 @@ export default function HarvestDetailsScreen() {
       created_at: '2026-10-22T10:00:00.000Z',
     } as unknown as HarvestBatch);
 
-  const publicVerificationUrl = `https://cropcapture.app/verify/${activeBatch.qr_token || 'AGR-SEC-77491-VERIFIED'}`;
+  const publicVerificationUrl = `https://farmtori.app/verify/${activeBatch.qr_token || 'AGR-SEC-77491-VERIFIED'}`;
 
   const handleShare = async () => {
     try {
       await Share.share({
-        title: `CropCapture Batch ${activeBatch.batch_reference}`,
-        message: `CropCapture Verified Batch Passport\nBatch: ${activeBatch.batch_reference}\nCrop: ${activeBatch.crop?.name || 'Rice'} (${activeBatch.crop_variety_id || 'Suakoko 8'})\nYield: ${activeBatch.quantity} ${activeBatch.unit}\nStatus: ${activeBatch.status.toUpperCase()}\n\nVerify public record: ${publicVerificationUrl}`,
+        title: `FarmTori Batch ${activeBatch.batch_reference}`,
+        message: `FarmTori Verified Batch Passport\nBatch: ${activeBatch.batch_reference}\nCrop: ${activeBatch.crop?.name || 'Rice'} (${activeBatch.crop_variety_id || 'Suakoko 8'})\nYield: ${activeBatch.quantity} ${activeBatch.unit}\nStatus: ${activeBatch.status.toUpperCase()}\n\nVerify public record: ${publicVerificationUrl}`,
       });
     } catch (e: any) {
       console.warn('Share error:', e);

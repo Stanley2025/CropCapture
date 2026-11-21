@@ -157,7 +157,7 @@ export default function LoginScreen() {
         'Account Created Successfully!',
         `Your Farm ID is: ${created.farmer_id_code}\n${
           pin ? `Your security PIN is: ${pin}\n` : ''
-        }You are now logged into CropCapture.`,
+        }You are now logged into FarmTori.`,
         [
           {
             text: 'Enter Dashboard',
@@ -231,7 +231,7 @@ export default function LoginScreen() {
             </Text>
             <Text style={styles.headingSub}>
               {authMode === 'signin'
-                ? 'Sign in to your CropCapture account'
+                ? 'Sign in to your FarmTori account'
                 : 'Join the national smallholder verified network'}
             </Text>
           </View>

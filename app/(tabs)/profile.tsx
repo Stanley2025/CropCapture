@@ -165,7 +165,7 @@ export default function ProfileScreen() {
   };
 
   const handleLogout = () => {
-    Alert.alert('Log Out', 'Are you sure you want to log out of CropCapture?', [
+    Alert.alert('Log Out', 'Are you sure you want to log out of FarmTori?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Log out',
@@ -315,7 +315,7 @@ export default function ProfileScreen() {
               onPress={() =>
                 Alert.alert(
                   'Help & Support',
-                  'Ministry of Agriculture Farmer Helpline: 4455\nLocal Extension Officer: Emmanuel Nimba Office\nCropCapture Offline Support: active.'
+                  'Ministry of Agriculture Farmer Helpline: 4455\nLocal Extension Officer: Emmanuel Nimba Office\nFarmTori Offline Support: active.'
                 )
               }
               activeOpacity={0.7}

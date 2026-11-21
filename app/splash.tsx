@@ -73,9 +73,8 @@ export default function SplashScreen() {
           </View>
         </View>
 
-        <Text style={styles.brandTitle}>CropCapture</Text>
-        <Text style={styles.tagline}>From field to frame.</Text>
-        <Text style={styles.taglineSub}>Every harvest verified.</Text>
+        <Text style={styles.brandTitle}>FarmTori</Text>
+        <Text style={styles.tagline}>Every farm has a story worth recording</Text>
       </View>
 
       {/* Bottom Action Buttons (Lime Get Started + White Outline Sign In) */}

@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "CropCapture",
-    "slug": "cropcapture",
+    "name": "FarmTori",
+    "slug": "farmtori",
     "version": "1.0.0",
     "sdkVersion": "58.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "scheme": "cropcapture",
+    "scheme": "farmtori",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0D221A",
     "primaryColor": "#15803D",
@@ -18,7 +18,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.cropcapture.app",
+      "bundleIdentifier": "com.farmtori.app",
       "userInterfaceStyle": "dark",
       "splash": {
         "image": "./assets/splash.png",
@@ -26,9 +26,10 @@
         "backgroundColor": "#0D221A"
       },
       "infoPlist": {
-        "NSCameraUsageDescription": "CropCapture requires camera access for farm photography and QR code traceability scanning.",
-        "NSLocationWhenInUseUsageDescription": "CropCapture requires location permissions to record precise GPS coordinates for farm boundaries and field visits.",
-        "NSPhotoLibraryUsageDescription": "CropCapture needs photo library access to upload farm, crop, and inspection evidence photos."
+        "NSCameraUsageDescription": "FarmTori requires camera access for farm photography and QR code traceability scanning.",
+        "NSLocationWhenInUseUsageDescription": "FarmTori requires location permissions to record precise GPS coordinates for farm boundaries and field visits.",
+        "NSPhotoLibraryUsageDescription": "FarmTori needs photo library access to upload farm, crop, and inspection evidence photos.",
+        "NSMicrophoneUsageDescription": "FarmTori uses the microphone so you can record a spoken note about your season."
       }
     },
     "android": {
@@ -41,9 +42,10 @@
         "resizeMode": "cover",
         "backgroundColor": "#0D221A"
       },
-      "package": "com.cropcapture.app",
+      "package": "com.farmtori.app",
       "permissions": [
         "CAMERA",
+        "RECORD_AUDIO",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
         "READ_EXTERNAL_STORAGE",
@@ -69,6 +71,12 @@
         }
       ],
       "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "FarmTori uses the microphone so you can record a spoken note about your season."
+        }
+      ],
       "expo-secure-store",
       [
         "expo-sqlite",
