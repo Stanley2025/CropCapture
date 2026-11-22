@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { KeyboardAwareScrollView } from '../../src/components/KeyboardAwareScrollView';
 import {
   View,
   Text,
@@ -103,7 +104,7 @@ export default function RecordVisitScreen() {
     <SafeAreaView style={styles.safeArea}>
       <Header title="Record Field Visit" subtitle="Extension service & agronomy log" showBack />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         <Card style={styles.formCard}>
           <Text style={styles.sectionTitle}>1. Target Farm Parcel</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
@@ -201,7 +202,7 @@ export default function RecordVisitScreen() {
         />
 
         <View style={{ height: Spacing.xxl }} />
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

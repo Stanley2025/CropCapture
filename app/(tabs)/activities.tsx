@@ -21,7 +21,8 @@ import {
   Shadows,
 } from '../../src/constants/theme';
 import { localDb } from '../../src/services/storage/localDatabase';
-import { FarmActivity, Farm } from '../../src/types/database';
+import { getScope } from '../../src/services/access/visibility';
+import { FarmActivity, Farm, FarmSeason } from '../../src/types/database';
 import { useAppStore } from '../../src/store/useAppStore';
 import { matchesCategory as activityMatchesCategory } from '../../src/shared/activityTypes';
 
@@ -38,35 +39,36 @@ const CATEGORIES = [
 export default function ActivitiesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentRole, currentFarmer } = useAppStore();
+  const { currentRole, currentFarmer, currentUserProfile } = useAppStore();
 
   const [activities, setActivities] = useState<FarmActivity[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
+  const [seasons, setSeasons] = useState<FarmSeason[]>([]);
+  // null = the newest season (the one just activated); 'all' = every season
+  const [seasonChoice, setSeasonChoice] = useState<string | null>(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
 
   const loadActivities = useCallback(async () => {
     try {
-      let [acts, fms] = await Promise.all([
+      let [acts, fms, allSeasons] = await Promise.all([
         localDb.getActivities(),
         localDb.getFarms(),
+        localDb.getSeasons(),
       ]);
 
-      if (currentRole === 'farmer' && currentFarmer?.id) {
-        fms = fms.filter((f) => f.farmer_id === currentFarmer.id);
-        const myFarmIds = new Set(fms.map((f) => f.id));
-        acts = acts.filter(
-          (a) => a.farmer_id === currentFarmer.id || myFarmIds.has(a.farm_id)
-        );
-      }
+      const scope = await getScope(currentRole, currentUserProfile?.id, currentFarmer?.id);
+      fms = fms.filter(scope.farm);
+      acts = acts.filter(scope.row);
+      setSeasons(allSeasons.filter(scope.row));
 
       setActivities(acts);
       setFarms(fms);
     } catch (e) {
       console.error('Error loading activities:', e);
     }
-  }, [currentRole, currentFarmer?.id]);
+  }, [currentRole, currentFarmer?.id, currentUserProfile?.id]);
 
   useEffect(() => {
     loadActivities();
@@ -83,7 +85,14 @@ export default function ActivitiesScreen() {
     return f ? f.name : 'Farm';
   };
 
-  const filteredActivities = activities.filter((act) => {
+  // The log starts with the newest season, so a newly activated season begins with an empty log.
+  // Older seasons are one tap away.
+  const seasonsNewestFirst = [...seasons].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  const validChoice = seasonChoice === 'all' || seasonsNewestFirst.some((x) => x.id === seasonChoice) ? seasonChoice : null;
+  const seasonId = validChoice ?? (seasonsNewestFirst[0]?.id || 'all');
+  const seasonActivities = seasonId === 'all' ? activities : activities.filter((a) => a.season_id === seasonId);
+
+  const filteredActivities = seasonActivities.filter((act) => {
     const matchesCategory = activityMatchesCategory(act.activity_type, selectedCategory);
     const matchesSearch =
       !searchQuery.trim() ||
@@ -143,6 +152,27 @@ export default function ActivitiesScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
+
+        {/* Season: newest first */}
+        {seasonsNewestFirst.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+            {[...seasonsNewestFirst.map((x) => ({ id: x.id, label: `${x.season_name}${farms.length > 1 ? ` · ${getFarmName(x.farm_id)}` : ''}` })), { id: 'all', label: 'All seasons' }].map((opt) => {
+              const on = seasonId === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  style={[styles.filterChip, on ? styles.filterChipActive : styles.filterChipInactive]}
+                  onPress={() => setSeasonChoice(opt.id)}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                >
+                  <Text style={[styles.filterChipText, on ? styles.filterChipTextActive : styles.filterChipTextInactive]}>{opt.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        ) : null}
 
         {/* Filter Chips Horizontal Row */}
         <ScrollView

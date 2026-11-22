@@ -24,6 +24,14 @@ import {
   getDistrictsByCounty as getStaticDistrictsByCounty,
 } from '../../constants/liberiaGeographicData';
 
+export interface ExtensionAssignment {
+  id: string;
+  officer_id: string;
+  farmer_id: string;
+  farm_id?: string | null;
+  status?: string;
+}
+
 export interface SyncQueueItem {
   id: string; // client uuid
   entity_type:
@@ -72,6 +80,7 @@ const STORAGE_KEYS = {
   SEASON_WEATHER: '@agritrack_season_weather',
   FARM_PLANS: '@agritrack_farm_plans',
   HARVEST_PHOTOS: '@agritrack_harvest_photos',
+  EXTENSION_ASSIGNMENTS: '@agritrack_extension_assignments',
 };
 
 /** The records that hang off a season (see src/shared/seasonRecord.js and seasonWeather.js). */
@@ -179,6 +188,45 @@ export class LocalDatabase {
     queue.push(item);
     await this.setItems(STORAGE_KEYS.SYNC_QUEUE, queue);
     return item;
+  }
+
+  /**
+   * One-time recovery. An earlier build of the app, made without a server address, marked every record as
+   * "synced" without sending it anywhere. In a build that IS connected, every record on the phone is queued
+   * once more (uploading is safe to repeat: records are saved by id). Records already waiting are not
+   * queued twice, and the built-in sample farmers are never sent. Returns how many records were queued.
+   */
+  public async requeueUnsentRecords(): Promise<number> {
+    const FLAG = '@farmtori_recovery_resend_v1';
+    if ((await AsyncStorage.getItem(FLAG)) === 'done') return 0;
+
+    const waiting = new Set(
+      (await this.getSyncQueue()).filter((i) => i.status !== 'synced').map((i) => `${i.entity_type}:${i.payload && i.payload.id}`)
+    );
+    const isSample = (id?: string | null) => Boolean(id && id.startsWith('f0000000-'));
+    const farmers = (await this.getFarmers()).filter((f) => !isSample(f.id));
+    const farmerIds = new Set(farmers.map((f) => f.id));
+    const farms = (await this.getFarms()).filter((f) => farmerIds.has(f.farmer_id));
+    const farmIds = new Set(farms.map((f) => f.id));
+    const groups: Array<[SyncQueueItem['entity_type'], any[]]> = [
+      ['farmer', farmers],
+      ['farm', farms],
+      ['season', (await this.getSeasons()).filter((s) => farmIds.has(s.farm_id))],
+      ['activity', (await this.getActivities()).filter((a) => farmIds.has(a.farm_id))],
+      ['input', (await this.getInputs()).filter((i) => farmIds.has(i.farm_id))],
+      ['expense', (await this.getExpenses()).filter((e) => farmIds.has(e.farm_id))],
+      ['harvest', (await this.getHarvests()).filter((h) => farmIds.has(h.farm_id))],
+    ];
+    let queued = 0;
+    for (const [type, records] of groups) {
+      for (const record of records) {
+        if (!record || waiting.has(`${type}:${record.id}`)) continue;
+        await this.addToSyncQueue(type, 'create', record);
+        queued++;
+      }
+    }
+    await AsyncStorage.setItem(FLAG, 'done');
+    return queued;
   }
 
   public async updateSyncQueueItem(
@@ -498,6 +546,18 @@ export class LocalDatabase {
     const plans = await this.getItems<FarmPlan>(STORAGE_KEYS.FARM_PLANS);
     await this.setItems(STORAGE_KEYS.FARM_PLANS, plans.filter((p) => p.id !== id));
     if (queueSync) await this.addToSyncQueue('farm_plan', 'delete', { id });
+  }
+
+  // --- EXTENSION ASSIGNMENTS (which farmers an extension officer looks after) ---
+  public async getExtensionAssignments(officerId: string): Promise<ExtensionAssignment[]> {
+    const all = await this.getItems<ExtensionAssignment>(STORAGE_KEYS.EXTENSION_ASSIGNMENTS);
+    return all.filter((a) => a.officer_id === officerId && (a.status || 'active') === 'active');
+  }
+
+  /** Replaces this officer's assignments with the list the server just returned. */
+  public async saveExtensionAssignments(officerId: string, list: ExtensionAssignment[]): Promise<void> {
+    const others = (await this.getItems<ExtensionAssignment>(STORAGE_KEYS.EXTENSION_ASSIGNMENTS)).filter((a) => a.officer_id !== officerId);
+    await this.setItems(STORAGE_KEYS.EXTENSION_ASSIGNMENTS, [...others, ...list]);
   }
 
   // --- HARVEST PHOTOS (pictures of the product, for the buyer) ---

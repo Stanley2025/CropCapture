@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { KeyboardAwareScrollView } from '../../../src/components/KeyboardAwareScrollView';
 import {
   View,
   Text,
@@ -173,7 +174,7 @@ export default function ConductInspectionScreen() {
         showBack
       />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Batch Summary Pill */}
         <Card style={styles.summaryCard}>
           <View style={styles.summaryHeader}>
@@ -352,7 +353,7 @@ export default function ConductInspectionScreen() {
         />
 
         <View style={{ height: Spacing.xxl }} />
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

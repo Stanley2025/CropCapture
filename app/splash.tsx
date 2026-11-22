@@ -15,15 +15,17 @@ import {
   Spacing,
   Shadows,
 } from '../src/constants/theme';
+import { Logo } from '../src/components/Logo';
 import { FarmerHero } from '../src/components/FarmerHero';
 import { useAppStore } from '../src/store/useAppStore';
+import { homeRouteFor } from '../src/constants/roleHome';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 export default function SplashScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { isAuthenticated } = useAppStore();
+  const { isAuthenticated, currentRole } = useAppStore();
 
   const handleGetStarted = async () => {
     try {
@@ -32,7 +34,7 @@ export default function SplashScreen() {
       // ignore
     }
     if (isAuthenticated) {
-      router.replace('/(tabs)');
+      router.replace(homeRouteFor(currentRole) as any);
     } else {
       router.replace('/login' as any);
     }
@@ -45,7 +47,7 @@ export default function SplashScreen() {
       // ignore
     }
     if (isAuthenticated) {
-      router.replace('/(tabs)');
+      router.replace(homeRouteFor(currentRole) as any);
     } else {
       router.replace('/login' as any);
     }
@@ -60,20 +62,7 @@ export default function SplashScreen() {
 
       {/* Top Branding Section */}
       <View style={[styles.topBranding, { paddingTop: Math.max(insets.top, 20) + 32 }]}>
-        {/* Viewfinder sprout icon */}
-        <View style={styles.brandIconBox}>
-          <View style={styles.bracketTopLeft} />
-          <View style={styles.bracketTopRight} />
-          <View style={styles.bracketBottomLeft} />
-          <View style={styles.bracketBottomRight} />
-          <View style={styles.leafIconContainer}>
-            <View style={styles.leafLeft} />
-            <View style={styles.leafRight} />
-            <View style={styles.leafStem} />
-          </View>
-        </View>
-
-        <Text style={styles.brandTitle}>FarmTori</Text>
+        <Logo tone="light" height={60} style={{ marginBottom: 14 }} />
         <Text style={styles.tagline}>Every farm has a story worth recording</Text>
       </View>
 

@@ -63,10 +63,12 @@ export default function ProfileScreen() {
         const farmerFarms = currentFarmer?.id
           ? f.filter((x) => x.farmer_id === currentFarmer.id)
           : f;
+        const mine = <T extends { farmer_id?: string }>(rows: T[]) =>
+          currentFarmer?.id ? rows.filter((x) => x.farmer_id === currentFarmer.id) : rows;
         setStats({
-          farmsCount: farmerFarms.length || 2,
-          activitiesCount: a.length || 3,
-          harvestsCount: h.length || 1,
+          farmsCount: farmerFarms.length,
+          activitiesCount: mine(a).length,
+          harvestsCount: mine(h).length,
         });
       } catch (e) {
         console.warn('Failed to load profile stats:', e);
@@ -76,9 +78,13 @@ export default function ProfileScreen() {
   }, [currentFarmer?.id]);
 
   const photoUri = currentUserProfile?.avatar_url || currentFarmer?.photo_url;
-  const fullName = currentUserProfile?.full_name || currentFarmer?.full_name || 'Emmanuel Gaye';
-  const farmerCode = currentFarmer?.farmer_id_code || 'AGR-F-000001';
-  const locationStr = `${currentUserProfile?.district || currentFarmer?.district || 'Gbehley'}, ${currentUserProfile?.county || currentFarmer?.county || 'Nimba'}`;
+  const fullName = currentUserProfile?.full_name || currentFarmer?.full_name || 'Farmer';
+  const farmerCode = currentFarmer?.farmer_id_code || 'Not set';
+  // Only what is really known: the location comes from the farmer's first registered farm.
+  const locationStr =
+    [currentUserProfile?.district || currentFarmer?.district, currentUserProfile?.county || currentFarmer?.county]
+      .filter((x) => x && String(x).trim())
+      .join(', ') || 'Register a farm to set your location';
   const roleName = currentRole.charAt(0).toUpperCase() + currentRole.slice(1).replace('_', ' ');
 
   const initials = fullName

@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { Tabs } from 'expo-router';
+import { Tabs, Redirect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Home, Map, Calendar, Leaf, User } from 'lucide-react-native';
 import { Colors, FontFamily, Typography } from '../../src/constants/theme';
@@ -67,6 +67,8 @@ export default function TabLayout() {
   const getHomeTitle = () => {
     return currentRole === 'farmer' ? 'Home' : 'Command';
   };
+
+  if (currentRole === 'buyer') return <Redirect href={"/buyer" as any} />;
 
   const bottomInset = Math.max(insets.bottom, Platform.OS === 'android' ? 10 : 16);
   const tabHeight = 64 + bottomInset;

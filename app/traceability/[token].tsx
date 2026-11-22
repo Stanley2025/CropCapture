@@ -5,7 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Spacing } from '../../src/constants/theme';
 import { useAppStore } from '../../src/store/useAppStore';
-import { loadBuyerData, BuyerData } from '../../src/services/photos/buyerViewService';
+import { loadBuyerData, rememberViewedHarvest, BuyerData } from '../../src/services/photos/buyerViewService';
 import { BuyerPage } from '../../src/components/buyer/BuyerPage';
 import { t } from '../../src/i18n/en';
 
@@ -24,7 +24,10 @@ export default function BuyerScreen() {
   useEffect(() => {
     if (!token) return;
     loadBuyerData(token, { offline: isOfflineMode, preferPhone: preview === '1' })
-      .then(setData)
+      .then((d) => {
+        setData(d);
+        if (d && preview !== '1') rememberViewedHarvest(token, d.view);
+      })
       .catch(() => setData(null))
       .finally(() => setLoading(false));
   }, [token, preview, isOfflineMode]);

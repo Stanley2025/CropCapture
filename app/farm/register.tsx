@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { KeyboardAwareScrollView } from '../../src/components/KeyboardAwareScrollView';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  Image,
   TextInput,
   TouchableOpacity,
   Switch,
@@ -34,24 +36,18 @@ import {
   District,
 } from '../../src/constants/liberiaGeographicData';
 import { getDistrictCoordinates } from '../../src/constants/liberiaCoordinates';
-
-const SOIL_TYPES = [
-  'Clay Loam (Swamp Basin)',
-  'Sandy Clay Loam',
-  'Alluvial Deposit',
-  'Red Lateritic Soil',
-  'Sandy Loam',
-  'Gravelly Loam',
-  'Peat / Organic Muck',
-];
-
-const TENURE_TYPES = [
-  'Family Customary Land',
-  'Freehold / Titled Deed',
-  'Leasehold Agreement',
-  'Community Communal Land',
-  'Sharecropping / Tenant',
-];
+// Option lists and the farm record builder are shared with the USSD channel (src/shared/farmRecords.js),
+// so a farm registered over USSD has exactly the same fields as one registered here.
+import {
+  SOIL_TYPES,
+  TENURE_TYPES,
+  WATER_SOURCES,
+  HOUSING_TYPES,
+  GRAZING_ARRANGEMENTS,
+  FEEDING_SYSTEMS,
+  buildFarmRecord,
+  buildLivestockDetails,
+} from '../../src/shared/farmRecords';
 
 // Livestock Constants (Species, Production Purposes, Management Systems, Housing, Water Sources)
 const LIVESTOCK_ANIMAL_TYPES = [
@@ -90,39 +86,17 @@ const MANAGEMENT_SYSTEMS = [
   },
 ];
 
-const WATER_SOURCES = [
-  'Well',
-  'Hand pump',
-  'River or stream',
-  'Borehole',
-  'Rainwater',
-  'Pipe-borne water',
-];
-
-const HOUSING_TYPES = [
-  'Raised Slatted Wooden Pen',
-  'Concrete Block Shed',
-  'Open Kraal / Fenced Paddock',
-  'Poultry Coop / Run',
-  'Thatched Enclosure',
-  'Deep Litter House',
-];
-
-const GRAZING_ARRANGEMENTS = [
-  'Communal Village Pasture',
-  'Private Fenced Pasture',
-  'Rotational Grazing Paddock',
-  'Roadside / Bush Tethering',
-  'Zero-Grazing (Cut-and-Carry)',
-];
-
-const FEEDING_SYSTEMS = [
-  'Commercial Formulated Feed',
-  'Cut Forage, Napier Grass & Legumes',
-  'Natural Pasture Grazing Only',
-  'Mixed Feeding (Pasture + Concentrates)',
-  'Cassava Peels, Rice Bran & Farm Waste',
-];
+const CROP_PHOTOS: Record<string, any> = {
+  Rice: require('../../assets/crops/rice.jpg'),
+  Coffee: require('../../assets/crops/coffee.jpg'),
+  Cocoa: require('../../assets/crops/cocoa.jpg'),
+  Cassava: require('../../assets/crops/cassava.jpg'),
+  Maize: require('../../assets/crops/maize.jpg'),
+  Plantain: require('../../assets/crops/plantain.jpg'),
+  'Oil Palm': require('../../assets/crops/oil-palm.jpg'),
+  Vegetables: require('../../assets/crops/vegetables.jpg'),
+  Pepper: require('../../assets/crops/pepper.jpg'),
+};
 
 export default function RegisterFarmScreen() {
   const router = useRouter();
@@ -132,13 +106,13 @@ export default function RegisterFarmScreen() {
   const [registrationDate, setRegistrationDate] = useState(
     new Date().toISOString().split('T')[0]
   );
-  const [farmingType, setFarmingType] = useState<'crops' | 'livestock' | 'both'>('crops');
+  const [farmingType, setFarmingType] = useState<'crops' | 'livestock' | 'both' | null>(null);
 
   // Livestock Specific State (Multi-selection enabled)
-  const [selectedAnimals, setSelectedAnimals] = useState<string[]>(['Goats']);
+  const [selectedAnimals, setSelectedAnimals] = useState<string[]>([]);
   const [breed, setBreed] = useState('West African Dwarf');
   const [headCount, setHeadCount] = useState('');
-  const [productionPurposes, setProductionPurposes] = useState<string[]>(['Meat production']);
+  const [productionPurposes, setProductionPurposes] = useState<string[]>([]);
   const [managementSystem, setManagementSystem] = useState<'Free-range' | 'Semi-intensive' | 'Intensive'>('Semi-intensive');
   const [housingType, setHousingType] = useState('Raised Slatted Wooden Pen');
   const [housingSize, setHousingSize] = useState('');
@@ -149,14 +123,12 @@ export default function RegisterFarmScreen() {
   const [waterSource, setWaterSource] = useState('Well');
   const [feedingSystem, setFeedingSystem] = useState('Mixed Feeding (Pasture + Concentrates)');
 
-  // Crops Multi-Select (For Crops or Both)
-  const [selectedCrops, setSelectedCrops] = useState<string[]>(['Rice', 'Cassava']);
+  // Crops Multi-Select (For Crops or Both) - Nothing pre-selected
+  const [selectedCrops, setSelectedCrops] = useState<string[]>([]);
   const toggleCrop = (cropName: string) => {
     setSelectedCrops((prev) =>
       prev.includes(cropName)
-        ? prev.length > 1
-          ? prev.filter((c) => c !== cropName)
-          : prev
+        ? prev.filter((c) => c !== cropName)
         : [...prev, cropName]
     );
   };
@@ -206,9 +178,11 @@ export default function RegisterFarmScreen() {
   const [community, setCommunity] = useState('');
   const [size, setSize] = useState('');
   const [sizeUnit, setSizeUnit] = useState<'acres' | 'hectares'>('acres');
-  const [ownershipType, setOwnershipType] = useState('Family Customary Land');
+  // Nothing pre-selected: the farmer selects their tenure type
+  const [ownershipType, setOwnershipType] = useState('');
   const [irrigation, setIrrigation] = useState(false);
-  const [soilType, setSoilType] = useState('Clay Loam (Swamp Basin)');
+  // Nothing is preselected: the farmer chooses the soil (tap again to clear it).
+  const [soilType, setSoilType] = useState('');
   const [description, setDescription] = useState('');
 
   // GPS State
@@ -325,6 +299,17 @@ export default function RegisterFarmScreen() {
       return;
     }
 
+    if (!farmingType) {
+      Alert.alert('Required Field', 'Please choose what you farm: crops, livestock or both.');
+      return;
+    }
+
+    const isCropsActive = farmingType === 'crops' || farmingType === 'both';
+    if (isCropsActive && selectedCrops.length === 0) {
+      Alert.alert('Required Field', 'Please select at least one crop produced on this farm parcel.');
+      return;
+    }
+
     const isLivestockActive = farmingType === 'livestock' || farmingType === 'both';
     if (isLivestockActive) {
       if (selectedAnimals.length === 0) {
@@ -344,6 +329,11 @@ export default function RegisterFarmScreen() {
       }
     }
 
+    if (!ownershipType.trim()) {
+      Alert.alert('Required Field', 'Please select the Land Tenure / Ownership type for this parcel.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       const resolvedCounty =
@@ -354,69 +344,72 @@ export default function RegisterFarmScreen() {
       );
 
       const livestockDetails = isLivestockActive
-        ? {
-            animal_type: selectedAnimals.join(', '),
-            selected_animals: selectedAnimals,
-            breed: breed.trim() || undefined,
-            head_count: parseInt(headCount, 10),
-            production_purpose: productionPurposes,
-            management_system: managementSystem,
-            housing_type: housingType,
-            housing_size: housingSize.trim() || undefined,
-            housing_capacity: housingCapacity ? parseInt(housingCapacity, 10) : undefined,
-            grazing_availability: grazingAvailable,
-            grazing_arrangement: grazingAvailable ? grazingArrangement : undefined,
-            grazing_area: grazingAvailable ? grazingArea.trim() || undefined : undefined,
-            water_source: waterSource,
-            feeding_system: feedingSystem,
-          }
+        ? buildLivestockDetails({
+            animals: selectedAnimals,
+            breed,
+            headCount,
+            productionPurposes,
+            managementSystem,
+            housingType,
+            housingSize,
+            housingCapacity,
+            grazingAvailable,
+            grazingArrangement,
+            grazingArea,
+            waterSource,
+            feedingSystem,
+          })
         : null;
 
-      const newFarm = {
-        id: generateUUID(),
-        farmer_id: currentFarmer?.id || '00000000-0000-0000-0000-000000000001',
-        name: name.trim(),
-        farming_type: farmingType,
-        livestock_details: livestockDetails,
-        county: resolvedCounty?.name || county.trim(),
-        district: resolvedDistrict?.name || district.trim(),
-        county_id: countyId || resolvedCounty?.id || null,
-        district_id: districtId || resolvedDistrict?.id || null,
+      const countyName = resolvedCounty?.name || county.trim();
+      const districtName = resolvedDistrict?.name || district.trim();
+      const fallbackCoords = getDistrictCoordinates(districtName, countyName);
+
+      const newFarm = buildFarmRecord({
+        farmerId: currentFarmer?.id || '00000000-0000-0000-0000-000000000001',
+        name,
+        farmingType,
+        livestockDetails,
+        county: countyName,
+        district: districtName,
+        countyId: countyId || resolvedCounty?.id || null,
+        districtId: districtId || resolvedDistrict?.id || null,
         community: community.trim(),
         size: parseFloat(size),
-        size_unit: sizeUnit,
-        latitude:
-          latitude ??
-          getDistrictCoordinates(
-            resolvedDistrict?.name || district.trim(),
-            resolvedCounty?.name || county.trim()
-          ).latitude,
-        longitude:
-          longitude ??
-          getDistrictCoordinates(
-            resolvedDistrict?.name || district.trim(),
-            resolvedCounty?.name || county.trim()
-          ).longitude,
-        ownership_type: ownershipType,
+        sizeUnit,
+        latitude: latitude ?? fallbackCoords.latitude,
+        longitude: longitude ?? fallbackCoords.longitude,
+        ownershipType,
         irrigation,
-        soil_type: soilType,
-        photo_url: 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?auto=format&fit=crop&w=600&q=80',
-        description:
-          description.trim() ||
-          (farmingType === 'livestock'
-            ? `${selectedAnimals.join(' & ')} holding (${headCount || '0'} head) raised for ${productionPurposes.join(', ')} under ${managementSystem} management.`
-            : farmingType === 'both'
-            ? `Integrated farm: Cultivating ${selectedCrops.join(', ') || 'crops'} and rearing ${selectedAnimals.join(' & ')} (${headCount || '0'} head).`
-            : `Crops parcel cultivating ${selectedCrops.join(', ') || 'crops'}.`),
-        registration_date: registrationDate,
-        is_active: true,
-        created_at: registrationDate
-          ? `${registrationDate}T12:00:00.000Z`
-          : new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
+        soilType: soilType || null,
+        description,
+        crops: selectedCrops,
+        registrationDate,
+      });
 
+      // The farmer's first farm gives their profile its location (county, district, community).
+      const hadFarms = (await localDb.getFarms(currentFarmer?.id)).some((f) => f.farmer_id === currentFarmer?.id);
       await localDb.saveFarm(newFarm, true);
+      if (currentFarmer && !hadFarms) {
+        const located = {
+          ...currentFarmer,
+          county: newFarm.county,
+          district: newFarm.district,
+          community: newFarm.community,
+          updated_at: new Date().toISOString(),
+        };
+        await localDb.saveFarmer(located, true);
+        const store = useAppStore.getState();
+        useAppStore.setState({
+          currentFarmer: located,
+          currentUserProfile: {
+            ...store.currentUserProfile,
+            county: newFarm.county,
+            district: newFarm.district,
+            community: newFarm.community,
+          },
+        });
+      }
       await refreshPendingSyncCount();
       syncEngine.syncQueue().catch((e) => console.warn('Background auto-sync on farm save:', e));
 
@@ -441,7 +434,7 @@ export default function RegisterFarmScreen() {
     <SafeAreaView style={styles.safeArea}>
       <Header title="Register Farm" subtitle="Capture parcel boundary & details" showBack />
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {/* Basic Parcel & Farmer Information */}
         <Card style={styles.formCard}>
           <Text style={styles.sectionTitle}>1. Farmer & Parcel Identity</Text>
@@ -1174,11 +1167,15 @@ export default function RegisterFarmScreen() {
                       onPress={() => toggleCrop(c)}
                       activeOpacity={0.7}
                     >
-                      <Ionicons
-                        name={isSelected ? 'checkmark-circle' : 'leaf-outline'}
-                        size={13}
-                        color={isSelected ? '#FFFFFF' : Colors.primary}
-                      />
+                      {CROP_PHOTOS[c] ? (
+                        <Image source={CROP_PHOTOS[c]} style={styles.cropChipPhoto} accessibilityIgnoresInvertColors />
+                      ) : (
+                        <Ionicons
+                          name={isSelected ? 'checkmark-circle' : 'leaf-outline'}
+                          size={13}
+                          color={isSelected ? '#FFFFFF' : Colors.primary}
+                        />
+                      )}
                       <Text style={[styles.cropChipText, isSelected && styles.cropChipTextActive]}>
                         {c}
                       </Text>
@@ -1186,16 +1183,21 @@ export default function RegisterFarmScreen() {
                   );
                 })}
               </View>
+              {selectedCrops
+                .filter((c) => CROP_PHOTOS[c])
+                .map((c) => (
+                  <Image key={c} source={CROP_PHOTOS[c]} style={styles.cropBanner} accessibilityLabel={c} />
+                ))}
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Land Tenure / Ownership</Text>
+              <Text style={styles.label}>Land Tenure / Ownership * (tap to select)</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
                 {TENURE_TYPES.map((t) => (
                   <TouchableOpacity
                     key={t}
                     style={[styles.chip, ownershipType === t && styles.chipActive]}
-                    onPress={() => setOwnershipType(t)}
+                    onPress={() => setOwnershipType(ownershipType === t ? '' : t)}
                   >
                     <Text style={[styles.chipText, ownershipType === t && styles.chipTextActive]}>
                       {t}
@@ -1206,13 +1208,13 @@ export default function RegisterFarmScreen() {
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Predominant Soil Type</Text>
+              <Text style={styles.label}>Predominant Soil Type (tap to select)</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
                 {SOIL_TYPES.map((s) => (
                   <TouchableOpacity
                     key={s}
                     style={[styles.chip, soilType === s && styles.chipActive]}
-                    onPress={() => setSoilType(s)}
+                    onPress={() => setSoilType(soilType === s ? '' : s)}
                   >
                     <Text style={[styles.chipText, soilType === s && styles.chipTextActive]}>
                       {s}
@@ -1267,7 +1269,7 @@ export default function RegisterFarmScreen() {
         </View>
 
         <View style={{ height: Spacing.xxl }} />
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {/* County Selection Modal */}
       <Modal
@@ -1581,6 +1583,8 @@ const styles = StyleSheet.create({
   enterpriseContainer: {
     gap: Spacing.sm,
   },
+  cropChipPhoto: { width: 26, height: 26, borderRadius: 13, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.tint },
+  cropBanner: { width: '100%', height: 170, borderRadius: Radius.lg, marginTop: Spacing.md, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.tint },
   enterpriseCard: {
     backgroundColor: Colors.surfaceAlt,
     borderWidth: 1.5,

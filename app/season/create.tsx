@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { KeyboardAwareScrollView } from '../../src/components/KeyboardAwareScrollView';
 import {
   View,
   Text,
@@ -14,6 +15,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing, Typography } from '../../src/constants/theme';
 import { localDb, generateUUID } from '../../src/services/storage/localDatabase';
+import { VARIETIES_BY_CROP_CODE } from '../../src/shared/seasonRecord';
 import { useAppStore } from '../../src/store/useAppStore';
 import { Farm, FarmSeason } from '../../src/types/database';
 import { Header } from '../../src/components/Header';
@@ -29,7 +31,7 @@ const CROPS = [
     emoji: '☕',
     code: 'COFF',
     category: 'Cash Crop',
-    varieties: ['Liberica Indigenous', 'Robusta', 'Arabica'],
+    varieties: VARIETIES_BY_CROP_CODE.COFF,
   },
   {
     id: '11111111-1111-1111-1111-111111111104',
@@ -37,7 +39,7 @@ const CROPS = [
     emoji: '🍫',
     code: 'COCO',
     category: 'Cash Crop',
-    varieties: ['Forastero Hybrid', 'Trinitario Elite'],
+    varieties: VARIETIES_BY_CROP_CODE.COCO,
   },
   {
     id: '11111111-1111-1111-1111-111111111101',
@@ -45,7 +47,7 @@ const CROPS = [
     emoji: '🌾',
     code: 'RICE',
     category: 'Cereal / Staple',
-    varieties: ['Suakoko 8', 'LAC 23', 'Nerica L-19'],
+    varieties: VARIETIES_BY_CROP_CODE.RICE,
   },
   {
     id: '11111111-1111-1111-1111-111111111102',
@@ -53,7 +55,7 @@ const CROPS = [
     emoji: '🥔',
     code: 'CASS',
     category: 'Root / Tuber',
-    varieties: ['CARICASS 1', 'TMS 30572', 'Bassa Girl'],
+    varieties: VARIETIES_BY_CROP_CODE.CASS,
   },
   {
     id: '11111111-1111-1111-1111-111111111110',
@@ -61,7 +63,7 @@ const CROPS = [
     emoji: '🌴',
     code: 'PALM',
     category: 'Tree Crop',
-    varieties: ['Tenera Hybrid', 'Dura'],
+    varieties: VARIETIES_BY_CROP_CODE.PALM,
   },
   {
     id: '11111111-1111-1111-1111-111111111103',
@@ -69,7 +71,7 @@ const CROPS = [
     emoji: '🌽',
     code: 'MAIZ',
     category: 'Cereal / Grain',
-    varieties: ['DMR-ESR-Y', 'Western Yellow'],
+    varieties: VARIETIES_BY_CROP_CODE.MAIZ,
   },
   {
     id: '11111111-1111-1111-1111-111111111106',
@@ -77,7 +79,7 @@ const CROPS = [
     emoji: '🌶️',
     code: 'PEPP',
     category: 'Vegetable / Spice',
-    varieties: ['Scotch Bonnet', 'Habanero', 'Local Birdseye'],
+    varieties: VARIETIES_BY_CROP_CODE.PEPP,
   },
   {
     id: '11111111-1111-1111-1111-111111111107',
@@ -85,7 +87,7 @@ const CROPS = [
     emoji: '🍌',
     code: 'PLAN',
     category: 'Horticulture',
-    varieties: ['Giant False Horn', 'French Plantain'],
+    varieties: VARIETIES_BY_CROP_CODE.PLAN,
   },
   {
     id: '11111111-1111-1111-1111-111111111108',
@@ -93,7 +95,7 @@ const CROPS = [
     emoji: '🍠',
     code: 'SPOT',
     category: 'Root / Tuber',
-    varieties: ['Orange-Fleshed (OFSP)', 'White Local'],
+    varieties: VARIETIES_BY_CROP_CODE.SPOT,
   },
   {
     id: '11111111-1111-1111-1111-111111111109',
@@ -101,7 +103,7 @@ const CROPS = [
     emoji: '🥬',
     code: 'VEG',
     category: 'Horticulture',
-    varieties: ['Bitterball', 'Okra', 'Water Greens'],
+    varieties: VARIETIES_BY_CROP_CODE.VEG,
   },
 ];
 
@@ -452,7 +454,7 @@ export default function CreateSeasonScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+      <KeyboardAwareScrollView style={styles.container} contentContainerStyle={styles.content}>
         {activeTab === 'create' ? (
           <>
             {/* ========================================================= */}
@@ -1256,7 +1258,7 @@ export default function CreateSeasonScreen() {
     )}
 
         <View style={{ height: Spacing.xxl }} />
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

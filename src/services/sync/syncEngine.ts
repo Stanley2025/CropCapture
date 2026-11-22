@@ -57,6 +57,15 @@ export class SyncEngine {
     this.isSyncing = true;
     this.notifyStatus('synchronizing');
 
+    if (isSupabaseConfigured()) {
+      // First connected sync on this phone: send records that an unconnected build wrongly called "synced".
+      try {
+        await localDb.requeueUnsentRecords();
+      } catch (e) {
+        console.warn('Recovery re-send skipped:', e);
+      }
+    }
+
     const queue = await localDb.getSyncQueue();
     const pendingItems = queue.filter(
       (item) => item.status === 'waiting_to_sync' || item.status === 'sync_failed'
@@ -98,13 +107,10 @@ export class SyncEngine {
     for (const item of pendingItems) {
       try {
         if (!canSyncOnline) {
-          // If Supabase live URL is in offline/demo mode, simulate successful idempotent sync
-          await new Promise((res) => setTimeout(res, 50));
-          await localDb.updateSyncQueueItem(item.id, {
-            status: 'synced',
-            synced_at: new Date().toISOString(),
-          });
-          successCount++;
+          // This build has no server address (EXPO_PUBLIC_SUPABASE_URL was not set when it was built). Nothing can
+          // be uploaded, so nothing may be marked as synced: the records stay on the phone, waiting, and the
+          // farmer and the team see a failed sync instead of a false "Synced".
+          throw new Error('This app is not connected to the server (no server address was built into this version). Your records are saved on the phone and will upload once a connected version is installed.');
         } else {
           // Process online sync against live Supabase tables
           const result = await this.syncItemToSupabase(item);
@@ -184,9 +190,10 @@ export class SyncEngine {
       delete clean.farmer;
       delete clean.farm;
       delete clean.season;
-      if (clean.recorded_by && !isValidUUID(clean.recorded_by)) {
-        clean.recorded_by = null;
-      }
+      // recorded_by points at a signed-in staff PROFILE. A farmer is not one, so the farmer's own id (or the
+      // app's built-in profile id) made the database reject every activity: nothing a farmer recorded ever
+      // reached the admin dashboard. The farmer is already identified by farmer_id.
+      clean.recorded_by = null;
     } else if (entityType === 'input') {
       delete clean.farm;
       delete clean.season;
@@ -401,6 +408,22 @@ export class SyncEngine {
    * Remote rows are merged OVER local rows so client-only fields (nested crop/farm,
    * farming_type, livestock_details...) survive.
    */
+  /**
+   * The farmers an extension officer looks after (rows of extension_assignments set by an administrator).
+   * Returns their ids. When the server cannot be reached the list saved on the phone is kept as it is.
+   */
+  public async pullOfficerAssignments(officerId: string): Promise<string[]> {
+    if (!isSupabaseConfigured() || !officerId) return [];
+    const { data, error } = await supabase
+      .from('extension_assignments')
+      .select('id, officer_id, farmer_id, farm_id, status')
+      .eq('officer_id', officerId)
+      .eq('status', 'active');
+    if (error || !data) return [];
+    await localDb.saveExtensionAssignments(officerId, data as any);
+    return Array.from(new Set((data as any[]).map((a) => a.farmer_id as string)));
+  }
+
   public async pullUserDelta(userId: string): Promise<{
     pulledCount: number;
     tablesUpdated: string[];

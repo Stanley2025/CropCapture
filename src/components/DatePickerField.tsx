@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { yearsForPicker } from '../shared/dateRanges';
 import {
   View,
   Text,
@@ -172,13 +173,8 @@ export const DatePickerField: React.FC<DatePickerFieldProps> = ({
     calendarCells.push(d);
   }
 
-  // Generate list of selectable years for DOB (1940 to current year)
-  const availableYears: number[] = [];
-  const startYear = isDob ? 1940 : maxYear - 20;
-  const endYear = isDob ? maxYear - 10 : maxYear + 5;
-  for (let y = endYear; y >= startYear; y--) {
-    availableYears.push(y);
-  }
+  // Selectable years: for a date of birth, every year from 1920 to this year
+  const availableYears = yearsForPicker(isDob);
 
   return (
     <View style={styles.container}>

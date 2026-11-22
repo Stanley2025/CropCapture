@@ -66,6 +66,7 @@ export default function RootLayout() {
         <Stack.Screen name="splash" options={{ headerShown: false }} />
         <Stack.Screen name="login" options={{ headerShown: false }} />
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="buyer/index" options={{ headerShown: false }} />
         <Stack.Screen name="farm/register" options={{ presentation: 'card' }} />
         <Stack.Screen name="farm/[id]" options={{ presentation: 'card' }} />
         <Stack.Screen name="season/create" options={{ presentation: 'card' }} />

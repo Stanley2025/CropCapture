@@ -42,6 +42,7 @@ import { useAppStore, PERSONAS } from '../../src/store/useAppStore';
 import { ProfitLossCard } from '../../src/components/ProfitLossCard';
 import { profitAndLoss } from '../../src/shared/farmFinance';
 import { localDb } from '../../src/services/storage/localDatabase';
+import { getScope } from '../../src/services/access/visibility';
 import { weatherService } from '../../src/services/weather/weatherService';
 import type { WeatherForecast } from '../../src/types/weather';
 import { Farm, FarmActivity, FarmSeason, HarvestBatch } from '../../src/types/database';
@@ -90,13 +91,12 @@ export default function HomeScreen() {
         localDb.getHarvests(),
       ]);
 
-      if (currentRole === 'farmer' && currentFarmer?.id) {
-        f = f.filter((farm) => farm.farmer_id === currentFarmer.id);
-        const myFarmIds = new Set(f.map((farm) => farm.id));
-        s = s.filter((season) => myFarmIds.has(season.farm_id));
-        a = a.filter((act) => act.farmer_id === currentFarmer.id || myFarmIds.has(act.farm_id));
-        h = h.filter((harv) => harv.farmer_id === currentFarmer.id || myFarmIds.has(harv.farm_id));
-      }
+      // Only what this person may see (a farmer: their own; an extension officer: their assigned farmers)
+      const scope = await getScope(currentRole, currentUserProfile?.id, currentFarmer?.id);
+      f = f.filter(scope.farm);
+      s = s.filter(scope.row);
+      a = a.filter(scope.row);
+      h = h.filter(scope.row);
 
       const ids = f.map((x) => x.id);
       const [ex, inp] = await Promise.all([localDb.getExpenses(ids), localDb.getInputs(ids)]);
@@ -116,7 +116,7 @@ export default function HomeScreen() {
     } catch (e) {
       console.error('Failed to load dashboard data:', e);
     }
-  }, [refreshPendingSyncCount, currentRole, currentFarmer?.id]);
+  }, [refreshPendingSyncCount, currentRole, currentFarmer?.id, currentUserProfile?.id]);
 
   // This screen stays open while another is shown on top of it (for example after registering a
   // second harvest), so read the saved records again every time it comes back into view.
@@ -457,9 +457,9 @@ export default function HomeScreen() {
             <View style={styles.overlappingStatsWrapper}>
               <StatsCard
                 stats={[
-                  { value: totalFarms || 8, label: 'Parcels' },
-                  { value: 4, label: 'Visits' },
-                  { value: 2, label: 'Follow-ups' },
+                  { value: totalFarms, label: 'Assigned farms' },
+                  { value: seasons.length, label: 'Seasons' },
+                  { value: harvests.length, label: 'Harvests' },
                 ]}
               />
             </View>

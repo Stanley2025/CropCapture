@@ -29,6 +29,24 @@ import {
 import { localDb, SyncQueueItem } from '../src/services/storage/localDatabase';
 import { useAppStore } from '../src/store/useAppStore';
 
+// Queue items carry an entity_type (not a table name) and the record itself in `payload`.
+const ENTITY_LABELS: Record<string, string> = {
+  farmer: 'Farmer',
+  farm: 'Farm',
+  season: 'Season',
+  activity: 'Activity',
+  input: 'Input',
+  expense: 'Expense',
+  harvest: 'Harvest',
+  inspection: 'Inspection',
+  season_details: 'Season details',
+  season_labor: 'Season labour',
+  season_problem: 'Season problem',
+  season_disposal: 'Harvest outcome',
+  season_weather: 'Season weather',
+};
+const entityLabel = (type?: string) => ENTITY_LABELS[type || ''] || String(type || 'Record');
+
 export default function OfflineSyncCenterScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -176,7 +194,7 @@ export default function OfflineSyncCenterScreen() {
           <View style={styles.telemetryRow}>
             <View style={styles.telemetryCol}>
               <Text style={styles.telemetryLabel}>Status</Text>
-              <Text style={styles.telemetryValue}>{syncStatus.toUpperCase()}</Text>
+              <Text style={styles.telemetryValue}>{String(syncStatus || '').toUpperCase()}</Text>
             </View>
             <View style={styles.telemetryCol}>
               <Text style={styles.telemetryLabel}>Pending Queue</Text>
@@ -253,6 +271,7 @@ export default function OfflineSyncCenterScreen() {
               {queue.map((item, idx) => {
                 const isLast = idx === queue.length - 1;
                 const isSynced = item.status === 'synced';
+                const isFailed = item.status === 'sync_failed';
                 return (
                   <View
                     key={item.id}
@@ -260,13 +279,18 @@ export default function OfflineSyncCenterScreen() {
                   >
                     <View style={{ flex: 1, paddingRight: 8 }}>
                       <Text style={styles.queueAction}>
-                        {item.table_name.toUpperCase()} • {item.action}
+                        {entityLabel(item.entity_type)} • {String(item.action || '').toUpperCase()}
                       </Text>
-                      <Text style={styles.queueRecordId}>ID: {item.record_id}</Text>
+                      <Text style={styles.queueRecordId}>ID: {String(item.payload?.id ?? item.id).slice(0, 8)}</Text>
+                      {isFailed && item.last_error ? (
+                        <Text style={styles.queueRecordId} numberOfLines={3}>
+                          {item.last_error}
+                        </Text>
+                      ) : null}
                     </View>
                     <View style={isSynced ? styles.pillSynced : styles.pillPending}>
                       <Text style={isSynced ? styles.pillSyncedText : styles.pillPendingText}>
-                        {isSynced ? 'Synced' : 'Waiting'}
+                        {isSynced ? 'Synced' : isFailed ? 'Failed' : 'Waiting'}
                       </Text>
                     </View>
                   </View>

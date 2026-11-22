@@ -3,6 +3,7 @@ export * from './GreenHeader';
 export * from './Button';
 export * from './Card';
 export * from './Chip';
+export * from './Logo';
 export * from './Badge';
 export * from './SectionHeader';
 export * from './ListRow';

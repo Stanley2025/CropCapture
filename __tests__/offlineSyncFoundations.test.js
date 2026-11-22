@@ -235,3 +235,26 @@ test('Geographic Data: Server versioning updates cache only when newer', () => {
   assert.strictEqual(update.version, 2);
   assert.strictEqual(localCache.counties.length, 2);
 });
+
+// ---- a build with no server address must not say "synced", and records it wrongly sent are sent later ----
+test('records marked synced by an unconnected build are queued once more by a connected one', async () => {
+  const { loadApp } = require('./helpers/loadTs');
+  const { localDb, syncEngine, server } = loadApp();
+  await localDb.saveFarmer({ id: 'farmer-p', full_name: 'Philip S', farmer_id_code: '123456', phone_number: '+231-77-000-0000', county: '', district: '', community: '', created_at: '2026-11-22T10:00:00Z' }, false);
+  await localDb.saveFarm({ id: 'farm-p', farmer_id: 'farmer-p', name: 'Philip Farm', county: 'Lofa', district: 'Foya', created_at: '2026-11-22T10:01:00Z' }, false);
+  // what the unconnected build left behind: an item marked synced although nothing was sent
+  await localDb.saveHarvest({ id: 'h-p', farmer_id: 'farmer-p', farm_id: 'farm-p', batch_reference: 'LR-P-1', crop_id: 'c', harvest_date: '2026-11-22', quantity: 200, unit: 'kg', status: 'submitted', qr_token: 't', created_at: '2026-11-22T10:02:00Z' }, true);
+  const [item] = await localDb.getSyncQueue();
+  await localDb.updateSyncQueueItem(item.id, { status: 'synced', synced_at: '2026-11-22T10:03:00Z' });
+  assert.equal(server.tables.farmers, undefined, 'nothing is on the server yet');
+
+  await syncEngine.syncQueue();
+  assert.ok(server.tables.farmers.has('farmer-p'), 'the farmer reached the server');
+  assert.ok(server.tables.farms.has('farm-p'), 'the farm reached the server');
+  assert.ok(server.tables.harvest_batches.has('h-p'), 'the harvest reached the server');
+
+  // the recovery runs once only
+  const before = (await localDb.getSyncQueue()).length;
+  await syncEngine.syncQueue();
+  assert.equal((await localDb.getSyncQueue()).length <= before, true);
+});

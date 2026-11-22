@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../../constants/theme';
+import { SkyIcon, hasSkyPicture } from './SkyIcon';
 import { weatherLabel, WeatherSky } from '../../shared/activityWeather';
 
 type IconName = React.ComponentProps<typeof Ionicons>['name'];
@@ -14,7 +15,7 @@ export const ActivityWeatherLine: React.FC<{ activity: any }> = ({ activity }) =
   const sky = activity.weather_sky as WeatherSky | null;
   return (
     <View style={styles.row} accessible accessibilityLabel={`Weather: ${text}`}>
-      <Ionicons name={sky ? SKY_ICON[sky] : 'partly-sunny-outline'} size={16} color={Colors.primaryDark} />
+      {sky && hasSkyPicture(sky) ? <SkyIcon sky={sky} size={18} /> : <Ionicons name={sky ? SKY_ICON[sky] : 'partly-sunny-outline'} size={16} color={Colors.primaryDark} />}
       <Text style={styles.text}>{text}</Text>
     </View>
   );

@@ -7,9 +7,10 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Plus, Calendar, QrCode } from 'lucide-react-native';
+import { Plus, Calendar, QrCode, Camera } from 'lucide-react-native';
+import { t } from '../../src/i18n/en';
 import {
   Colors,
   FontFamily,
@@ -18,31 +19,43 @@ import {
   Shadows,
 } from '../../src/constants/theme';
 import { localDb } from '../../src/services/storage/localDatabase';
+import { getScope } from '../../src/services/access/visibility';
 import { HarvestBatch } from '../../src/types/database';
 import { useAppStore } from '../../src/store/useAppStore';
+import { findCropById } from '../../src/shared/farmRecords';
 
 const FILTERS = ['All', 'Approved', 'Pending'];
 
 export default function HarvestsScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentRole, currentFarmer } = useAppStore();
+  const { currentRole, currentFarmer, currentUserProfile } = useAppStore();
 
   const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
+  const [photoCounts, setPhotoCounts] = useState<Record<string, number>>({});
   const [selectedFilter, setSelectedFilter] = useState('All');
   const [refreshing, setRefreshing] = useState(false);
 
   const loadHarvests = useCallback(async () => {
     try {
-      let data = await localDb.getHarvests();
-      if (currentRole === 'farmer' && currentFarmer?.id) {
-        data = data.filter((h) => h.farmer_id === currentFarmer.id);
-      }
+      const scope = await getScope(currentRole, currentUserProfile?.id, currentFarmer?.id);
+      const data = (await localDb.getHarvests()).filter(scope.row);
       setHarvests(data);
+      const counts: Record<string, number> = {};
+      for (const p of await localDb.getHarvestPhotos()) counts[p.harvest_id] = (counts[p.harvest_id] || 0) + 1;
+      setPhotoCounts(counts);
     } catch (e) {
       console.error('Failed to load harvests:', e);
     }
-  }, [currentRole, currentFarmer?.id]);
+  }, [currentRole, currentFarmer?.id, currentUserProfile?.id]);
+
+  // This screen stays open while another is shown on top of it (for example after registering a
+  // second harvest), so read the saved records again every time it comes back into view.
+  useFocusEffect(
+    useCallback(() => {
+      loadHarvests();
+    }, [loadHarvests])
+  );
 
   useEffect(() => {
     loadHarvests();
@@ -50,6 +63,7 @@ export default function HarvestsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await useAppStore.getState().pullRemoteChanges();
     await loadHarvests();
     setRefreshing(false);
   };
@@ -65,28 +79,7 @@ export default function HarvestsScreen() {
     return true;
   });
 
-  // Fallback demo harvests if empty
-  const displayHarvests =
-    filteredHarvests.length > 0
-      ? filteredHarvests
-      : harvests.length === 0
-      ? [
-          {
-            id: 'batch-demo-1',
-            farm_id: 'farm-01',
-            farmer_id: 'farmer-01',
-            batch_reference: 'AGR-2026-RICE-000001',
-            qr_token: 'AGR-SEC-77491-VERIFIED',
-            crop: { name: 'Rice', category: 'Cereals' },
-            crop_variety_id: 'Suakoko 8',
-            quantity: 2450,
-            unit: 'kg',
-            harvest_date: '2026-10-22',
-            status: 'approved',
-            is_server_verified: true,
-          } as unknown as HarvestBatch,
-        ]
-      : [];
+  const displayHarvests = filteredHarvests;
 
   return (
     <View style={styles.root}>
@@ -149,9 +142,21 @@ export default function HarvestsScreen() {
 
         {/* Harvest Cards List */}
         <View style={styles.harvestList}>
+          {displayHarvests.length === 0 ? (
+            <View style={styles.emptyBox}>
+              <Text style={styles.emptyTitle}>
+                {harvests.length === 0 ? 'No harvests recorded yet' : 'No harvests match this filter'}
+              </Text>
+              <Text style={styles.emptyText}>
+                {harvests.length === 0 ? 'Register a harvest and it will appear here with its QR passport.' : 'Try another filter.'}
+              </Text>
+            </View>
+          ) : null}
           {displayHarvests.map((batch) => {
-            const cropName = batch.crop?.name || 'Rice';
-            const variety = batch.crop_variety_id || 'Suakoko 8';
+            const cropName = batch.crop?.name || findCropById(batch.crop_id)?.name || 'Harvest';
+            // the variety is a name the farmer chose; an internal id is never shown
+            const variety =
+              batch.crop_variety_id && !/^[0-9a-f]{8}-/i.test(String(batch.crop_variety_id)) ? batch.crop_variety_id : null;
             const isApproved = batch.status === 'approved';
             const qtyStr = `${Number(batch.quantity).toLocaleString()} ${batch.unit || 'kg'}`;
 
@@ -165,13 +170,13 @@ export default function HarvestsScreen() {
                 <View style={styles.cardHeader}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
                     <Text style={styles.batchTitle}>
-                      {cropName} • {variety}
+                      {variety ? `${cropName} • ${variety}` : cropName}
                     </Text>
                     <Text style={styles.batchRef}>{batch.batch_reference}</Text>
                   </View>
                   <View style={isApproved ? styles.approvedPill : styles.pendingPill}>
                     <Text style={isApproved ? styles.approvedPillText : styles.pendingPillText}>
-                      {isApproved ? 'Approved' : 'Pending verification'}
+                      {isApproved ? 'Approved' : 'Awaiting approval'}
                     </Text>
                   </View>
                 </View>
@@ -192,6 +197,19 @@ export default function HarvestsScreen() {
                     <Text style={styles.qrIndicatorText}>Passport</Text>
                   </View>
                 </View>
+
+                <TouchableOpacity
+                  style={styles.photosBtn}
+                  onPress={() => router.push(`/harvest-photos/${batch.id}` as any)}
+                  activeOpacity={0.85}
+                  accessibilityRole="button"
+                  accessibilityLabel={t('addPhotosBtn')}
+                >
+                  <Camera size={18} color={Colors.primary} strokeWidth={2.2} />
+                  <Text style={styles.photosBtnText}>
+                    {photoCounts[batch.id] ? t('harvestPhotosCount', { count: photoCounts[batch.id] }) : t('addPhotosBtn')}
+                  </Text>
+                </TouchableOpacity>
               </TouchableOpacity>
             );
           })}
@@ -212,6 +230,28 @@ export default function HarvestsScreen() {
 }
 
 const styles = StyleSheet.create({
+  photosBtn: {
+    marginTop: 12,
+    minHeight: 44,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  photosBtnText: { color: Colors.primary, fontWeight: '800', fontSize: 14 },
+  emptyBox: {
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    padding: Spacing.xl,
+    alignItems: 'center',
+  },
+  emptyTitle: { fontFamily: FontFamily.bold, fontSize: 16, color: Colors.text },
+  emptyText: { fontSize: 14, color: Colors.textMuted, marginTop: 6, textAlign: 'center' },
   root: {
     flex: 1,
     backgroundColor: Colors.background,

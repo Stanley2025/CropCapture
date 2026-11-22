@@ -57,7 +57,7 @@ export class WeatherService {
     districtName: string,
     countyName: string,
     customCoords?: { latitude?: number | null; longitude?: number | null }
-  ): Promise<WeatherForecast> {
+  ): Promise<WeatherForecast | null> {
     const cacheKey = `${STORAGE_KEYS.WEATHER_FORECAST_PREFIX}${districtId || 'default'}`;
     const resolvedCoords =
       customCoords?.latitude && customCoords?.longitude
@@ -118,107 +118,25 @@ export class WeatherService {
         };
       }
 
-      // If no cache exists, generate a graceful offline fallback matching Liberia's climate
-      return this.generateOfflineBaselineForecast(districtId, districtName, countyName, resolvedCoords);
+      // Nothing saved and no connection: there is no forecast. Never show made-up numbers.
+      return null;
     }
   }
 
   /**
-   * Fallback forecast generator matching the design mockup when totally offline.
+   * The forecast for where this farmer farms: their farm's place, otherwise the place on their profile.
+   * Returns null when no place is known yet, or when there is neither a connection nor a saved forecast.
    */
-  public generateOfflineBaselineForecast(
-    districtId: string,
-    districtName: string,
-    countyName: string,
-    coords: { latitude: number; longitude: number }
-  ): WeatherForecast {
-    const now = new Date();
-    const hours = String(now.getHours()).padStart(2, '0');
-    const minutes = String(now.getMinutes()).padStart(2, '0');
-
-    return {
-      district_id: districtId,
-      district_name: districtName || 'Gbehley',
-      county_name: countyName || 'Nimba',
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      season: 'Dry season',
-      current: {
-        temp_c: 31,
-        condition: 'Partly cloudy',
-        rain_chance_pct: 20,
-        wind_kmh: 8,
-        humidity_pct: 74,
-        weather_code: 2,
-      },
-      advisory: {
-        title: 'Good day to dry your rice',
-        message: 'Rain is expected tomorrow afternoon. Harvest and dry your crop today, and cover stored paddy.',
-        severity: 'warning',
-        action_type: 'drying',
-      },
-      daily: [
-        {
-          day: 'Today',
-          date: now.toISOString().split('T')[0],
-          rain_chance_pct: 20,
-          temp_max_c: 31,
-          temp_min_c: 24,
-          condition: 'Partly cloudy',
-          weather_code: 2,
-          expected_rain_mm: 2,
-          wind_speed_kmh: 8,
-        },
-        {
-          day: 'Sun',
-          date: new Date(now.getTime() + 86400000).toISOString().split('T')[0],
-          rain_chance_pct: 70,
-          temp_max_c: 29,
-          temp_min_c: 23,
-          condition: 'Moderate rain',
-          weather_code: 63,
-          expected_rain_mm: 28,
-          wind_speed_kmh: 18,
-        },
-        {
-          day: 'Mon',
-          date: new Date(now.getTime() + 172800000).toISOString().split('T')[0],
-          rain_chance_pct: 60,
-          temp_max_c: 28,
-          temp_min_c: 23,
-          condition: 'Moderate rain',
-          weather_code: 63,
-          expected_rain_mm: 22,
-          wind_speed_kmh: 14,
-        },
-        {
-          day: 'Tue',
-          date: new Date(now.getTime() + 259200000).toISOString().split('T')[0],
-          rain_chance_pct: 30,
-          temp_max_c: 30,
-          temp_min_c: 23,
-          condition: 'Partly cloudy',
-          weather_code: 2,
-          expected_rain_mm: 4,
-          wind_speed_kmh: 10,
-        },
-        {
-          day: 'Wed',
-          date: new Date(now.getTime() + 345600000).toISOString().split('T')[0],
-          rain_chance_pct: 10,
-          temp_max_c: 32,
-          temp_min_c: 24,
-          condition: 'Clear sky',
-          weather_code: 0,
-          expected_rain_mm: 0,
-          wind_speed_kmh: 9,
-        },
-      ],
-      updated_at: now.toISOString(),
-      updated_time_display: `Updated ${hours}:${minutes}`,
-      source: 'Offline Default Baseline',
-      is_cached: true,
-    };
+  public async getForecastFor(
+    farm?: { district?: string | null; county?: string | null; district_id?: string | null; latitude?: number | null; longitude?: number | null } | null,
+    person?: { district?: string | null; county?: string | null } | null
+  ): Promise<WeatherForecast | null> {
+    const district = (farm?.district || person?.district || '').trim();
+    const county = (farm?.county || person?.county || '').trim();
+    const hasCoords = Boolean(farm?.latitude && farm?.longitude);
+    if (!district && !county && !hasCoords) return null;
+    const districtId = farm?.district_id || `${county}_${district}`.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    return this.getDistrictForecast(districtId, district, county, farm ? { latitude: farm.latitude, longitude: farm.longitude } : undefined);
   }
 
   // =========================================================================
@@ -242,60 +160,7 @@ export class WeatherService {
       console.warn('Failed to load alerts from storage:', e);
     }
 
-    // Default baseline alerts matching the design screen
-    const baselineAlerts: WeatherAlert[] = [
-      {
-        id: 'alert_heavy_rain_initial',
-        district_id: 'd_nimba_gbehley',
-        district_name: 'Gbehley',
-        county_name: 'Nimba',
-        alert_type: 'heavy_rain',
-        title: 'Heavy rain tomorrow afternoon',
-        message: 'Gbehley, Nimba. High expected rain amount in the next 24 hours.',
-        action_advice: 'Harvest and dry your rice today. Cover stored paddy and clear drains around your plots.',
-        severity: 'critical',
-        is_read: false,
-        created_at: new Date().toISOString(),
-        timestamp_display: 'Today, 09:30',
-        sms_sent: true,
-      },
-      {
-        id: 'alert_dry_spell_earlier',
-        district_id: 'd_nimba_gbehley',
-        district_name: 'Gbehley',
-        county_name: 'Nimba',
-        alert_type: 'dry_spell',
-        title: 'Dry spell: no rain for 7 days',
-        message: 'No rainfall observed in the past 7 days.',
-        action_advice: 'Water young seedlings in the morning.',
-        severity: 'warning',
-        is_read: true,
-        created_at: new Date(Date.now() - 3 * 86400000).toISOString(),
-        timestamp_display: 'Mon',
-        sms_sent: true,
-      },
-      {
-        id: 'alert_wind_earlier',
-        district_id: 'd_nimba_gbehley',
-        district_name: 'Gbehley',
-        county_name: 'Nimba',
-        alert_type: 'strong_wind',
-        title: 'Strong wind expected',
-        message: 'Wind gusts exceeding 40 km/h detected.',
-        action_advice: 'Secure drying mats and tall crops.',
-        severity: 'warning',
-        is_read: true,
-        created_at: new Date(Date.now() - 7 * 86400000).toISOString(),
-        timestamp_display: 'Thu',
-        sms_sent: false,
-      },
-    ];
-
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.WEATHER_ALERTS, JSON.stringify(baselineAlerts));
-    } catch {}
-
-    return baselineAlerts;
+    return [];
   }
 
   /**

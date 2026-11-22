@@ -151,7 +151,7 @@ export default function FarmRecordScreen() {
               ))}
             </View>
 
-            <ProfitLossCard pl={pl} />
+            <ProfitLossCard pl={pl} farmNames={farm ? { [farm.id]: farm.name } : {}} />
 
             <RainChart year={year} months={summary.months} />
 

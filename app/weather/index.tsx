@@ -1,3 +1,5 @@
+import { SunIcon } from '../../src/components/activity/SunIcon';
+import { SkyIcon } from '../../src/components/activity/SkyIcon';
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -39,7 +41,7 @@ export default function WeatherScreen() {
   const { currentFarmer } = useAppStore();
 
   const [forecast, setForecast] = useState<WeatherForecast | null>(null);
-  const [unreadCount, setUnreadCount] = useState<number>(1);
+  const [unreadCount, setUnreadCount] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
   const [selectedFarm, setSelectedFarm] = useState<Farm | null>(null);
@@ -53,17 +55,8 @@ export default function WeatherScreen() {
       const farm = myFarms[0] || null;
       setSelectedFarm(farm);
 
-      const districtName = farm?.district || currentFarmer?.district || 'Gbehley';
-      const countyName = farm?.county || currentFarmer?.county || 'Nimba';
-      const districtId = farm?.district_id || 'd_nimba_gbehley';
-
-      const data = await weatherService.getDistrictForecast(
-        districtId,
-        districtName,
-        countyName,
-        farm ? { latitude: farm.latitude, longitude: farm.longitude } : undefined
-      );
-      setForecast(data);
+      // Where this farmer farms. No place yet, or no connection and nothing saved: no forecast (never a made-up one).
+      setForecast(await weatherService.getForecastFor(farm, currentFarmer));
 
       const count = await weatherService.getUnreadAlertCount(currentFarmer?.id);
       setUnreadCount(count);
@@ -84,18 +77,18 @@ export default function WeatherScreen() {
     loadWeatherData();
   };
 
-  const locationText = selectedFarm
-    ? `${selectedFarm.district || 'Gbehley'}, ${selectedFarm.county || 'Nimba'}`
-    : `${currentFarmer?.district || 'Gbehley'}, ${currentFarmer?.county || 'Nimba'}`;
+  const locationText = [selectedFarm?.district || currentFarmer?.district, selectedFarm?.county || currentFarmer?.county].filter(Boolean).join(', ');
+  const hasPlace = Boolean(locationText) || Boolean(selectedFarm?.latitude);
 
-  // 5-day forecast items
-  const fiveDayList = forecast?.daily?.slice(0, 5) || [
-    { day: 'Today', icon: 'cloud', rainPct: '20% rain', maxTemp: '31°', minTemp: '24°' },
-    { day: 'Sun', icon: 'rain', rainPct: '70% rain', maxTemp: '29°', minTemp: '23°' },
-    { day: 'Mon', icon: 'rain', rainPct: '60% rain', maxTemp: '28°', minTemp: '23°' },
-    { day: 'Tue', icon: 'cloud', rainPct: '30% rain', maxTemp: '30°', minTemp: '23°' },
-    { day: 'Wed', icon: 'sun', rainPct: '10% rain', maxTemp: '32°', minTemp: '24°' },
-  ];
+  // Next 5 days, exactly as the provider returned them
+  const fiveDayList = (forecast?.daily || []).slice(0, 5).map((d) => ({
+    day: d.day,
+    rainPct: `${Math.round(d.rain_chance_pct)}% rain`,
+    maxTemp: `${Math.round(d.temp_max_c)}°`,
+    minTemp: `${Math.round(d.temp_min_c)}°`,
+    icon: d.rain_chance_pct >= 50 ? 'rain' : d.weather_code <= 1 ? 'sun' : 'cloud',
+  }));
+  const todayText = new Date().toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 
   return (
     <View style={styles.root}>
@@ -144,72 +137,82 @@ export default function WeatherScreen() {
           </TouchableOpacity>
         </View>
 
+        {!forecast ? (
+          <View style={styles.mainWeatherCard}>
+            <Text style={styles.weatherConditionText}>
+              {loading ? 'Loading the weather...' : hasPlace ? 'The weather is not available right now. Connect to the internet and pull down to refresh.' : 'Add a farm with its place to see the weather for your area.'}
+            </Text>
+          </View>
+        ) : null}
+
         {/* Big Dark Green Current Weather Card */}
+        {forecast ? (
         <View style={styles.mainWeatherCard}>
           <View style={styles.weatherCardTopRow}>
-            <Text style={styles.weatherDateText}>Sat 21 Nov • Dry season</Text>
-            <Text style={styles.weatherUpdatedText}>Updated 10:00</Text>
+            <Text style={styles.weatherDateText}>{`${todayText} • ${forecast.season}`}</Text>
+            <Text style={styles.weatherUpdatedText}>{`${forecast.updated_time_display}${forecast.is_cached ? ' (saved)' : ''}`}</Text>
           </View>
 
           <View style={styles.weatherTempRow}>
             <Cloud size={46} color="#A5D65A" strokeWidth={2.2} />
             <View style={{ marginLeft: 16 }}>
               <Text style={styles.weatherDegreeText}>
-                {forecast ? `${Math.round(forecast.current.temperature_2m)}°` : '31°'}
+                {`${Math.round(forecast.current.temp_c)}°`}
               </Text>
-              <Text style={styles.weatherConditionText}>Partly cloudy</Text>
+              <Text style={styles.weatherConditionText}>{forecast.current.condition}</Text>
             </View>
           </View>
 
           <View style={styles.metricsRow}>
             <View style={styles.metricItem}>
               <Text style={styles.metricValue}>
-                {forecast ? `${forecast.current.precipitation_probability || 20}%` : '20%'}
+                {`${Math.round(forecast.current.rain_chance_pct)}%`}
               </Text>
               <Text style={styles.metricLabel}>Rain today</Text>
             </View>
 
             <View style={styles.metricItem}>
               <Text style={styles.metricValue}>
-                {forecast ? `${Math.round(forecast.current.wind_speed_10m)} km/h` : '8 km/h'}
+                {`${Math.round(forecast.current.wind_kmh)} km/h`}
               </Text>
               <Text style={styles.metricLabel}>Wind</Text>
             </View>
 
             <View style={styles.metricItem}>
               <Text style={styles.metricValue}>
-                {forecast ? `${forecast.current.relative_humidity_2m}%` : '74%'}
+                {`${Math.round(forecast.current.humidity_pct)}%`}
               </Text>
               <Text style={styles.metricLabel}>Humidity</Text>
             </View>
           </View>
         </View>
+        ) : null}
 
-        {/* Soft Green Farming Advice Card */}
-        <View style={styles.adviceCard}>
-          <View style={styles.adviceIconBubble}>
-            <Leaf size={20} color="#A5D65A" strokeWidth={2.4} />
+        {forecast && forecast.advisory ? (
+          <View style={styles.adviceCard}>
+            <View style={styles.adviceIconBubble}>
+              <Leaf size={20} color="#A5D65A" strokeWidth={2.4} />
+            </View>
+            <View style={styles.adviceTextCol}>
+              <Text style={styles.adviceTitle}>{forecast.advisory.title}</Text>
+              <Text style={styles.adviceBody}>{forecast.advisory.message}</Text>
+            </View>
           </View>
-          <View style={styles.adviceTextCol}>
-            <Text style={styles.adviceTitle}>Good day to dry your rice</Text>
-            <Text style={styles.adviceBody}>
-              Rain is expected tomorrow afternoon. Harvest and dry your crop today, and cover stored paddy.
-            </Text>
-          </View>
-        </View>
+        ) : null}
 
         {/* Next 5 Days Forecast Section */}
+        {forecast ? (
         <View style={styles.fiveDaysSection}>
           <Text style={styles.sectionTitle}>Next 5 days</Text>
 
           <View style={styles.fiveDaysCard}>
             {fiveDayList.map((item, idx) => {
               const isLast = idx === fiveDayList.length - 1;
-              const dayStr = (item as any).day || (item as any).date || 'Day';
-              const rainStr = (item as any).rainPct || `${(item as any).precipitation_probability_max || 20}% rain`;
-              const maxT = (item as any).maxTemp || `${Math.round((item as any).temperature_2m_max || 30)}°`;
-              const minT = (item as any).minTemp || `${Math.round((item as any).temperature_2m_min || 23)}°`;
-              const iconKey = (item as any).icon || ((item as any).precipitation_probability_max > 50 ? 'rain' : 'cloud');
+              const dayStr = item.day;
+              const rainStr = item.rainPct;
+              const maxT = item.maxTemp;
+              const minT = item.minTemp;
+              const iconKey = item.icon;
 
               return (
                 <View
@@ -220,9 +223,9 @@ export default function WeatherScreen() {
 
                   <View style={styles.forecastIconAndRain}>
                     {iconKey === 'sun' ? (
-                      <Sun size={20} color="#F2A93B" strokeWidth={2.2} />
+                      <SunIcon size={22} />
                     ) : iconKey === 'rain' ? (
-                      <CloudRain size={20} color="#0284C7" strokeWidth={2.2} />
+                      <SkyIcon sky="rain" size={24} />
                     ) : (
                       <Cloud size={20} color={Colors.textMuted} strokeWidth={2.2} />
                     )}
@@ -237,11 +240,10 @@ export default function WeatherScreen() {
               );
             })}
 
-            <Text style={styles.sampleForecastFooter}>
-              Sample forecast shown for design. Real data comes from your weather provider.
-            </Text>
+            <Text style={styles.sampleForecastFooter}>{`Source: ${forecast.source}`}</Text>
           </View>
         </View>
+        ) : null}
       </ScrollView>
     </View>
   );

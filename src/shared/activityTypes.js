@@ -10,7 +10,11 @@
 
 /** Ordered sections. A section with a title is a group; one without is a plain list of activities. */
 const CROP_ACTIVITY_SECTIONS = Object.freeze([
-  { items: ['Land preparation', 'Planting'] },
+  { items: ['Land preparation'] },
+  {
+    title: 'Planting',
+    items: ['Seed selection', 'Seed sorting', 'Seed treatment', 'Nursery preparation', 'Seed sowing', 'Broadcasting', 'Drilling', 'Transplanting', 'Direct planting', 'Gap filling'],
+  },
   {
     title: 'Fertilizer application',
     items: ['Compost application', 'Manure application', 'NPK fertilizer application', 'Urea application', 'Soil amendment application'],
@@ -30,6 +34,13 @@ const CROP_ACTIVITY_SECTIONS = Object.freeze([
   { items: ['Disease management', 'Pruning', 'Field inspection', 'Harvesting', 'Harvest preparation', 'Other crop activity'] },
 ]);
 
+/**
+ * The activities that actually put seed or plants in the ground. These (and the older plain
+ * "Planting") set the planting date of a season; seed selection, sorting, treatment, nursery
+ * preparation and gap filling do not.
+ */
+const PLANTING_ACTIVITIES = Object.freeze(['Planting', 'Seed sowing', 'Broadcasting', 'Drilling', 'Transplanting', 'Direct planting']);
+
 /** Every activity a farmer can pick, in screen order. */
 const CROP_ACTIVITY_TYPES = Object.freeze(CROP_ACTIVITY_SECTIONS.flatMap((s) => s.items));
 
@@ -38,6 +49,7 @@ const CROP_ACTIVITY_FILTERS = Object.freeze(CROP_ACTIVITY_SECTIONS.flatMap((s) =
 
 /** Names used before the groups existed, mapped to their group. */
 const LEGACY_GROUP = Object.freeze({
+  planting: 'Planting',
   'fertilizer application': 'Fertilizer application',
   weeding: 'Weeding',
   irrigation: 'Irrigation and watering',
@@ -81,4 +93,4 @@ function matchesCategory(activityType, category) {
   return norm(group) === norm(wanted);
 }
 
-module.exports = { CROP_ACTIVITY_SECTIONS, CROP_ACTIVITY_TYPES, CROP_ACTIVITY_FILTERS, LEGACY_GROUP, groupOf, matchesCategory };
+module.exports = { PLANTING_ACTIVITIES, CROP_ACTIVITY_SECTIONS, CROP_ACTIVITY_TYPES, CROP_ACTIVITY_FILTERS, LEGACY_GROUP, groupOf, matchesCategory };

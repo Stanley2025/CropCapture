@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   RefreshControl,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Plus } from 'lucide-react-native';
 import {
@@ -18,6 +18,7 @@ import {
   Shadows,
 } from '../../src/constants/theme';
 import { localDb } from '../../src/services/storage/localDatabase';
+import { getScope } from '../../src/services/access/visibility';
 import { Farm, HarvestBatch, ExpenseRecord, InputRecord } from '../../src/types/database';
 import { FieldIllustration } from '../../src/components/FieldIllustration';
 import { useAppStore } from '../../src/store/useAppStore';
@@ -25,7 +26,7 @@ import { useAppStore } from '../../src/store/useAppStore';
 export default function FarmsListScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { currentRole, currentFarmer } = useAppStore();
+  const { currentRole, currentFarmer, currentUserProfile } = useAppStore();
 
   const [farms, setFarms] = useState<Farm[]>([]);
   const [allHarvests, setAllHarvests] = useState<HarvestBatch[]>([]);
@@ -42,18 +43,23 @@ export default function FarmsListScreen() {
         localDb.getExpenses(),
         localDb.getInputs(),
       ]);
-      const filtered =
-        currentRole === 'farmer' && currentFarmer?.id
-          ? data.filter((f) => f.farmer_id === currentFarmer.id)
-          : data;
-      setFarms(filtered);
-      setAllHarvests(harvests);
-      setAllExpenses(expenses);
-      setAllInputs(inputs);
+      const scope = await getScope(currentRole, currentUserProfile?.id, currentFarmer?.id);
+      setFarms(data.filter(scope.farm));
+      setAllHarvests(harvests.filter(scope.row));
+      setAllExpenses(expenses.filter(scope.row));
+      setAllInputs(inputs.filter(scope.row));
     } catch (e) {
       console.error('Error loading farms:', e);
     }
-  }, [currentRole, currentFarmer?.id]);
+  }, [currentRole, currentFarmer?.id, currentUserProfile?.id]);
+
+  // This screen stays open while another is shown on top of it (for example after registering a
+  // second harvest), so read the saved records again every time it comes back into view.
+  useFocusEffect(
+    useCallback(() => {
+      loadFarms();
+    }, [loadFarms])
+  );
 
   useEffect(() => {
     loadFarms();
@@ -61,6 +67,7 @@ export default function FarmsListScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
+    await useAppStore.getState().pullRemoteChanges();
     await loadFarms();
     setRefreshing(false);
   };
@@ -89,38 +96,8 @@ export default function FarmsListScreen() {
     });
   }, [farms, selectedFilter]);
 
-  // Demo fallback farms matching V2 design if local DB is empty
-  const displayFarms =
-    filteredFarms.length > 0
-      ? filteredFarms
-      : farms.length === 0
-      ? [
-          {
-            id: 'demo-farm-rice-01',
-            name: 'Gbehley Rice Plot',
-            crop_type: 'rice',
-            variety: 'Suakoko 8',
-            size: 4.1,
-            size_unit: 'acres',
-            community: 'Gbehley',
-            district: 'Nimba',
-            county: 'Nimba',
-            status: 'Season active',
-          } as unknown as Farm,
-          {
-            id: 'demo-farm-cassava-02',
-            name: 'Upland Farm',
-            crop_type: 'cassava',
-            variety: 'CARICASS 2',
-            size: 3.2,
-            size_unit: 'acres',
-            community: 'Gbehley',
-            district: 'Nimba',
-            county: 'Nimba',
-            status: 'Season active',
-          } as unknown as Farm,
-        ]
-      : [];
+  // Only the farmer's own farms are listed (never invented ones).
+  const displayFarms = filteredFarms;
 
   return (
     <View style={styles.container}>
@@ -189,6 +166,17 @@ export default function FarmsListScreen() {
 
         {/* Farm Cards Vertical List */}
         <View style={styles.farmsList}>
+          {displayFarms.length === 0 ? (
+            <View style={{ backgroundColor: Colors.card, borderRadius: 18, borderWidth: 1, borderColor: Colors.border, padding: 18 }}>
+              <Text style={{ color: Colors.text, fontSize: 16, fontWeight: '700' }}>No farms yet</Text>
+              <Text style={{ color: Colors.textMuted, fontSize: 14, marginTop: 4 }}>
+                Register your first farm to start recording activities, harvests and costs.
+              </Text>
+              <TouchableOpacity style={{ alignSelf: 'flex-start', marginTop: 12, paddingVertical: 9, paddingHorizontal: 18, borderRadius: 999, backgroundColor: Colors.primary }} activeOpacity={0.85} onPress={() => router.push('/farm/register' as any)}>
+                <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Add your farm</Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
           {displayFarms.map((farm) => {
             const cropRaw =
               ((farm as any).crop_type || farm.farming_type || 'rice').toLowerCase();

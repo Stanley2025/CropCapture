@@ -1,5 +1,8 @@
+import { getScope } from '../../src/services/access/visibility';
 import React, { useState, useEffect, useMemo } from 'react';
 import { KeyboardAwareScrollView } from '../../src/components/KeyboardAwareScrollView';
+import { CurrencyToggle } from '../../src/components/CurrencyToggle';
+import { formatMoney, currencyOf, Currency } from '../../src/shared/money';
 import { WeatherCard } from '../../src/components/activity/WeatherCard';
 import { ActivityWeatherLine } from '../../src/components/activity/ActivityWeatherLine';
 import { ActivityDetailSheet } from '../../src/components/activity/ActivityDetailSheet';
@@ -35,6 +38,7 @@ import {
   groupOf,
 } from '../../src/shared/activityTypes';
 import { BottomSheet } from '../../src/components/BottomSheet';
+import { VoiceNoteRecorder } from '../../src/components/VoiceNoteRecorder';
 
 // Crop activities are grouped (Fertilizer application, Weeding, Irrigation and watering, Pest management).
 // The list lives in src/shared/activityTypes.js so the activity log and the tabs filter use the same groups.
@@ -111,6 +115,7 @@ export default function RecordActivityScreen() {
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('kg');
   const [cost, setCost] = useState('');
+  const [costCurrency, setCostCurrency] = useState<Currency>('USD');
   const [laborCount, setLaborCount] = useState('2');
   const [selectedLandPrepOps, setSelectedLandPrepOps] = useState<string[]>([]);
   const [selectedHarvestOps, setSelectedHarvestOps] = useState<string[]>([]);
@@ -118,14 +123,19 @@ export default function RecordActivityScreen() {
   const [activitySheetOpen, setActivitySheetOpen] = useState(false);
   const [tasksSheetOpen, setTasksSheetOpen] = useState(false);
   const [showMaterials, setShowMaterials] = useState(false);
-  // Weather the farmer saw today: all optional
+  // Voice note recorded by the farmer
+  const [voiceNoteUri, setVoiceNoteUri] = useState<string | null>(null);
+  // Weather the farmer observed today (Required)
   const [weatherSky, setWeatherSky] = useState<WeatherSky | null>(null);
+  const [weatherSkyError, setWeatherSkyError] = useState(false);
   const [rainMm, setRainMm] = useState('');
   const [dayFeel, setDayFeel] = useState<DayFeel | null>(null);
   const [rainError, setRainError] = useState<StringKey | null>(null);
   const [detailActivity, setDetailActivity] = useState<FarmActivity | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [logFilterCategory, setLogFilterCategory] = useState('All');
+  // null = the farm's newest season (the one just activated); 'all' = every season of the farm
+  const [logSeasonChoice, setLogSeasonChoice] = useState<string | null>(null);
 
   const isHarvestingActivity = (type: string) => {
     const norm = (type || '').toLowerCase();
@@ -178,18 +188,10 @@ export default function RecordActivityScreen() {
         localDb.getActivities(),
       ]);
 
-      const myFarms =
-        currentRole === 'farmer' && currentFarmer?.id
-          ? allFarms.filter((f) => f.farmer_id === currentFarmer.id)
-          : allFarms;
-      const myFarmIds = new Set(myFarms.map((f) => f.id));
-
-      const mySeasons = allSeasons.filter((s) => myFarmIds.has(s.farm_id));
-      const myActivities = allActivities.filter(
-        (a) =>
-          (currentFarmer?.id && a.farmer_id === currentFarmer.id) ||
-          myFarmIds.has(a.farm_id)
-      );
+      const scope = await getScope(currentRole, currentUserProfile?.id, currentFarmer?.id);
+      const myFarms = allFarms.filter(scope.farm);
+      const mySeasons = allSeasons.filter(scope.row);
+      const myActivities = allActivities.filter(scope.row);
 
       setFarms(myFarms);
       setSeasons(mySeasons);
@@ -218,7 +220,7 @@ export default function RecordActivityScreen() {
 
   useEffect(() => {
     loadData();
-  }, [currentFarmer?.id, currentRole]);
+  }, [currentFarmer?.id, currentRole, currentUserProfile?.id]);
 
   const selectedFarm = farms.find((f) => f.id === selectedFarmId);
   const farmType = selectedFarm?.farming_type || 'crops';
@@ -280,6 +282,14 @@ export default function RecordActivityScreen() {
     });
   }, [seasons, selectedFarmId, isLivestock]);
 
+  // New records go to the newest season of the farm unless the farmer picks another, so they appear in the
+  // season's log. (Switching farm clears a season that belongs to the other farm.)
+  useEffect(() => {
+    if (selectedSeasonId && availableSeasons.some((x) => x.id === selectedSeasonId)) return;
+    const newest = [...availableSeasons].sort((x, y) => String(y.created_at || '').localeCompare(String(x.created_at || '')))[0];
+    setSelectedSeasonId(newest ? newest.id : '');
+  }, [availableSeasons]);
+
   const handleSubmit = async () => {
     if (!currentFarmer?.id) {
       Alert.alert('Farmer Profile Required', 'Please ensure a farmer profile is active.');
@@ -300,6 +310,17 @@ export default function RecordActivityScreen() {
       );
       return;
     }
+
+    // Weather observation is required for agronomic records
+    if (!weatherSky) {
+      setWeatherSkyError(true);
+      Alert.alert(
+        'Weather Data Required',
+        'Weather observation is required for all field records. Please select today\'s sky condition (Sunny, Cloudy, Rain, or Heavy rain).'
+      );
+      return;
+    }
+    setWeatherSkyError(false);
 
     const weather = validateWeather({ sky: weatherSky, rainMm, dayFeel });
     if (!weather.ok) {
@@ -329,6 +350,7 @@ export default function RecordActivityScreen() {
         quantity: quantity ? parseFloat(quantity) : null,
         unit: quantity ? unit : null,
         cost: cost ? parseFloat(cost) : 0,
+        currency: costCurrency,
         labor_count: laborCount ? parseInt(laborCount, 10) : 1,
         photo_url: null,
         recorded_by: currentUserProfile.id,
@@ -347,9 +369,11 @@ export default function RecordActivityScreen() {
       setDescription('');
       setSelectedLandPrepOps([]);
       setSelectedHarvestOps([]);
+      setVoiceNoteUri(null);
       setQuantity('');
       setCost('');
       setWeatherSky(null);
+      setWeatherSkyError(false);
       setRainMm('');
       setDayFeel(null);
       setRainError(null);
@@ -377,7 +401,18 @@ export default function RecordActivityScreen() {
 
   const farmLookup = new Map(farms.map((f) => [f.id, f.name]));
 
-  const filteredActivities = activities.filter((a) => {
+  // Seasons of the chosen farm, newest first. The log shows the newest one unless the farmer picks another.
+  const farmSeasonsNewestFirst = seasons
+    .filter((x) => x.farm_id === selectedFarmId)
+    .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  // a choice made for another farm no longer applies after switching farms
+  const validChoice = logSeasonChoice === 'all' || farmSeasonsNewestFirst.some((x) => x.id === logSeasonChoice) ? logSeasonChoice : null;
+  const logSeasonId = validChoice ?? (farmSeasonsNewestFirst[0]?.id || 'all');
+  const logActivities = activities.filter(
+    (a) => a.farm_id === selectedFarmId && (logSeasonId === 'all' || a.season_id === logSeasonId)
+  );
+
+  const filteredActivities = logActivities.filter((a) => {
     if (logFilterCategory === 'All') return true;
     return isLivestock
       ? a.activity_type.toLowerCase() === logFilterCategory.toLowerCase()
@@ -391,7 +426,7 @@ export default function RecordActivityScreen() {
         subtitle={
           activeTab === 'record'
             ? 'Log field operations & agronomy'
-            : `${activities.length} Recorded ${activities.length === 1 ? 'Operation' : 'Operations'}`
+            : `${logActivities.length} Recorded ${logActivities.length === 1 ? 'Operation' : 'Operations'}`
         }
         showBack
       />
@@ -708,10 +743,29 @@ export default function RecordActivityScreen() {
                   </View>
 
                   <View style={styles.inputGroup}>
-                    <Text style={styles.label}>{selectedTasks.length > 0 ? 'Notes (optional)' : 'Notes *'}</Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={styles.label}>{selectedTasks.length > 0 ? 'Notes & Voice (optional)' : 'Notes & Voice *'}</Text>
+                    </View>
+                    <VoiceNoteRecorder
+                      currentAudioUri={voiceNoteUri}
+                      onRecorded={(res) => {
+                        setVoiceNoteUri(res.uri);
+                        if (!description.trim() || description.startsWith('🎤 Voice note')) {
+                          setDescription(res.label);
+                        } else {
+                          setDescription((prev) => `${prev.trim()}\n${res.label}`);
+                        }
+                      }}
+                      onRemove={() => {
+                        setVoiceNoteUri(null);
+                        if (description.startsWith('🎤 Voice note')) {
+                          setDescription('');
+                        }
+                      }}
+                    />
                     <TextInput
-                      style={[styles.input, styles.textArea]}
-                      placeholder={isLivestock ? 'e.g. Vaccinated 25 goats and cleaned the pens' : 'e.g. Applied compost along the rice bunds'}
+                      style={[styles.input, styles.textArea, { marginTop: Spacing.xs }]}
+                      placeholder={isLivestock ? 'e.g. Vaccinated 25 goats and cleaned pens, or tap above to speak' : 'e.g. Applied compost along the rice bunds, or tap above to speak'}
                       placeholderTextColor={Colors.textMuted}
                       multiline
                       numberOfLines={2}
@@ -723,7 +777,10 @@ export default function RecordActivityScreen() {
 
                 <WeatherCard
                   sky={weatherSky}
-                  onSky={setWeatherSky}
+                  onSky={(val) => {
+                    setWeatherSky(val);
+                    if (weatherSkyError) setWeatherSkyError(false);
+                  }}
                   rainMm={rainMm}
                   onRainMm={(v) => {
                     setRainMm(v);
@@ -732,6 +789,8 @@ export default function RecordActivityScreen() {
                   rainError={rainError}
                   dayFeel={dayFeel}
                   onDayFeel={setDayFeel}
+                  required={true}
+                  skyError={weatherSkyError}
                 />
 
                 {/* 3. Cost, workers and (optionally) materials */}
@@ -740,7 +799,7 @@ export default function RecordActivityScreen() {
 
                   <View style={styles.inputRow}>
                     <View style={[styles.inputGroup, { flex: 1, marginRight: Spacing.xs }]}>
-                      <Text style={styles.label}>Cost (USD)</Text>
+                      <Text style={styles.label}>{`Cost (${costCurrency})`}</Text>
                       <TextInput
                         style={styles.input}
                         placeholder="e.g. 45"
@@ -749,6 +808,9 @@ export default function RecordActivityScreen() {
                         value={cost}
                         onChangeText={setCost}
                       />
+                      <View style={{ marginTop: Spacing.xs }}>
+                        <CurrencyToggle value={costCurrency} onChange={setCostCurrency} />
+                      </View>
                     </View>
                     <View style={[styles.inputGroup, { flex: 1, marginLeft: Spacing.xs }]}>
                       <Text style={styles.label}>Workers</Text>
@@ -906,11 +968,11 @@ export default function RecordActivityScreen() {
                 <View style={styles.recentHeader}>
                   <Text style={styles.recentTitle}>Recent Activity Log</Text>
                   <TouchableOpacity onPress={() => setActiveTab('log')}>
-                    <Text style={styles.viewAllText}>View All ({activities.length}) →</Text>
+                    <Text style={styles.viewAllText}>View All ({logActivities.length}) →</Text>
                   </TouchableOpacity>
                 </View>
 
-                {activities.slice(0, 3).map((act) => {
+                {logActivities.slice(0, 3).map((act) => {
                   const isLive = LIVESTOCK_ACTIVITY_TYPES.includes(act.activity_type);
                   return (
                     <TouchableOpacity
@@ -942,7 +1004,7 @@ export default function RecordActivityScreen() {
                         <Text style={styles.logFarmText}>
                           📍 {farmLookup.get(act.farm_id) || 'Registered Farm'}
                         </Text>
-                        {act.cost ? <Text style={styles.logCostText}>${act.cost}</Text> : null}
+                        {act.cost ? <Text style={styles.logCostText}>{formatMoney(act.cost, currencyOf(act))}</Text> : null}
                       </View>
                     </Card>
                     </TouchableOpacity>
@@ -954,6 +1016,23 @@ export default function RecordActivityScreen() {
         ) : (
           /* Activity Log Tab */
           <View style={styles.logContainer}>
+            {/* Season: the newest season is shown first; older seasons are one tap away */}
+            {farmSeasonsNewestFirst.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={[styles.chipRow, { marginBottom: Spacing.sm }]}>
+                {[...farmSeasonsNewestFirst.map((x) => ({ id: x.id, label: x.season_name })), { id: 'all', label: 'All seasons' }].map((opt) => (
+                  <TouchableOpacity
+                    key={opt.id}
+                    style={[styles.chip, logSeasonId === opt.id && styles.chipActive]}
+                    onPress={() => setLogSeasonChoice(opt.id)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: logSeasonId === opt.id }}
+                  >
+                    <Text style={[styles.chipText, logSeasonId === opt.id && styles.chipTextActive]}>{opt.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            ) : null}
+
             {/* Category Filter Chips */}
             <ScrollView
               horizontal
@@ -1046,7 +1125,7 @@ export default function RecordActivityScreen() {
                     {act.cost ? (
                       <View style={styles.logDetailItem}>
                         <Text style={styles.logDetailLabel}>EXPENSE</Text>
-                        <Text style={styles.logDetailValue}>${act.cost} USD</Text>
+                        <Text style={styles.logDetailValue}>{formatMoney(act.cost, currencyOf(act))}</Text>
                       </View>
                     ) : null}
 

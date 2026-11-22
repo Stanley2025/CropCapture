@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, FontFamily, Radius, Spacing, Typography } from '../constants/theme';
 import { useAppStore } from '../store/useAppStore';
+import { Logo } from './Logo';
 
 interface HeaderProps {
   title?: string;
@@ -55,7 +56,7 @@ export const Header: React.FC<HeaderProps> = ({
             </TouchableOpacity>
           )}
           <View style={{ flex: 1 }}>
-            <Text style={styles.appTitle}>FARMTORI</Text>
+            <Logo tone="onGreen" height={18} style={{ marginBottom: 4 }} />
             {title && <Text style={styles.screenTitle}>{title}</Text>}
             {subtitle && <Text style={styles.subtitle}>{subtitle}</Text>}
           </View>

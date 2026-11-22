@@ -76,21 +76,8 @@ export default function WeatherAlertsScreen() {
   const newAlerts = alerts.filter((a) => !a.is_read && !acknowledgedIds.has(a.id));
   const earlierAlerts = alerts.filter((a) => a.is_read || acknowledgedIds.has(a.id));
 
-  // Fallback demo active alert matching screenshot if none
-  const activeAlertsList =
-    newAlerts.length > 0
-      ? newAlerts
-      : [
-          {
-            id: 'demo-alert-01',
-            type: 'heavy_rain',
-            title: 'Heavy rain tomorrow afternoon',
-            message:
-              'Gbehley, Nimba. Harvest and dry your rice today. Cover stored paddy and clear drains around your plots.',
-            created_at: 'Today, 09:30',
-            is_read: false,
-          } as unknown as WeatherAlert,
-        ];
+  // Only alerts that were really raised; never a sample alert
+  const activeAlertsList = newAlerts;
 
   return (
     <View style={styles.root}>
@@ -118,6 +105,9 @@ export default function WeatherAlertsScreen() {
         </View>
 
         {/* 1. Active / New Alerts (Sky Blue Card) */}
+        {activeAlertsList.length === 0 && earlierAlerts.length === 0 ? (
+          <Text style={{ fontSize: 15, color: Colors.textMuted, marginVertical: 24 }}>No weather alerts yet. Alerts appear here when the weather for your farm needs your attention.</Text>
+        ) : null}
         {activeAlertsList.map((item) => (
           <View key={item.id} style={styles.newAlertCard}>
             <View style={styles.newAlertTopRow}>
@@ -125,7 +115,7 @@ export default function WeatherAlertsScreen() {
                 <Text style={styles.newBadgeText}>New</Text>
               </View>
               <Text style={styles.newAlertTimestamp}>
-                {item.created_at?.includes('T') ? 'Today, 09:30' : item.created_at || 'Today, 09:30'}
+                {item.timestamp_display || (item.created_at ? new Date(item.created_at).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '')}
               </Text>
             </View>
 

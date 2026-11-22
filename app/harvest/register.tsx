@@ -29,6 +29,8 @@ import { Card } from '../../src/components/Card';
 import { Badge } from '../../src/components/Badge';
 import { DatePickerField } from '../../src/components/DatePickerField';
 import { newPublicCode } from '../../src/constants/buyerLink';
+import { CurrencyToggle } from '../../src/components/CurrencyToggle';
+import { formatMoney, currencyOf, Currency } from '../../src/shared/money';
 
 // Local units (cups, tins, bags) are accepted and converted to kg (see src/shared/seasonRecord.js).
 const CROP_UNITS = ['kg', 'tonnes', '50kg bags', 'cups', 'tins', 'bunches'];
@@ -74,10 +76,9 @@ export default function RegisterHarvestScreen() {
   const [quantity, setQuantity] = useState('');
   const [unit, setUnit] = useState('kg');
   const [totalValue, setTotalValue] = useState('');
+  const [valueCurrency, setValueCurrency] = useState<Currency>('USD');
   const [harvestDate, setHarvestDate] = useState(new Date().toISOString().split('T')[0]);
-  const [storageLocation, setStorageLocation] = useState(
-    'Central Cooperative Warehouse, Sanniquellie'
-  );
+  const [storageLocation, setStorageLocation] = useState('');
   const [observations, setObservations] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -147,17 +148,13 @@ export default function RegisterHarvestScreen() {
 
     if (farm.farming_type === 'livestock') {
       setUnit('heads');
-      setStorageLocation('Farm Holding Paddock, Sanniquellie');
     } else if (farm.farming_type === 'crops') {
       setUnit('kg');
-      setStorageLocation('Central Cooperative Warehouse, Sanniquellie');
     } else if (farm.farming_type === 'both') {
       if (bothEnterpriseMode === 'livestock') {
         setUnit('heads');
-        setStorageLocation('Farm Holding Paddock, Sanniquellie');
       } else {
         setUnit('kg');
-        setStorageLocation('Central Cooperative Warehouse, Sanniquellie');
       }
     }
 
@@ -175,10 +172,8 @@ export default function RegisterHarvestScreen() {
     setBothEnterpriseMode(mode);
     if (mode === 'livestock') {
       setUnit('heads');
-      setStorageLocation('Farm Holding Paddock, Sanniquellie');
     } else {
       setUnit('kg');
-      setStorageLocation('Central Cooperative Warehouse, Sanniquellie');
     }
   };
 
@@ -273,6 +268,7 @@ export default function RegisterHarvestScreen() {
         quantity_kg: isLivestock ? null : kgConversion ? kgConversion.kg : null,
         kg_per_unit: isLivestock ? null : kgConversion ? kgConversion.kgPerUnit : null,
         total_value: totalValue.trim() && !isNaN(Number(totalValue)) ? parseFloat(totalValue) : null,
+        currency: valueCurrency,
         unit_price:
           totalValue.trim() && !isNaN(Number(totalValue)) && parseFloat(quantity) > 0
             ? parseFloat(totalValue) / parseFloat(quantity)
@@ -783,7 +779,7 @@ export default function RegisterHarvestScreen() {
           {/* Gross Market / Sale Value for Real Farm Profit Tracking */}
           <View style={[styles.inputGroup, { marginTop: Spacing.md }]}>
             <View style={styles.fieldHeaderRow}>
-              <Text style={styles.label}>Estimated / Market Sale Value ($ USD)</Text>
+              <Text style={styles.label}>{`Estimated / Market Sale Value (${valueCurrency === 'LRD' ? 'L$ LRD' : '$ USD'})`}</Text>
               <Badge label="Revenue & Profit" variant="success" size="sm" />
             </View>
             <TextInput
@@ -794,6 +790,9 @@ export default function RegisterHarvestScreen() {
               value={totalValue}
               onChangeText={setTotalValue}
             />
+            <View style={{ marginTop: Spacing.sm }}>
+              <CurrencyToggle value={valueCurrency} onChange={setValueCurrency} />
+            </View>
             <Text style={styles.helperText}>
               Gross value/revenue from this harvest or offtake (used to calculate real farm profit & loss)
             </Text>
@@ -822,8 +821,8 @@ export default function RegisterHarvestScreen() {
               onChangeText={setStorageLocation}
               placeholder={
                 isLivestock
-                  ? 'e.g. Central Paddock / Abattoir Cold Room / Farm Pen'
-                  : 'e.g. Nimba Cooperative Central Depot #2'
+                  ? 'Where the animals are held (optional)'
+                  : 'Where the harvest is stored (optional)'
               }
               placeholderTextColor={Colors.textMuted}
             />
@@ -937,7 +936,7 @@ export default function RegisterHarvestScreen() {
                     <Text style={styles.recentDate}>{item.harvest_date}</Text>
                     {item.total_value ? (
                       <Text style={styles.recentValue}>
-                        ${Number(item.total_value).toFixed(2)} USD
+                        {formatMoney(item.total_value, currencyOf(item))}
                       </Text>
                     ) : null}
                   </View>
@@ -1156,7 +1155,7 @@ export default function RegisterHarvestScreen() {
                     <Text style={styles.logMetaLabel}>EST. MARKET VALUE</Text>
                     <Text style={[styles.logMetaValue, item.total_value ? { color: '#15803D' } : {}]}>
                       {item.total_value
-                        ? `$${Number(item.total_value).toFixed(2)} USD`
+                        ? formatMoney(item.total_value, currencyOf(item))
                         : 'Not Specified'}
                     </Text>
                   </View>

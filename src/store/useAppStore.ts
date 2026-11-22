@@ -280,6 +280,11 @@ export const useAppStore = create<AppState>((set, get) => ({
           f.email?.toLowerCase() === cleanInput ||
           (cleanInput.length === 6 && f.farmer_id_code === cleanInput)
       );
+      // An unknown ID or email must not sign in as the built-in demo farmer: that would show another
+      // farmer's records to a new person. Only the demo account's own email reaches the demo farmer.
+      if (!matched && cleanInput !== (PERSONAS.farmer.profile.email || '').toLowerCase()) {
+        throw new Error('No farmer account was found with that ID or email. Check it, or create an account.');
+      }
       if (matched) {
         activeFarmer = matched;
         activeProfile = {
@@ -471,10 +476,17 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   pullRemoteChanges: async () => {
-    const { isOfflineMode, currentRole, currentFarmer } = get();
-    if (isOfflineMode || currentRole !== 'farmer' || !currentFarmer?.id) return;
+    const { isOfflineMode, currentRole, currentFarmer, currentUserProfile } = get();
+    if (isOfflineMode) return;
     try {
-      await syncEngine.pullUserDelta(currentFarmer.id);
+      if (currentRole === 'farmer' && currentFarmer?.id) {
+        await syncEngine.pullUserDelta(currentFarmer.id);
+      } else if (currentRole === 'extension_officer' && currentUserProfile?.id) {
+        // an officer receives only the farmers assigned to them
+        for (const farmerId of await syncEngine.pullOfficerAssignments(currentUserProfile.id)) {
+          await syncEngine.pullUserDelta(farmerId);
+        }
+      }
     } catch (e) {
       console.warn('Pull of remote changes skipped:', e);
     }

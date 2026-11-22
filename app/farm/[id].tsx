@@ -8,7 +8,7 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   ChevronLeft,
@@ -37,8 +37,12 @@ import {
   InputRecord,
 } from '../../src/types/database';
 import { FieldIllustration } from '../../src/components/FieldIllustration';
-import { estimateHarvestRevenue, findCropById } from '../../src/shared/farmRecords';
+import { findCropById } from '../../src/shared/farmRecords';
+import { profitAndLoss } from '../../src/shared/farmFinance';
+import { ProfitLossCard } from '../../src/components/ProfitLossCard';
+import { formatMoney } from '../../src/shared/money';
 import { t } from '../../src/i18n/en';
+import { Ionicons } from '@expo/vector-icons';
 import { Button } from '../../src/components/Button';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -55,28 +59,20 @@ export default function FarmDetailsScreen() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [inputs, setInputs] = useState<InputRecord[]>([]);
 
-  // Calculate Real Farm Financial Profit & Loss (P&L)
+  // Real farm profit and loss, in US dollars and (separately) Liberian dollars
   const financialSummary = useMemo(() => {
-    const harvestRevenue = estimateHarvestRevenue(harvests);
-
-    const totalInputsCost = inputs.reduce((acc, i) => acc + (Number(i.cost) || 0), 0);
-    const totalActivitiesCost = activities.reduce((acc, a) => acc + (Number(a.cost) || 0), 0);
-    const totalDirectExpenses = expenses.reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
-    const totalExpenses = totalInputsCost + totalActivitiesCost + totalDirectExpenses;
-    const netProfit = harvestRevenue - totalExpenses;
-    const profitMargin = harvestRevenue > 0 ? (netProfit / harvestRevenue) * 100 : 0;
-
+    const pl = profitAndLoss({ harvests, expenses, inputs, activities, farmIds: [id as string] });
+    const profitMargin = pl.usd.moneyIn > 0 ? (pl.usd.result / pl.usd.moneyIn) * 100 : 0;
     return {
-      harvestRevenue,
-      totalInputsCost,
-      totalActivitiesCost,
-      totalDirectExpenses,
-      totalExpenses,
-      netProfit,
+      harvestRevenue: pl.usd.moneyIn,
+      totalExpenses: pl.usd.moneyOut,
+      netProfit: pl.usd.result,
       profitMargin,
-      isProfitable: netProfit >= 0,
+      isProfitable: pl.usd.isProfit,
+      lrd: pl.lrd,
+      pl,
     };
-  }, [harvests, inputs, activities, expenses]);
+  }, [harvests, inputs, activities, expenses, id]);
 
   const loadFarmData = useCallback(async () => {
     if (!id) return;
@@ -103,6 +99,14 @@ export default function FarmDetailsScreen() {
       console.error('Failed to load farm details:', e);
     }
   }, [id]);
+
+  // This screen stays open while another is shown on top of it (for example after registering a
+  // second harvest), so read the saved records again every time it comes back into view.
+  useFocusEffect(
+    useCallback(() => {
+      loadFarmData();
+    }, [loadFarmData])
+  );
 
   useEffect(() => {
     loadFarmData();
@@ -215,6 +219,75 @@ export default function FarmDetailsScreen() {
             </View>
           </View>
 
+          {/* Decisions from the past: last year's record, and the plan for next season */}
+          <View style={styles.timelineCard}>
+            <Text style={styles.timelineTitle}>{t('decideHeading')}</Text>
+            <TouchableOpacity
+              style={styles.decisionBtn}
+              onPress={() => router.push(`/farm-record/${activeFarm.id}` as any)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t('openFarmRecord')}
+            >
+              <Ionicons name="time-outline" size={22} color={Colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stepTitle}>{t('openFarmRecord')}</Text>
+                <Text style={styles.stepDateCost}>{t('openFarmRecordSub')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.decisionBtn}
+              onPress={() => router.push(`/farm-plan/${activeFarm.id}` as any)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={t('openPlanNext', { year: new Date().getFullYear() + 1 })}
+            >
+              <Ionicons name="trending-up-outline" size={22} color={Colors.primary} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.stepTitle}>{t('openPlanNext', { year: new Date().getFullYear() + 1 })}</Text>
+                <Text style={styles.stepDateCost}>{t('planSub')}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={Colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+
+          {/* Every harvest recorded on this farm, newest first, each with its own photos */}
+          <View style={styles.timelineCard}>
+            <Text style={styles.timelineTitle}>{`Harvests (${harvests.length})`}</Text>
+            {harvests.length === 0 ? (
+              <Text style={styles.emptyTimeline}>No harvest recorded on this farm yet.</Text>
+            ) : (
+              [...harvests]
+                .sort((a, b) => String(b.harvest_date).localeCompare(String(a.harvest_date)) || String(b.created_at).localeCompare(String(a.created_at)))
+                .map((h) => (
+                  <View key={h.id} style={styles.harvestRow}>
+                    <TouchableOpacity
+                      style={{ flex: 1, minHeight: 44, justifyContent: 'center' }}
+                      onPress={() => router.push(`/harvest/${h.id}` as any)}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Harvest ${h.batch_reference}`}
+                    >
+                      <Text style={styles.stepTitle}>{`${Number(h.quantity).toLocaleString()} ${h.unit || 'kg'}`}</Text>
+                      <Text style={styles.stepDateCost}>{`${String(h.harvest_date).slice(0, 10)} • ${h.batch_reference}`}</Text>
+                      <Text style={styles.harvestStatus}>{h.status === 'approved' ? 'Approved' : 'Awaiting approval'}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.photoBtn}
+                      onPress={() => router.push(`/harvest-photos/${h.id}` as any)}
+                      activeOpacity={0.85}
+                      accessibilityRole="button"
+                      accessibilityLabel={t('addPhotosBtn')}
+                    >
+                      <Ionicons name="camera-outline" size={20} color={Colors.primary} />
+                      <Text style={styles.photoBtnText}>{t('harvestPhotosBtn')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))
+            )}
+          </View>
+
           {/* Season Timeline Card */}
           <View style={styles.timelineCard}>
             <Text style={styles.timelineTitle}>
@@ -250,16 +323,6 @@ export default function FarmDetailsScreen() {
               })}
             </View>
 
-            <TouchableOpacity
-              style={styles.seasonRecordLink}
-              onPress={() => router.push(`/farm-record/${activeFarm.id}` as any)}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel={t('openFarmRecord')}
-            >
-              <Text style={styles.seasonRecordLinkText}>{t('openFarmRecord')}</Text>
-            </TouchableOpacity>
-
             {seasons[0] ? (
               <TouchableOpacity
                 style={styles.seasonRecordLink}
@@ -294,7 +357,14 @@ export default function FarmDetailsScreen() {
             <Text style={styles.pnlSub}>
               Revenue: ${financialSummary.harvestRevenue.toFixed(0)} • Total Expenses: ${financialSummary.totalExpenses.toFixed(0)}
             </Text>
+            {financialSummary.lrd.hasData ? (
+              <Text style={styles.pnlSub}>
+                {`${financialSummary.lrd.isProfit ? 'Profit' : 'Loss'}: ${formatMoney(Math.abs(financialSummary.lrd.result), 'LRD')} • Revenue: ${formatMoney(financialSummary.lrd.moneyIn, 'LRD')} • Total Expenses: ${formatMoney(financialSummary.lrd.moneyOut, 'LRD')}`}
+              </Text>
+            ) : null}
           </View>
+
+          <ProfitLossCard pl={financialSummary.pl} title="Where the money came from and went" farmNames={{ [activeFarm.id]: activeFarm.name }} />
         </View>
       </ScrollView>
 
@@ -429,6 +499,19 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
     letterSpacing: -0.3,
   },
+  harvestRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    minHeight: 52,
+    paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  harvestStatus: { fontSize: 12, fontWeight: '700', color: Colors.primaryDark, marginTop: 2 },
+  photoBtn: { minHeight: 44, minWidth: 64, alignItems: 'center', justifyContent: 'center', borderRadius: 12, borderWidth: 1, borderColor: Colors.primary, paddingHorizontal: 10 },
+  photoBtnText: { fontSize: 12, fontWeight: '700', color: Colors.primary },
+  decisionBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 56, paddingVertical: 10, borderTopWidth: 1, borderTopColor: Colors.border },
   timelineCard: {
     backgroundColor: Colors.card,
     borderRadius: 24,

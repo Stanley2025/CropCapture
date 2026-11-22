@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card } from '../Card';
+import { SkyIcon, hasSkyPicture } from './SkyIcon';
 import { Colors, Radius, Spacing } from '../../constants/theme';
 import { t, StringKey } from '../../i18n/en';
 import { SKY_OPTIONS, DAY_FEEL_OPTIONS, WeatherSky, DayFeel } from '../../shared/activityWeather';
@@ -29,18 +30,42 @@ interface Props {
   rainError: StringKey | null;
   dayFeel: DayFeel | null;
   onDayFeel: (value: DayFeel | null) => void;
+  required?: boolean;
+  skyError?: boolean;
 }
 
 /**
- * "Weather today": optional. Four large sky options (tap the chosen one again to clear it), an optional
+ * "Weather today": Four large sky options (tap the chosen one again to clear it), an optional
  * rain amount the farmer measured, and how the day felt. Every option shows an icon together with its words.
  */
-export const WeatherCard: React.FC<Props> = ({ sky, onSky, rainMm, onRainMm, rainError, dayFeel, onDayFeel }) => (
-  <Card style={styles.card}>
+export const WeatherCard: React.FC<Props> = ({
+  sky,
+  onSky,
+  rainMm,
+  onRainMm,
+  rainError,
+  dayFeel,
+  onDayFeel,
+  required = false,
+  skyError = false,
+}) => (
+  <Card style={[styles.card, skyError && styles.cardError]}>
     <View style={styles.titleRow}>
       <Text style={styles.title}>{t('weatherToday')}</Text>
-      <Text style={styles.optionalTag}>{t('weatherOptional')}</Text>
+      {required ? (
+        <View style={[styles.requiredBadge, skyError && styles.requiredBadgeError]}>
+          <Text style={[styles.requiredTag, skyError && styles.requiredTagError]}>Required *</Text>
+        </View>
+      ) : (
+        <Text style={styles.optionalTag}>{t('weatherOptional')}</Text>
+      )}
     </View>
+
+    {skyError && (
+      <Text style={styles.skyErrorText}>
+        Please select today's sky condition below (Required)
+      </Text>
+    )}
 
     <View style={styles.skyGrid} accessibilityRole="radiogroup">
       {SKY_OPTIONS.map((value) => {
@@ -49,14 +74,26 @@ export const WeatherCard: React.FC<Props> = ({ sky, onSky, rainMm, onRainMm, rai
         return (
           <TouchableOpacity
             key={value}
-            style={[styles.skyOption, selected && styles.skyOptionOn]}
+            style={[
+              styles.skyOption,
+              selected && styles.skyOptionOn,
+              skyError && !selected && styles.skyOptionError,
+            ]}
             activeOpacity={0.8}
             onPress={() => onSky(selected ? null : value)}
             accessibilityRole="radio"
             accessibilityState={{ selected }}
             accessibilityLabel={t(selected ? 'weatherSelected' : 'weatherNotSelected', { option: label })}
           >
-            <Ionicons name={SKY[value].icon} size={28} color={selected ? '#FFFFFF' : Colors.primaryDark} />
+            {hasSkyPicture(value) ? (
+              <SkyIcon sky={value} size={32} />
+            ) : (
+              <Ionicons
+                name={SKY[value].icon}
+                size={28}
+                color={selected ? '#FFFFFF' : skyError ? Colors.danger : Colors.primaryDark}
+              />
+            )}
             <Text style={[styles.skyText, selected && styles.skyTextOn]}>{label}</Text>
           </TouchableOpacity>
         );
@@ -106,13 +143,26 @@ export const WeatherCard: React.FC<Props> = ({ sky, onSky, rainMm, onRainMm, rai
 );
 
 const styles = StyleSheet.create({
-  card: { padding: Spacing.lg, marginBottom: Spacing.lg },
-  titleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: Spacing.md },
-  title: { fontSize: 18, fontWeight: '800', color: Colors.text },
-  optionalTag: { fontSize: 12, fontWeight: '700', color: Colors.textMuted },
-  skyGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: Spacing.sm },
+  card: { padding: Spacing.md, marginBottom: Spacing.md },
+  cardError: { borderColor: Colors.danger, borderWidth: 1.5 },
+  titleRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: Spacing.md },
+  title: { fontSize: 16, fontWeight: '800', color: Colors.text },
+  optionalTag: { fontSize: 13, color: Colors.textMuted, fontWeight: '600' },
+  requiredBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: '#E4F4DF',
+    borderRadius: Radius.pill,
+  },
+  requiredBadgeError: {
+    backgroundColor: '#FBE5DF',
+  },
+  requiredTag: { fontSize: 12, color: Colors.primaryDark, fontWeight: '700' },
+  requiredTagError: { color: Colors.danger },
+  skyErrorText: { fontSize: 12, color: Colors.danger, fontWeight: '700', marginBottom: Spacing.sm },
+  skyGrid: { flexDirection: 'row', gap: Spacing.sm },
   skyOption: {
-    width: '48.5%',
+    flex: 1,
     minHeight: 76,
     alignItems: 'center',
     justifyContent: 'center',
@@ -124,6 +174,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   skyOptionOn: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  skyOptionError: { borderColor: '#F5C2B8' },
   skyText: { fontSize: 15, fontWeight: '700', color: Colors.text },
   skyTextOn: { color: '#FFFFFF' },
   label: { fontSize: 14, fontWeight: '700', color: Colors.text, marginTop: Spacing.lg, marginBottom: Spacing.xs },

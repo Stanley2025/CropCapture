@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { KeyboardAwareScrollView } from '../src/components/KeyboardAwareScrollView';
 import {
   View,
   Text,
@@ -15,7 +16,11 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors, Radius, Spacing, Typography } from '../src/constants/theme';
 import { localDb, generateUUID } from '../src/services/storage/localDatabase';
-import { buildExpenseRecord, estimateHarvestRevenue } from '../src/shared/farmRecords';
+import { buildExpenseRecord, estimateHarvestRevenue, harvestRevenueLRD } from '../src/shared/farmRecords';
+import { formatMoney } from '../src/shared/money';
+import { ProfitLossCard } from '../src/components/ProfitLossCard';
+import { getScope } from '../src/services/access/visibility';
+import { profitAndLoss } from '../src/shared/farmFinance';
 import { useAppStore } from '../src/store/useAppStore';
 import { InputRecord, ExpenseRecord, Farm, HarvestBatch } from '../src/types/database';
 import { Header } from '../src/components/Header';
@@ -151,7 +156,7 @@ const LIVESTOCK_ONLY_EXPENSE_CATEGORIES = new Set([
 
 export default function InputsExpensesScreen() {
   const router = useRouter();
-  const { currentRole, currentFarmer, refreshPendingSyncCount } = useAppStore();
+  const { currentRole, currentFarmer, currentUserProfile, refreshPendingSyncCount } = useAppStore();
 
   const [activeTab, setActiveTab] = useState<'inputs' | 'expenses'>('inputs');
   const [inputs, setInputs] = useState<InputRecord[]>([]);
@@ -197,13 +202,11 @@ export default function InputsExpensesScreen() {
         localDb.getHarvests(),
       ]);
 
-      if (currentRole === 'farmer' && currentFarmer?.id) {
-        f = f.filter((farm) => farm.farmer_id === currentFarmer.id);
-        const myFarmIds = new Set(f.map((farm) => farm.id));
-        inp = inp.filter((item) => myFarmIds.has(item.farm_id));
-        exp = exp.filter((item) => myFarmIds.has(item.farm_id));
-        h = h.filter((item) => myFarmIds.has(item.farm_id) || item.farmer_id === currentFarmer.id);
-      }
+      const scope = await getScope(currentRole, currentUserProfile?.id, currentFarmer?.id);
+      f = f.filter(scope.farm);
+      inp = inp.filter(scope.row);
+      exp = exp.filter(scope.row);
+      h = h.filter(scope.row);
 
       setInputs(inp);
       setExpenses(exp);
@@ -237,7 +240,7 @@ export default function InputsExpensesScreen() {
     } catch (e) {
       console.error('Failed to load inputs and expenses:', e);
     }
-  }, [currentRole, currentFarmer?.id]);
+  }, [currentRole, currentFarmer?.id, currentUserProfile?.id]);
 
   useEffect(() => {
     loadData();
@@ -447,6 +450,9 @@ export default function InputsExpensesScreen() {
     });
 
     const totalHarvestRevenue = estimateHarvestRevenue(filteredHarvests);
+    // Liberian dollars are kept apart: there is no exchange rate, so they are never added to US dollars
+    const harvestRevenueLRDTotal = harvestRevenueLRD(filteredHarvests);
+    const spentLRD = totalInputsLRD + totalExpensesLRD;
 
     const netProfit = totalHarvestRevenue - spentUSD;
     const isProfitable = netProfit >= 0;
@@ -457,11 +463,14 @@ export default function InputsExpensesScreen() {
       netProfit,
       isProfitable,
       harvestCount: filteredHarvests.length,
-      hasData: spentUSD > 0 || totalHarvestRevenue > 0,
+      hasData: spentUSD > 0 || totalHarvestRevenue > 0 || spentLRD > 0 || harvestRevenueLRDTotal > 0,
+      lrd: { spent: spentLRD, revenue: harvestRevenueLRDTotal, net: harvestRevenueLRDTotal - spentLRD },
     };
   }, [
     totalInputsUSD,
     totalExpensesUSD,
+    totalInputsLRD,
+    totalExpensesLRD,
     harvests,
     selectedFarmFilter,
     selectedYearFilter,
@@ -837,7 +846,7 @@ export default function InputsExpensesScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      <KeyboardAwareScrollView
         style={styles.container}
         contentContainerStyle={styles.content}
         refreshControl={
@@ -944,6 +953,15 @@ export default function InputsExpensesScreen() {
             </View>
           </View>
 
+          {farmProfitSummary.lrd.spent > 0 || farmProfitSummary.lrd.revenue > 0 ? (
+            <View style={styles.farmProfitFormulaBox}>
+              <Ionicons name="cash-outline" size={14} color={Colors.textMuted} />
+              <Text style={styles.farmProfitFormulaText}>
+                {`Liberian dollars: Harvest Got (${formatMoney(farmProfitSummary.lrd.revenue, 'LRD')}) - Amount Spent (${formatMoney(farmProfitSummary.lrd.spent, 'LRD')}) = ${farmProfitSummary.lrd.net >= 0 ? 'Profit' : 'Loss'} (${formatMoney(Math.abs(farmProfitSummary.lrd.net), 'LRD')}). Not added to the US dollar figures above.`}
+              </Text>
+            </View>
+          ) : null}
+
           <View style={styles.farmProfitFormulaBox}>
             <Ionicons name="information-circle-outline" size={14} color={Colors.textMuted} />
             <Text style={styles.farmProfitFormulaText}>
@@ -951,6 +969,19 @@ export default function InputsExpensesScreen() {
             </Text>
           </View>
         </Card>
+
+        {/* The same figures, line by line: which harvest, which farm, which cost (follows the farm and year chosen above) */}
+        <ProfitLossCard
+          pl={profitAndLoss({
+            harvests,
+            expenses,
+            inputs,
+            year: selectedYearFilter === 'all' ? null : Number(selectedYearFilter),
+            farmIds: selectedFarmFilter === 'all' ? null : [selectedFarmFilter],
+          })}
+          title="Where the money came from and went"
+          farmNames={Object.fromEntries(farms.map((f) => [f.id, f.name]))}
+        />
 
         {activeTab === 'inputs' ? (
           <>
@@ -1901,7 +1932,7 @@ export default function InputsExpensesScreen() {
         )}
 
         <View style={{ height: Spacing.xxl }} />
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

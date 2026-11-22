@@ -4,6 +4,7 @@
  * photo links. The farmer's own preview, and a scan with no connection, use this phone's copy built by the
  * same allowlist (buildBuyerView).
  */
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { localDb } from '../storage/localDatabase';
 import { findCropById } from '../../shared/farmRecords';
 import { buildBuyerView, BuyerView } from '../../shared/harvestPhotos';
@@ -64,4 +65,45 @@ export async function loadBuyerData(value: string, { offline = false, preferPhon
     }
   }
   return fromPhone(scanned.value);
+}
+
+// --- harvests this buyer has looked at, kept on their own phone ---------------------------------------------
+
+const VIEWED_KEY = '@farmtori_buyer_viewed';
+const MAX_VIEWED = 10;
+
+export interface ViewedHarvest {
+  /** what to open again: the code or reference that was scanned or typed */
+  value: string;
+  crop: string | null;
+  batchId: string | null;
+  place: string | null;
+  viewedAt: string;
+}
+
+export async function getViewedHarvests(): Promise<ViewedHarvest[]> {
+  try {
+    const raw = await AsyncStorage.getItem(VIEWED_KEY);
+    return raw ? (JSON.parse(raw) as ViewedHarvest[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Remember a harvest the buyer opened (newest first, at most 10, no repeats). */
+export async function rememberViewedHarvest(value: string, view: BuyerView): Promise<void> {
+  try {
+    const scanned = parseScanned(value).value;
+    const entry: ViewedHarvest = {
+      value: scanned,
+      crop: view.crop,
+      batchId: view.batchId,
+      place: [view.district, view.county].filter(Boolean).join(', ') || null,
+      viewedAt: new Date().toISOString(),
+    };
+    const rest = (await getViewedHarvests()).filter((v) => v.value !== scanned);
+    await AsyncStorage.setItem(VIEWED_KEY, JSON.stringify([entry, ...rest].slice(0, MAX_VIEWED)));
+  } catch {
+    // remembering is a convenience; the page itself still opens
+  }
 }

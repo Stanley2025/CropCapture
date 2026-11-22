@@ -1,3 +1,4 @@
+import { getScope } from '../../src/services/access/visibility';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -41,7 +42,7 @@ function extractYear(dateStr?: string | null): number | null {
 
 export default function ReportsScreen() {
   const router = useRouter();
-  const { currentFarmer, currentRole } = useAppStore();
+  const { currentFarmer, currentRole, currentUserProfile } = useAppStore();
 
   const [farms, setFarms] = useState<Farm[]>([]);
   const [seasons, setSeasons] = useState<FarmSeason[]>([]);
@@ -64,25 +65,15 @@ export default function ReportsScreen() {
       localDb.getHarvests(),
       localDb.getExpenses(),
       localDb.getInputs(),
-    ]).then(([f, s, a, h, exp, inp]) => {
-      // Isolate to current farmer to ensure strict multi-tenant privacy
-      if (currentRole === 'farmer' && currentFarmer?.id) {
-        f = f.filter((farm) => farm.farmer_id === currentFarmer.id);
-        const myFarmIds = new Set(f.map((farm) => farm.id));
-        s = s.filter((season) => myFarmIds.has(season.farm_id));
-        a = a.filter(
-          (act) => act.farmer_id === currentFarmer.id || myFarmIds.has(act.farm_id)
-        );
-        h = h.filter(
-          (harv) => harv.farmer_id === currentFarmer.id || myFarmIds.has(harv.farm_id)
-        );
-        exp = exp.filter(
-          (e) => myFarmIds.has(e.farm_id) || (e as any).farmer_id === currentFarmer.id
-        );
-        inp = inp.filter(
-          (i) => myFarmIds.has(i.farm_id) || (i as any).farmer_id === currentFarmer.id
-        );
-      }
+    ]).then(async ([f, s, a, h, exp, inp]) => {
+      // Only what this person may see (a farmer: their own; an extension officer: their assigned farmers)
+      const scope = await getScope(currentRole, currentUserProfile?.id, currentFarmer?.id);
+      f = f.filter(scope.farm);
+      s = s.filter(scope.row);
+      a = a.filter(scope.row);
+      h = h.filter(scope.row);
+      exp = exp.filter(scope.row);
+      inp = inp.filter(scope.row);
 
       setFarms(f);
       setSeasons(s);
@@ -91,7 +82,7 @@ export default function ReportsScreen() {
       setExpenses(exp);
       setInputs(inp);
     });
-  }, [currentRole, currentFarmer?.id]);
+  }, [currentRole, currentFarmer?.id, currentUserProfile?.id]);
 
   // Dynamically discover all recorded years plus historical baseline years
   const availableYears = useMemo(() => {

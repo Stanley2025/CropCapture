@@ -4,6 +4,8 @@
  * ensuring accurate district-level weather forecasts and microclimate alerts.
  */
 
+import { COUNTY_COORDINATES as SHARED_COUNTY_COORDINATES } from '../shared/farmRecords';
+
 export interface GeoCoordinate {
   latitude: number;
   longitude: number;
@@ -15,25 +17,8 @@ export const LIBERIA_DEFAULT_COORDINATES: GeoCoordinate = {
   longitude: -9.4295,
 };
 
-// 15 County Centroid Coordinates
-export const COUNTY_COORDINATES: Record<string, GeoCoordinate> = {
-  bomi: { latitude: 6.758, longitude: -10.845 },
-  bong: { latitude: 7.004, longitude: -9.472 },
-  gbarpolu: { latitude: 7.495, longitude: -10.08 },
-  'grand bassa': { latitude: 6.231, longitude: -9.816 },
-  'grand cape mount': { latitude: 7.047, longitude: -11.071 },
-  'grand gedeh': { latitude: 5.922, longitude: -8.222 },
-  'grand kru': { latitude: 4.754, longitude: -8.222 },
-  lofa: { latitude: 8.191, longitude: -9.723 },
-  margibi: { latitude: 6.515, longitude: -10.305 },
-  maryland: { latitude: 4.724, longitude: -7.717 },
-  montserrado: { latitude: 6.444, longitude: -10.655 },
-  nimba: { latitude: 6.842, longitude: -8.66 },
-  'river cess': { latitude: 5.904, longitude: -9.456 },
-  'rivercess': { latitude: 5.904, longitude: -9.456 },
-  'river gee': { latitude: 5.26, longitude: -7.664 },
-  sinoe: { latitude: 5.25, longitude: -8.66 },
-};
+// 15 County Centroid Coordinates (shared with the USSD channel)
+export const COUNTY_COORDINATES: Record<string, GeoCoordinate> = SHARED_COUNTY_COORDINATES;
 
 // District-level specific coordinates (key: normalized "county:district" or "district")
 export const DISTRICT_COORDINATES: Record<string, GeoCoordinate> = {

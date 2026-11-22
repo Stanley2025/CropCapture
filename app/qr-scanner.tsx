@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { KeyboardAwareScrollView } from '../src/components/KeyboardAwareScrollView';
 import {
   View,
@@ -26,6 +27,18 @@ export default function QRScannerScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const [manualToken, setManualToken] = useState('');
+  const [permission, requestPermission] = useCameraPermissions();
+  const justScanned = useRef(false);
+
+  // The camera reads the QR code by itself: one code opens one page (not once per camera frame).
+  const onScanned = ({ data }: { data: string }) => {
+    if (justScanned.current || !data) return;
+    justScanned.current = true;
+    handleVerify(data);
+    setTimeout(() => {
+      justScanned.current = false;
+    }, 3000);
+  };
   const [recentBatches, setRecentBatches] = useState<Array<{ ref: string; token: string; crop: string }>>([]);
 
   useEffect(() => {
@@ -79,18 +92,35 @@ export default function QRScannerScreen() {
         {/* Scanner Viewfinder Box */}
         <View style={styles.viewfinderCard}>
           <View style={styles.cameraBox}>
+            {permission?.granted ? (
+              <CameraView
+                style={StyleSheet.absoluteFill}
+                facing="back"
+                barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+                onBarcodeScanned={onScanned}
+                accessibilityLabel="Camera for scanning a harvest QR code"
+              />
+            ) : null}
             <View style={styles.cornerTL} />
             <View style={styles.cornerTR} />
             <View style={styles.cornerBL} />
             <View style={styles.cornerBR} />
-            <QrCode size={72} color="rgba(255,255,255,0.7)" strokeWidth={1.5} />
-            <Text style={styles.viewfinderHint}>Align QR code within frame</Text>
+            {permission?.granted ? (
+              <Text style={styles.viewfinderHint}>Align QR code within frame</Text>
+            ) : (
+              <>
+                <QrCode size={72} color="rgba(255,255,255,0.7)" strokeWidth={1.5} />
+                <TouchableOpacity style={styles.verifyBtn} onPress={requestPermission} activeOpacity={0.85} accessibilityRole="button">
+                  <Text style={styles.verifyBtnText}>Allow the camera to scan</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
         {/* Manual Code Input Card */}
         <View style={styles.manualCard}>
-          <Text style={styles.manualCardTitle}>Enter batch reference manually</Text>
+          <Text style={styles.manualCardTitle}>Enter a batch ID or code</Text>
           <Text style={styles.manualCardSub}>
             If camera scanning is unavailable in low light or offline.
           </Text>
@@ -98,11 +128,12 @@ export default function QRScannerScreen() {
           <View style={styles.inputRow}>
             <TextInput
               style={styles.textInput}
-              placeholder="e.g. AGR-2026-RICE-000001"
+              placeholder="Batch ID or the code from the QR link"
               placeholderTextColor={Colors.textMuted}
               value={manualToken}
               onChangeText={setManualToken}
-              autoCapitalize="characters"
+              autoCapitalize="none"
+              autoCorrect={false}
             />
           </View>
 
@@ -204,6 +235,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
+    overflow: 'hidden',
   },
   cornerTL: {
     position: 'absolute',
