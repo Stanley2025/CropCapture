@@ -349,7 +349,7 @@ export default function FarmersPage() {
                     <strong className="text-slate-900">{confirmTarget.full_name}</strong> ({confirmTarget.farmer_id_code})?
                   </p>
                   <p className="mt-2 text-xs text-slate-500">
-                    Once disabled, this farmer will not be able to log in to CropCapture or submit harvest batches until re-enabled by an administrator.
+                    Once disabled, this farmer will not be able to log in to FarmTori or submit harvest batches until re-enabled by an administrator.
                   </p>
                 </div>
               </div>

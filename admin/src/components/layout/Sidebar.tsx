@@ -24,7 +24,7 @@ import {
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { CropCaptureLogo } from '@/components/brand/Logo';
+import { FarmToriLogo } from '@/components/brand/Logo';
 
 interface NavItem {
   title: string;
@@ -114,11 +114,7 @@ export function Sidebar({ mobileOpen, onCloseMobile }: { mobileOpen?: boolean; o
         {/* Brand Header */}
         <div className="flex h-16 items-center justify-between px-5 pt-3">
           <Link href="/dashboard" className="flex items-center gap-2">
-            <CropCaptureLogo
-              iconClassName="h-7 w-7 text-[#B4E544]"
-              light={true}
-              subtitle="Admin console"
-            />
+            <FarmToriLogo height={26} light subtitle="Admin console" />
           </Link>
 
           {onCloseMobile && (

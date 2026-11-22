@@ -194,7 +194,7 @@ export default function FarmDetailPage() {
                   );
                 })()}
                 <p className="mt-1 text-xs text-slate-400">
-                  Cadastral survey recorded via CropCapture Mobile Field App
+                  Cadastral survey recorded via FarmTori Mobile Field App
                 </p>
 
               </div>

@@ -10,7 +10,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: 'CropCapture — National Agricultural Platform',
+  title: 'FarmTori — National Agricultural Platform',
   description: 'Digital Farm Records, Agricultural Production & Quality Verification Management Portal',
   icons: {
     icon: '/icon.svg',

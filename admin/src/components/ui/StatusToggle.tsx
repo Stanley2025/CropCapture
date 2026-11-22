@@ -11,7 +11,7 @@ interface StatusToggleProps {
 }
 
 /**
- * Modern iOS/neumorphic toggle switch matching the CropCapture design specification.
+ * Modern iOS/neumorphic toggle switch matching the FarmTori design specification.
  * - Active (ON): Vibrant green track with right-aligned circular white knob.
  * - Disabled (OFF): Vibrant red track with left-aligned circular white knob.
  */

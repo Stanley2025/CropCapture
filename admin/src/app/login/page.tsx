@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Mail, Lock, Eye, EyeOff, ArrowRight, ShieldCheck, AlertCircle, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { createClient, isSupabaseConfigured } from '@/lib/supabase/client';
-import { CropCaptureLogo } from '@/components/brand/Logo';
+import { FarmToriLogo } from '@/components/brand/Logo';
 
 
 export default function LoginPage() {
@@ -186,7 +186,7 @@ export default function LoginPage() {
 
         {/* Top Brand Header */}
         <div className="relative z-10 flex items-center">
-          <CropCaptureLogo light iconClassName="h-9 w-9 text-[#A3E635]" />
+          <FarmToriLogo light height={42} />
         </div>
 
 
@@ -214,7 +214,7 @@ export default function LoginPage() {
         <div className="w-full max-w-[420px]">
           {/* Mobile-only Top Brand Header */}
           <div className="mb-8 flex items-center lg:hidden">
-            <CropCaptureLogo iconClassName="h-8 w-8 text-[#15803D]" />
+            <FarmToriLogo height={36} />
           </div>
 
 
