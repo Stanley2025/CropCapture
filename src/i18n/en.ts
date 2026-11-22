@@ -181,7 +181,7 @@ export const en = {
   buyerHowGrown: 'How it was grown',
   buyerNoActivities: 'No farm activities recorded.',
   buyerNote: 'These details and photos were entered by the farmer. Ask the farmer, or your own inspector, if you need to check them.',
-  buyerNotFound: 'Product not found',
+  buyerNotFound: 'Product not found. Check the code and make sure you are online. The farmer must also have synced this harvest.',
   buyerOwnCopy: 'This is the copy saved on this phone.',
   buyerPhotoMissing: 'Photo is not on this phone',
 } as const;

@@ -74,9 +74,9 @@ const ROLE_TABS: RoleTab[] = [
 export default function LoginScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { login, registerFarmerAccount } = useAppStore();
+  const { login, registerFarmerAccount, registerBuyerAccount } = useAppStore();
 
-  const [authMode, setAuthMode] = useState<'signin' | 'create_account'>('signin');
+  const [authMode, setAuthMode] = useState<'signin' | 'create_account' | 'create_buyer'>('signin');
   const isDev = typeof __DEV__ !== 'undefined' ? __DEV__ : false;
 
   // Sign In State
@@ -99,6 +99,31 @@ export default function LoginScreen() {
   const [pin, setPin] = useState('');
   const [idType, setIdType] = useState<'Passport' | 'National ID card' | ''>('');
   const [idNumber, setIdNumber] = useState('');
+
+  // Create Buyer Account State
+  const [buyerName, setBuyerName] = useState('');
+  const [buyerContact, setBuyerContact] = useState('');
+  const [buyerOrg, setBuyerOrg] = useState('');
+
+  const handleCreateBuyer = async () => {
+    if (!buyerName.trim()) {
+      Alert.alert('Required Field', 'Please enter your name.');
+      return;
+    }
+    if (buyerContact.trim().length < 5) {
+      Alert.alert('Required Field', 'Please enter your email or phone number.');
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await registerBuyerAccount({ full_name: buyerName, contact: buyerContact, organisation: buyerOrg });
+      router.replace(homeRouteFor('buyer') as any);
+    } catch (e: any) {
+      Alert.alert('Account Creation Failed', e?.message || 'Could not create the account.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const activeTab = ROLE_TABS.find((r) => r.key === selectedRole) || ROLE_TABS[0];
 
@@ -236,11 +261,13 @@ export default function LoginScreen() {
 
             <Logo tone="onGreen" height={30} style={{ marginBottom: 14 }} />
             <Text style={styles.headingTitle}>
-              {authMode === 'signin' ? 'Welcome back' : 'Create account'}
+              {authMode === 'signin' ? 'Welcome back' : authMode === 'create_buyer' ? 'Create buyer account' : 'Create account'}
             </Text>
             <Text style={styles.headingSub}>
               {authMode === 'signin'
                 ? 'Sign in to your FarmTori account'
+                : authMode === 'create_buyer'
+                ? 'See where your food comes from'
                 : 'Join the national smallholder verified network'}
             </Text>
           </View>
@@ -342,6 +369,34 @@ export default function LoginScreen() {
                   >
                     <Text style={styles.switchModeText}>
                       New farmer? <Text style={{ color: Colors.primary, fontFamily: FontFamily.bold }}>Register account</Text>
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.switchModeBtn} onPress={() => setAuthMode('create_buyer')}>
+                    <Text style={styles.switchModeText}>
+                      Buying produce? <Text style={{ color: Colors.primary, fontFamily: FontFamily.bold }}>Create buyer account</Text>
+                    </Text>
+                  </TouchableOpacity>
+                </>
+              ) : authMode === 'create_buyer' ? (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Your name</Text>
+                    <TextInput style={styles.textInput} value={buyerName} onChangeText={setBuyerName} placeholder="e.g. Mary Johnson" placeholderTextColor={Colors.textMuted} />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Email or phone number</Text>
+                    <TextInput style={styles.textInput} value={buyerContact} onChangeText={setBuyerContact} placeholder="You will sign in with this" placeholderTextColor={Colors.textMuted} autoCapitalize="none" keyboardType="email-address" />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Company or market (optional)</Text>
+                    <TextInput style={styles.textInput} value={buyerOrg} onChangeText={setBuyerOrg} placeholder="e.g. Red Light Market" placeholderTextColor={Colors.textMuted} />
+                  </View>
+                  <TouchableOpacity style={styles.primaryButton} onPress={handleCreateBuyer} disabled={isLoading} activeOpacity={0.85}>
+                    {isLoading ? <ActivityIndicator size="small" color="#FFFFFF" /> : <Text style={styles.primaryButtonText}>Create Buyer Account</Text>}
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.switchModeBtn} onPress={() => setAuthMode('signin')}>
+                    <Text style={styles.switchModeText}>
+                      Already have an account? <Text style={{ color: Colors.primary, fontFamily: FontFamily.bold }}>Sign in</Text>
                     </Text>
                   </TouchableOpacity>
                 </>

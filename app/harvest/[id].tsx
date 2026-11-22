@@ -208,6 +208,11 @@ export default function HarvestDetailsScreen() {
               </View>
             </View>
 
+            {/* The code a buyer can type if they cannot scan */}
+            <Text selectable style={{ textAlign: 'center', color: Colors.textMuted, fontSize: 13, marginTop: -6, marginBottom: 14 }}>
+              Buyer code: <Text style={{ fontWeight: '800', color: Colors.text }}>{activeBatch.public_code || activeBatch.batch_reference}</Text>
+            </Text>
+
             {/* 2 Stat Boxes: Yield & Harvested */}
             <View style={styles.statBoxesRow}>
               <View style={styles.statBox}>

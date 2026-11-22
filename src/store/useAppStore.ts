@@ -158,7 +158,10 @@ interface AppState {
     id_type?: string;
     id_number?: string;
   }) => Promise<Farmer>;
+  registerBuyerAccount: (data: { full_name: string; contact: string; organisation?: string }) => Promise<void>;
 }
+
+const BUYER_ACCOUNT_KEY = '@farmtori_buyer_account';
 
 const INITIAL_NOTIFICATIONS: AppNotification[] = [];
 
@@ -268,8 +271,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
 
     const persona = PERSONAS[targetRole] || PERSONAS.farmer;
+    let savedBuyer: { full_name: string; contact: string; organisation?: string } | null = null;
+    if (targetRole === 'buyer') {
+      // A buyer who created an account on this phone signs in with the email or phone they registered with.
+      try {
+        const raw = await AsyncStorage.getItem(BUYER_ACCOUNT_KEY);
+        const acct = raw ? JSON.parse(raw) : null;
+        if (acct && String(email || '').trim().toLowerCase() === String(acct.contact).toLowerCase()) savedBuyer = acct;
+      } catch {
+        savedBuyer = null;
+      }
+    }
     let activeFarmer = persona.farmer || get().currentFarmer;
-    let activeProfile = persona.profile;
+    let activeProfile = savedBuyer ? { ...persona.profile, full_name: savedBuyer.full_name } : persona.profile;
 
     if (targetRole === 'farmer') {
       const cleanInput = (email || '').trim().toLowerCase();
@@ -358,6 +372,12 @@ export const useAppStore = create<AppState>((set, get) => ({
       currentUserProfile: PERSONAS.farmer.profile,
       currentFarmer: PERSONAS.farmer.farmer!,
     });
+  },
+
+  registerBuyerAccount: async ({ full_name, contact, organisation }) => {
+    const acct = { full_name: full_name.trim(), contact: contact.trim(), organisation: organisation?.trim() || undefined };
+    await AsyncStorage.setItem(BUYER_ACCOUNT_KEY, JSON.stringify(acct));
+    await get().login(acct.contact, undefined, 'buyer');
   },
 
   registerFarmerAccount: async (farmerData) => {
