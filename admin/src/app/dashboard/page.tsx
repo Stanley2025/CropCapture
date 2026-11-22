@@ -8,6 +8,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { AdminLayout } from '@/components/layout/AdminLayout';
+import { isSupabaseConfigured } from '@/lib/supabase/client';
 import { getDashboardMetrics, getFarmers, getHarvestBatches } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { Farmer, HarvestBatch } from '@/types/database';
@@ -100,6 +101,9 @@ export default function DashboardPage() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // The build has no database address: every figure would show 0 whatever is in the database
+  const notConnected = !isSupabaseConfigured();
 
   // Total production and crop breakdown data
   const totalProduction = metrics?.totalHarvestKg || 0;
@@ -195,6 +199,12 @@ export default function DashboardPage() {
           </div>
 
         </div>
+
+        {notConnected ? (
+          <div role="alert" className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-semibold text-red-900 sm:text-sm">
+            This admin site is not connected to the database, so every figure shows 0. On your host, set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY (and SUPABASE_SERVICE_ROLE_KEY), then redeploy. The values are read when the site is built.
+          </div>
+        ) : null}
 
         {/* Quality alert: only when harvest batches really are waiting for review */}
         {inspectionPending > 0 ? (

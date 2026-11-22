@@ -125,7 +125,7 @@ export function Header({ onOpenMobile }: { onOpenMobile?: () => void }) {
             <div className="absolute right-0 mt-2 w-56 rounded-2xl border border-[#EDE8DC] bg-white py-2 shadow-lg shadow-black/5 z-50">
               <div className="border-b border-slate-100 px-4 py-2">
                 <p className="text-xs font-bold text-slate-900">Administrator</p>
-                <p className="text-[11px] text-slate-500">admin@cropcapture.app</p>
+                <p className="text-[11px] text-slate-500">admin@farmtori.app</p>
                 <div className="mt-1 inline-flex rounded bg-[#E5F2DC] px-1.5 py-0.5 text-[9px] font-bold text-[#1C3822]">
                   SUPER ADMIN
                 </div>
