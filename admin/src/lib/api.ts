@@ -70,7 +70,7 @@ export async function getDashboardMetrics() {
     const query = Promise.all([
       supabase.from('farmers').select('id', { count: 'exact', head: true }),
       supabase.from('farms').select('id, size', { count: 'exact' }),
-      supabase.from('harvest_batches').select('id, status, quantity'),
+      supabase.from('harvest_batches').select('id, status, quantity, crops(name)'),
       supabase.from('cooperatives').select('id', { count: 'exact', head: true }),
     ]);
 
@@ -85,6 +85,13 @@ export async function getDashboardMetrics() {
         (h: any) => h.status === 'submitted' || h.status === 'pending_inspection' || h.status === 'under_inspection'
       ).length;
       const approvedHarvests = harvests.filter((h: any) => h.status === 'approved').length;
+      // Real production by crop: the name of the crop on each harvest, summed
+      const byCrop = new Map<string, number>();
+      for (const h of harvests) {
+        const name = (h.crops && h.crops.name) || 'Not recorded';
+        byCrop.set(name, (byCrop.get(name) || 0) + (Number(h.quantity) || 0));
+      }
+      const cropBreakdown = [...byCrop.entries()].map(([name, amount]) => ({ name, amount })).sort((a, b) => b.amount - a.amount);
       const rejectedHarvests = harvests.filter((h: any) => h.status === 'rejected').length;
 
       const result = {
@@ -95,6 +102,7 @@ export async function getDashboardMetrics() {
         pendingInspections,
         approvedHarvests,
         rejectedHarvests,
+        cropBreakdown,
         totalCooperatives: coopsRes.count || 0,
         activeExtensionOfficers: 0,
       };
@@ -114,6 +122,7 @@ export async function getDashboardMetrics() {
     pendingInspections: 0,
     approvedHarvests: 0,
     rejectedHarvests: 0,
+    cropBreakdown: [],
     totalCooperatives: 0,
     activeExtensionOfficers: 0,
   };

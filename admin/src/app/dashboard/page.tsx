@@ -103,13 +103,18 @@ export default function DashboardPage() {
 
   // Total production and crop breakdown data
   const totalProduction = metrics?.totalHarvestKg || 0;
-  const cropsData =
+  // Real production by crop (from the harvests recorded), biggest first
+  const CROP_COLORS = ['#15803D', '#16A34A', '#CA8A04', '#0E7490', '#7C3AED', '#64748B'];
+  const cropsData: Array<{ name: string; amount: number; color: string; pct: number }> =
     totalProduction > 0
-      ? [
-          { name: 'Rice', amount: Math.round(totalProduction * 0.55), color: '#15803D', pct: 55 },
-          { name: 'Cassava', amount: Math.round(totalProduction * 0.3), color: '#16A34A', pct: 30 },
-          { name: 'Other Crops', amount: Math.round(totalProduction * 0.15), color: '#CA8A04', pct: 15 },
-        ]
+      ? ((metrics?.cropBreakdown || []) as Array<{ name: string; amount: number }>)
+          .filter((c) => c.amount > 0)
+          .map((c, i) => ({
+            name: c.name,
+            amount: Math.round(c.amount),
+            color: CROP_COLORS[Math.min(i, CROP_COLORS.length - 1)],
+            pct: Math.round((c.amount / totalProduction) * 100),
+          }))
       : [];
 
   // Quality inspection breakdown
@@ -189,19 +194,15 @@ export default function DashboardPage() {
             <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-500" />
           </div>
 
-          {/* Season Tag */}
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#E5F2DC] border border-[#CDE3BF] px-3.5 py-1.5 text-xs font-medium text-[#1C3822]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#15803D]" />
-            2026 main season · active
-          </div>
         </div>
 
-        {/* Warning / Quality Alert Banner */}
+        {/* Quality alert: only when harvest batches really are waiting for review */}
+        {inspectionPending > 0 ? (
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-[#ECD3B0] bg-[#F6E5CC] p-4 shadow-2xs">
           <div className="flex items-center gap-2.5">
             <AlertTriangle className="h-4 w-4 text-amber-900 shrink-0" />
             <span className="text-xs font-medium text-amber-950 sm:text-sm">
-              2 harvest batches are waiting for quality review.
+              {inspectionPending} harvest {inspectionPending === 1 ? 'batch is' : 'batches are'} waiting for quality review.
             </span>
           </div>
           <Link
@@ -211,6 +212,7 @@ export default function DashboardPage() {
             Review batches
           </Link>
         </div>
+        ) : null}
 
         {/* Five Key KPI Cards streamed with Suspense */}
         <Suspense fallback={<MetricsSkeleton />}>
