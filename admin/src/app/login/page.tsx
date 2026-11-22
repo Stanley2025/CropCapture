@@ -218,41 +218,6 @@ export default function LoginPage() {
           </div>
 
 
-          {/* Mode Switcher Tabs */}
-          <div className="mb-6 flex rounded-xl bg-[#E8EDE5] p-1 text-xs font-semibold text-[#526658]">
-            <button
-              type="button"
-              onClick={() => {
-                setAuthMode('signin');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`flex-1 rounded-lg py-2 transition-all ${
-                authMode === 'signin'
-                  ? 'bg-white text-[#0E2417] shadow-sm font-bold'
-                  : 'hover:text-[#0E2417]'
-              }`}
-            >
-              Sign in
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (!farmId) setFarmId(generateFullDigitsFarmId());
-                setAuthMode('create_account');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`flex-1 rounded-lg py-2 transition-all ${
-                authMode === 'create_account'
-                  ? 'bg-white text-[#0E2417] shadow-sm font-bold'
-                  : 'hover:text-[#0E2417]'
-              }`}
-            >
-              Create account
-            </button>
-          </div>
-
           {/* Heading */}
           <h2 className="text-3xl font-extrabold tracking-tight text-[#0E2417]">
             {authMode === 'signin' ? 'Admin sign in' : 'Create account'}
@@ -546,16 +511,6 @@ export default function LoginPage() {
               </div>
             </form>
           )}
-
-          {/* Security Disclaimer Note */}
-          <div className="mt-8 border-t border-[#E4E4E7] pt-6">
-            <div className="flex items-start gap-2.5 text-xs text-[#71717A] leading-relaxed">
-              <Lock className="h-4 w-4 shrink-0 mt-0.5 text-[#A1A1AA]" />
-              <p>
-                Access is limited to Super Admins, Agricultural Administrators and Quality Managers. All sign-ins are logged.
-              </p>
-            </div>
-          </div>
         </div>
       </div>
     </div>
