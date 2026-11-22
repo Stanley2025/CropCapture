@@ -1,0 +1,14 @@
+# Render blueprint: hosts the USSD simulator (and the USSD/REST demo server) for a pitch.
+# It runs in MEMORY mode on purpose: demo data only, nothing connects to your real Supabase database,
+# and anyone who opens the link cannot touch real farmer records. It needs no npm install.
+services:
+  - type: web
+    name: farmtori-ussd-demo
+    runtime: node
+    plan: free
+    buildCommand: echo "no dependencies to install"
+    startCommand: node server/index.js --memory
+    healthCheckPath: /health
+    envVars:
+      - key: USSD_STORE
+        value: memory

@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FarmTori USSD Simulator (*000#)</title>
+<style>
+  :root {
+    --bg: #0f172a; --text: #e2e8f0; --muted: #94a3b8;
+    --phone: #1f2937; --phone-edge: #374151;
+    --lcd: #c7d9b1; --lcd-ink: #1b2a12; --lcd-dim: #4b5b3d;
+    --key: #374151; --key-ink: #f8fafc;
+    --send: #15803d; --end: #b91c1c; --cancel: #a16207;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text);
+         font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+         display: flex; flex-direction: column; align-items: center; padding: 16px; gap: 16px; }
+  header { text-align: center; }
+  header h1 { margin: 0; font-size: 1.5rem; }
+  header p { margin: 4px 0 0; color: var(--muted); }
+  header a { color: #86efac; }
+  .layout { display: flex; flex-wrap: wrap; gap: 24px; justify-content: center; align-items: flex-start; width: 100%; max-width: 980px; }
+  .phone { width: 100%; max-width: 380px; background: var(--phone); border: 3px solid var(--phone-edge);
+           border-radius: 36px; padding: 22px 20px 26px; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
+  .brand { text-align: center; color: var(--muted); letter-spacing: .3em; font-size: .8rem; margin-bottom: 10px; }
+  .lcd { background: var(--lcd); color: var(--lcd-ink); border-radius: 10px; padding: 14px; min-height: 290px;
+         font-family: "Courier New", ui-monospace, monospace; font-size: 22px; line-height: 1.3;
+         box-shadow: inset 0 0 0 3px #9fb38a; display: flex; flex-direction: column; }
+  .lcd .status { display: flex; justify-content: space-between; font-size: 14px; color: var(--lcd-dim); margin-bottom: 8px; }
+  .lcd .msg { white-space: pre-wrap; word-break: break-word; flex: 1; }
+  .lcd .msg.loading { color: var(--lcd-dim); }
+  .lcd input { width: 100%; margin-top: 10px; font: inherit; font-weight: bold; color: var(--lcd-ink); background: rgba(255,255,255,.35);
+               border: 2px solid var(--lcd-dim); border-radius: 6px; padding: 6px 8px; outline: none; }
+  .lcd input:disabled { opacity: .5; }
+  .keys { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; }
+  .keys button { font-size: 26px; padding: 14px 0; border-radius: 16px; border: none; background: var(--key); color: var(--key-ink);
+                 cursor: pointer; touch-action: manipulation; box-shadow: 0 3px 0 #111827; }
+  .keys button:active { transform: translateY(2px); box-shadow: 0 1px 0 #111827; }
+  .keys button small { display: block; font-size: 11px; letter-spacing: .15em; color: #cbd5e1; margin-top: -2px; }
+  .keys .send { background: var(--send); font-size: 20px; font-weight: 700; }
+  .keys .cancel { background: var(--cancel); font-size: 20px; font-weight: 700; }
+  .keys .end { background: var(--end); font-size: 20px; font-weight: 700; }
+  .panel { flex: 1; min-width: 280px; max-width: 520px; background: #111827; border: 1px solid #1f2937; border-radius: 16px; padding: 18px; }
+  .panel h2 { margin: 0 0 12px; font-size: 1.1rem; }
+  label { display: block; color: var(--muted); font-size: .9rem; margin: 12px 0 6px; }
+  select, .panel input { width: 100%; font-size: 1.1rem; padding: 10px; border-radius: 10px; border: 1px solid #334155; background: #0b1220; color: var(--text); }
+  .log { margin-top: 14px; font-family: ui-monospace, monospace; font-size: .95rem; background: #0b1220; border-radius: 10px; padding: 10px;
+         max-height: 260px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  .log .req { color: #93c5fd; } .log .con { color: #86efac; } .log .end { color: #fca5a5; }
+  .hint { color: var(--muted); font-size: .9rem; margin-top: 10px; line-height: 1.5; }
+  kbd { background: #1f2937; border-radius: 4px; padding: 1px 6px; }
+  @media (max-width: 420px) { .lcd { font-size: 19px; min-height: 250px; } .keys button { font-size: 22px; padding: 12px 0; } }
+  /* Demonstration view: only the phone is shown. The page title and the demo controls stay in the page
+     (hidden) because the phone uses the chosen demo farmer's number and the service code from them. */
+  header, .panel { display: none; }
+  /* The text message the farmer receives after registering a farm */
+  .sms { margin-top: 14px; background: #f8fafc; color: #0f172a; border-radius: 14px; padding: 10px 12px; font-size: .85rem; line-height: 1.35; display: none; }
+  .yourphone { margin-top: 14px; text-align: left; }
+  .yourphone label { display: block; font-size: .78rem; color: #94a3b8; margin-bottom: 4px; }
+  .yourphone input { width: 100%; box-sizing: border-box; padding: 10px 12px; border-radius: 10px; border: 1px solid #334155; background: #0f172a; color: #e2e8f0; font-size: 1rem; }
+  .sms b { display: block; font-size: .72rem; letter-spacing: .04em; color: #15803d; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>FarmTori USSD Simulator (*000#)</h1>
+  <p>Stands in for the mobile network gateway. <a href="/activity" target="_blank">Open activity log &rarr;</a></p>
+</header>
+
+<div class="layout">
+  <div class="phone">
+    <div class="brand">FARMTORI</div>
+    <div class="lcd" aria-live="polite">
+      <div class="status"><span id="statusLeft">Ready</span><span id="charCount"></span></div>
+      <div class="msg" id="screen">Dial *000# and press Send.</div>
+      <input id="entry" inputmode="tel" autocomplete="off" aria-label="Your input" value="*000#">
+    </div>
+    <div class="keys">
+      <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
+      <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
+      <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
+      <button data-k="*">*</button><button data-k="0">0</button><button data-k="#">#</button>
+      <button class="send" id="sendBtn">Send</button>
+      <button class="cancel" id="cancelBtn" title="Delete last character">Cancel</button>
+      <button class="end" id="endBtn" title="End the session">End</button>
+    </div>
+    <div class="sms" id="smsBox" role="status" aria-live="polite"></div>
+    <div class="yourphone">
+      <label for="phone">Your phone number</label>
+      <input id="phone" inputmode="tel" autocomplete="tel" placeholder="+231 77 000 0000">
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Demo controls</h2>
+    <label for="dial">Service code</label>
+    <input id="dial" value="*000#">
+    <div class="hint">
+      Keyboard: type digits, <kbd>Enter</kbd> = Send, <kbd>Backspace</kbd> = Cancel, <kbd>Esc</kbd> = End.<br>
+      In menus: <b>0</b> = back, <b>00</b> = main menu.<br>
+      <b>Typing a name:</b> the keypad switches to letters like a real phone. Press <b>2</b> once for A, twice for B, three times for C. Pause to move on. <b>0</b> = space, <b>#</b> = switch ABC / 123 (on any screen), <b>Cancel</b> = delete. You can also type on your computer keyboard.
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var screenEl = document.getElementById('screen');
+  var entry = document.getElementById('entry');
+  var statusLeft = document.getElementById('statusLeft');
+  var charCount = document.getElementById('charCount');
+  var phoneInput = document.getElementById('phone');
+  var dialInput = document.getElementById('dial');
+  var logEl = document.getElementById('log');
+
+  // Gateway session state
+  var session = null; // { id, inputs: [] }
+  var busy = false;
+  var textMode = false; // current screen asks for a name (letters)
+  var abc = false; // keypad in ABC (multi-tap) mode; # switches ABC <-> 123
+  var lastLen = 0;
+
+  function updateCount() {
+    charCount.textContent = lastLen
+      ? (textMode || abc ? (abc ? 'ABC' : '123') + ' (# to switch) · ' : '') + lastLen + '/160'
+      : '';
+  }
+
+  function toE164(p) {
+    var d = String(p || '').replace(/\D/g, '');
+    if (d.indexOf('231') === 0) return '+' + d;
+    if (d.charAt(0) === '0') d = d.slice(1);
+    return '+231' + d;
+  }
+
+  function log(cls, text) {
+    var div = document.createElement('div');
+    div.className = cls;
+    div.textContent = text;
+    logEl.appendChild(div);
+    logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function showIdle(message) {
+    session = null;
+    statusLeft.textContent = 'Ready';
+    lastLen = 0;
+    textMode = false;
+    abc = false;
+    resetTap();
+    updateCount();
+    screenEl.textContent = message || 'Dial *000# and press Send.';
+    entry.disabled = false;
+    entry.value = dialInput.value || '*000#';
+    entry.focus();
+  }
+
+  function show(body, isEnd) {
+    screenEl.classList.remove('loading');
+    screenEl.textContent = body;
+    lastLen = body.length;
+    // Screens that ask for a name need letters: switch the keypad to ABC multi-tap.
+    textMode = !isEnd && /(\bname|community or town|housing size|grazing area)[^\n]*:\s*(\n|$)/i.test(body);
+    abc = textMode;
+    resetTap();
+    updateCount();
+    if (isEnd) {
+      statusLeft.textContent = 'Session ended';
+      session = null;
+      entry.value = '';
+      entry.placeholder = 'Press Send to dial again';
+    } else {
+      statusLeft.textContent = 'Session ' + session.id.slice(-6);
+      entry.value = '';
+      entry.placeholder = 'Reply';
+    }
+    // Names need letters; everything else is a number on the keypad.
+    entry.setAttribute('inputmode', textMode ? 'text' : 'tel');
+    if (textMode) entry.placeholder = 'Type name (ABC)';
+    entry.disabled = false;
+    entry.focus();
+  }
+
+  function post(serviceCode) {
+    var text = session.inputs.join('*');
+    var params = new URLSearchParams({
+      sessionId: session.id,
+      serviceCode: serviceCode,
+      phoneNumber: toE164(phoneInput.value),
+      text: text
+    });
+    busy = true;
+    entry.disabled = true;
+    screenEl.classList.add('loading');
+    screenEl.textContent = 'USSD code running...';
+    log('req', '> text="' + text + '"');
+    return fetch('/ussd', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString()
+    })
+      .then(function (r) { return r.text(); })
+      .then(function (reply) {
+        var isEnd = reply.indexOf('END') === 0;
+        var body = reply.replace(/^(CON|END)\s?/, '');
+        log(isEnd ? 'end' : 'con', '< ' + reply.slice(0, 3) + ' ' + body.split('\n')[0]);
+        show(body, isEnd);
+        if (isEnd) showNewSms();
+      })
+      .catch(function () {
+        log('end', '< network error');
+        show('Connection problem.\nCheck the server and try again.', true);
+      })
+      .then(function () { busy = false; });
+  }
+
+  // A text message arrives after a farm is registered (the server keeps it when no real SMS gateway is set).
+  var smsShown = 0;
+  function showNewSms() {
+    var box = document.getElementById('smsBox');
+    fetch('/api/sms?phone=' + encodeURIComponent(toE164(phoneInput.value)))
+      .then(function (r) { return r.ok ? r.json() : { messages: [] }; })
+      .then(function (data) {
+        var all = data.messages || [];
+        if (all.length <= smsShown) return;
+        var last = all[all.length - 1];
+        smsShown = all.length;
+        box.innerHTML = '';
+        var title = document.createElement('b');
+        title.textContent = 'NEW SMS - FarmTori';
+        var text = document.createElement('div');
+        text.textContent = last.text;
+        box.appendChild(title);
+        box.appendChild(text);
+        box.style.display = 'block';
+      })
+      .catch(function () {});
+  }
+
+  function send() {
+    if (busy) return;
+    var value = entry.value.trim();
+    if (!/^\+?[\d\s-]{7,}$/.test(phoneInput.value.trim())) { screenEl.textContent = 'Type your phone number below first.'; phoneInput.focus(); return; }
+    if (!session) {
+      var code = value || dialInput.value || '*000#';
+      if (!/^\*[\d*]+#$/.test(code)) { screenEl.textContent = 'Dial a USSD code like *000#'; return; }
+      session = { id: 'sim-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8), inputs: [], code: code };
+      logEl.textContent = '';
+      log('req', '--- new session ' + session.id + ' (' + toE164(phoneInput.value) + ')');
+      return post(code);
+    }
+    if (!value) return;
+    session.inputs.push(value);
+    return post(session.code);
+  }
+
+  function endSession() {
+    if (session) log('end', '--- session ended by user');
+    showIdle('Session ended.');
+  }
+
+  // ---- Text entry: multi-tap like a real feature phone (2 = A B C, 3 = D E F ...) ----
+  var LETTERS = { '1': ".'-", '2': 'ABC', '3': 'DEF', '4': 'GHI', '5': 'JKL', '6': 'MNO', '7': 'PQRS', '8': 'TUV', '9': 'WXYZ' };
+  var tap = { key: null, base: '', idx: 0, timer: null };
+
+  function resetTap() {
+    clearTimeout(tap.timer);
+    tap.key = null;
+  }
+
+  // First letter of each word is a capital, the rest are lower case.
+  function applyCase(ch, base) {
+    var prev = base.charAt(base.length - 1);
+    return /[a-z]/i.test(ch) ? (prev === '' || prev === ' ' ? ch.toUpperCase() : ch.toLowerCase()) : ch;
+  }
+
+  function multiTap(k) {
+    var chars = (LETTERS[k] || '') + k; // letters first, the digit last
+    if (tap.key === k) {
+      tap.idx = (tap.idx + 1) % chars.length;
+    } else {
+      tap.base = entry.value;
+      tap.idx = 0;
+    }
+    tap.key = k;
+    entry.value = tap.base + applyCase(chars.charAt(tap.idx), tap.base);
+    clearTimeout(tap.timer);
+    tap.timer = setTimeout(resetTap, 900);
+  }
+
+  function pressKey(k) {
+    if (entry.disabled) return;
+    if (session && k === '#') { abc = !abc; resetTap(); updateCount(); entry.focus(); return; }
+    if (textMode && abc) {
+      if (k === '0') { resetTap(); entry.value += ' '; }
+      else if (k === '*') { resetTap(); entry.value += '.'; }
+      else multiTap(k);
+    } else {
+      resetTap();
+      entry.value += k;
+    }
+    entry.focus();
+  }
+
+  // Show the letters under each digit, like a real keypad.
+  document.querySelectorAll('[data-k]').forEach(function (b) {
+    var k = b.getAttribute('data-k');
+    if (LETTERS[k] && k !== '1') {
+      var small = document.createElement('small');
+      small.textContent = LETTERS[k];
+      b.appendChild(small);
+    }
+    b.addEventListener('click', function () { pressKey(k); });
+  });
+  document.getElementById('sendBtn').addEventListener('click', send);
+  document.getElementById('endBtn').addEventListener('click', endSession);
+  document.getElementById('cancelBtn').addEventListener('click', function () {
+    resetTap();
+    entry.value = entry.value.slice(0, -1);
+    entry.focus();
+  });
+  entry.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { e.preventDefault(); send(); }
+    if (e.key === 'Escape') { e.preventDefault(); endSession(); }
+  });
+
+  // the number the farmer typed on this device is remembered (nothing else is pre-filled)
+  try { phoneInput.value = localStorage.getItem('farmtori_sim_phone') || ''; } catch (e) {}
+  phoneInput.addEventListener('change', function () {
+    try { localStorage.setItem('farmtori_sim_phone', phoneInput.value); } catch (e) {}
+    endSession();
+  });
+
+  showIdle();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FarmTori Activity Log</title>
+<style>
+  :root { --bg: #f8fafc; --card: #ffffff; --text: #1e293b; --muted: #64748b; --border: #e2e8f0;
+          --green: #15803d; --green-bg: #dcfce7; --orange: #c2410c; --orange-bg: #ffedd5; --grey-bg: #e2e8f0; --new: #fef9c3; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; padding: 16px; }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+  h1 { margin: 0; font-size: 1.6rem; color: #14532d; }
+  .sub { color: var(--muted); }
+  a { color: var(--green); }
+  .counts { display: flex; gap: 12px; flex-wrap: wrap; margin: 16px 0; }
+  .count { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 18px; min-width: 130px; }
+  .count b { display: block; font-size: 1.8rem; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  table { width: 100%; border-collapse: collapse; font-size: 1.05rem; }
+  th, td { text-align: left; padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f1f5f9; font-size: .85rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  tr.new td { background: var(--new); transition: background 2s; }
+  .badge { display: inline-block; font-weight: 700; font-size: .85rem; padding: 3px 10px; border-radius: 999px; }
+  .USSD { background: var(--orange-bg); color: var(--orange); }
+  .App { background: var(--green-bg); color: var(--green); }
+  .Seed { background: var(--grey-bg); color: var(--muted); }
+  .when { color: var(--muted); white-space: nowrap; }
+  .empty { padding: 24px; color: var(--muted); text-align: center; }
+  @media (max-width: 640px) {
+    thead { display: none; }
+    tr { display: block; border-bottom: 1px solid var(--border); padding: 8px 0; }
+    td { display: block; border: none; padding: 4px 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Activity log</h1>
+    <span class="sub">One database, two channels. Updates every 4 seconds. <a href="/simulator">Simulator</a></span>
+  </header>
+  <div class="counts">
+    <div class="count"><span class="badge USSD">USSD</span><b id="cUSSD">0</b></div>
+    <div class="count"><span class="badge App">App</span><b id="cApp">0</b></div>
+    <div class="count"><span class="badge Seed">Seed</span><b id="cSeed">0</b></div>
+  </div>
+  <div class="card">
+    <table>
+      <thead><tr><th>When</th><th>Source</th><th>Record</th><th>Farmer / farm</th><th>Details</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="5" class="empty">Loading...</td></tr></tbody>
+    </table>
+  </div>
+  <p class="sub" id="store"></p>
+</div>
+<script>
+(function () {
+  var seen = null;
+  var rowsEl = document.getElementById('rows');
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function ago(iso) {
+    var s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return 'just now';
+    if (s < 3600) return Math.floor(s / 60) + ' min ago';
+    if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+    return new Date(iso).toLocaleDateString();
+  }
+
+  function render(data) {
+    var counts = { USSD: 0, App: 0, Seed: 0 };
+    var ids = {};
+    if (!data.items.length) {
+      rowsEl.innerHTML = '<tr><td colspan="5" class="empty">No records yet.</td></tr>';
+    } else {
+      rowsEl.innerHTML = data.items.map(function (it) {
+        counts[it.source] = (counts[it.source] || 0) + 1;
+        ids[it.id] = true;
+        var isNew = seen && !seen[it.id];
+        return '<tr class="' + (isNew ? 'new' : '') + '">' +
+          '<td class="when" title="' + esc(it.created_at) + '">' + esc(ago(it.created_at)) + '</td>' +
+          '<td><span class="badge ' + esc(it.source) + '">' + esc(it.source) + '</span></td>' +
+          '<td>' + esc(it.type) + '</td>' +
+          '<td>' + esc(it.farmer) + (it.farm ? '<br><span class="sub">' + esc(it.farm) + '</span>' : '') + '</td>' +
+          '<td>' + esc(it.detail) + '</td></tr>';
+      }).join('');
+    }
+    seen = ids;
+    ['USSD', 'App', 'Seed'].forEach(function (k) { document.getElementById('c' + k).textContent = counts[k] || 0; });
+    document.getElementById('store').textContent = 'Data store: ' + data.store + ' (last ' + data.items.length + ' records)';
+  }
+
+  function load() {
+    fetch('/api/activity?limit=30')
+      .then(function (r) { return r.json(); })
+      .then(render)
+      .catch(function () { document.getElementById('store').textContent = 'Could not reach the server.'; });
+  }
+  load();
+  setInterval(load, 4000);
+})();
+</script>
+</body>
+</html>
