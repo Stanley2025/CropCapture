@@ -17,6 +17,10 @@
 --   20261124_activity_weather_and_farm_plans.sql  weather on activities, farm_plans table, year indexes
 --   20261125_harvest_photos.sql                   harvest photos (first version)
 --   20261126_harvest_photos_traceability.sql      public_code, photo limit, private bucket, buyer page function
+--   20261127_harvest_audit_trail.sql              audit trail for harvest changes and photos
+--   20261128_amount_currency.sql                  USD or LRD on harvest value and activity cost
+--   20261129_ussd_farmer_pins.sql                 PIN storage for USSD accounts
+--   20261130_county_insights.sql                  county numbers for the admin Counties section
 -- (20261122_season_record_and_weather.sql is separate; run it too if you have not already.)
 -- ============================================================================
 
@@ -774,3 +778,322 @@ DROP TRIGGER IF EXISTS trg_log_harvest_photo_change ON public.harvest_photos;
 CREATE TRIGGER trg_log_harvest_photo_change
   AFTER INSERT OR UPDATE ON public.harvest_photos
   FOR EACH ROW EXECUTE FUNCTION public.log_harvest_photo_change();
+
+
+-- ===== 20261128_amount_currency =====
+-- ============================================================================
+-- Migration: 20261128_amount_currency.sql
+-- Description: A harvest's sale value and an activity's cost can be recorded in US dollars (USD, the
+--   default) or Liberian dollars (LRD). Existing rows stay USD. The two currencies are never added
+--   together. Safe to run more than once.
+-- ============================================================================
+
+ALTER TABLE public.harvest_batches ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD';
+ALTER TABLE public.farm_activities ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'harvest_batches_currency_check') THEN
+    ALTER TABLE public.harvest_batches ADD CONSTRAINT harvest_batches_currency_check CHECK (currency IN ('USD', 'LRD'));
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'farm_activities_currency_check') THEN
+    ALTER TABLE public.farm_activities ADD CONSTRAINT farm_activities_currency_check CHECK (currency IN ('USD', 'LRD'));
+  END IF;
+END $$;
+
+
+-- ===== 20261129_ussd_farmer_pins =====
+-- ============================================================================
+-- Migration: 20261129_ussd_farmer_pins.sql
+-- Description: PINs for farmers who use USSD. A farmer creates an account by USSD (name, date of birth,
+--   gender, county, town and a 4-digit PIN) and then enters the PIN each time they dial.
+--   The PIN is never stored as digits: only a salted hash, in THIS table, which the apps cannot read
+--   (row level security is on and there is no policy). Only the USSD server, using the service key, uses it.
+--   After 3 wrong PINs the account is locked for 30 minutes. Safe to run more than once.
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS public.farmer_pins (
+  farmer_id UUID PRIMARY KEY REFERENCES public.farmers(id) ON DELETE CASCADE,
+  pin_hash TEXT NOT NULL,
+  failed_attempts INTEGER NOT NULL DEFAULT 0,
+  locked_until TIMESTAMPTZ,
+  set_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.farmer_pins ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON public.farmer_pins FROM anon, authenticated;
+
+
+-- ===== 20261130_county_insights =====
+-- ============================================================================
+-- Migration: 20261130_county_insights.sql
+-- Description: Numbers for the admin "Counties" section: farmers, farms and harvest per county, with the
+--   gender split. Everything is counted in the database (never in the browser).
+--
+--   admin_county_insights(year, crop, approved_only)   one row per county + "Unassigned county" + national totals
+--   admin_county_detail(county, year, crop, approved_only)  districts and top crops of one county
+--
+-- Who can call them: only a signed-in user whose profile role is super_admin or agricultural_admin. The
+-- check is inside the functions (is_insights_admin), so the service key is not needed and is never sent to
+-- a browser. They return counts and totals only: no names, phones, IDs or locations of a person.
+--
+-- What is left out: sample records (source = 'seed'), harvests that were deleted (deleted_at) and harvests
+-- that were replaced by a newer edit (is_latest = false). Safe to run more than once.
+-- ============================================================================
+
+-- Indexes for the queries below -------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS idx_farms_farmer_id ON public.farms(farmer_id);
+CREATE INDEX IF NOT EXISTS idx_harvest_batches_crop ON public.harvest_batches(crop_id);
+CREATE INDEX IF NOT EXISTS idx_harvest_batches_farm_live ON public.harvest_batches(farm_id, harvest_date) WHERE deleted_at IS NULL;
+
+-- Small helpers ---------------------------------------------------------------------------------------
+-- A county name reduced to letters only, so "Nimba", " nimba " and "Nimba County" are the same county.
+-- Nothing else is guessed: a name that still does not match goes to "Unassigned county".
+CREATE OR REPLACE FUNCTION public.county_key(t TEXT) RETURNS TEXT
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT regexp_replace(regexp_replace(lower(btrim(coalesce(t, ''))), '\s+county$', ''), '[^a-z]', '', 'g');
+$$;
+
+-- Gender exactly as recorded: male, female, anything else (or nothing) is "unrecorded". Never guessed.
+CREATE OR REPLACE FUNCTION public.gender_key(g TEXT) RETURNS TEXT
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE lower(btrim(coalesce(g, ''))) WHEN 'male' THEN 'male' WHEN 'female' THEN 'female' ELSE 'unrecorded' END;
+$$;
+
+-- THE ONE PLACE where a harvest is turned into kilograms.
+--   1. the weight the app already worked out (quantity_kg), when there is one;
+--   2. otherwise by the unit: kg, g, lb, tonne (1 tonne = 1000 kg);
+--   3. otherwise quantity x kg_per_unit, when the farmer's record has one;
+--   4. otherwise NULL: the weight cannot be known (for example "bags" or "heads" with no weight).
+-- A NULL is counted and reported on the page; it is never added in as if it were 0 or a guessed weight.
+CREATE OR REPLACE FUNCTION public.harvest_weight_kg(quantity NUMERIC, unit TEXT, quantity_kg NUMERIC, kg_per_unit NUMERIC)
+RETURNS NUMERIC LANGUAGE sql IMMUTABLE AS $$
+  SELECT CASE
+    WHEN quantity_kg IS NOT NULL THEN quantity_kg
+    WHEN quantity IS NULL THEN NULL
+    WHEN lower(btrim(coalesce(unit, ''))) IN ('kg', 'kgs', 'kilogram', 'kilograms') THEN quantity
+    WHEN lower(btrim(coalesce(unit, ''))) IN ('g', 'gram', 'grams') THEN quantity / 1000
+    WHEN lower(btrim(coalesce(unit, ''))) IN ('lb', 'lbs', 'pound', 'pounds') THEN quantity * 0.45359237
+    WHEN lower(btrim(coalesce(unit, ''))) IN ('t', 'ton', 'tons', 'tonne', 'tonnes', 'mt') THEN quantity * 1000
+    WHEN kg_per_unit IS NOT NULL THEN quantity * kg_per_unit
+    ELSE NULL
+  END;
+$$;
+
+-- May this user see the Counties section?
+CREATE OR REPLACE FUNCTION public.is_insights_admin() RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles p
+    WHERE p.id = auth.uid() AND p.role::text IN ('super_admin', 'agricultural_admin')
+  );
+$$;
+
+-- The records the section counts (internal; not callable by the apps) -----------------------------------
+-- Farms, each with its county (the farm's own county_id, else its county text matched by name),
+-- its district, and the gender of the farmer who owns it.
+CREATE OR REPLACE FUNCTION public.insights_farm_base()
+RETURNS TABLE (id UUID, farmer_id UUID, gender TEXT, county_id UUID, district TEXT, created_at TIMESTAMPTZ)
+LANGUAGE sql STABLE SET search_path = public AS $$
+  SELECT f.id, f.farmer_id, public.gender_key(fr.gender),
+         COALESCE(
+           (SELECT c.id FROM public.counties c WHERE c.id = f.county_id),
+           (SELECT c.id FROM public.counties c WHERE public.county_key(f.county) <> '' AND public.county_key(c.name) = public.county_key(f.county) LIMIT 1)
+         ),
+         COALESCE(d.name, NULLIF(btrim(f.district), '')),
+         f.created_at
+  FROM public.farms f
+  JOIN public.farmers fr ON fr.id = f.farmer_id
+  LEFT JOIN public.districts d ON d.id = f.district_id
+  WHERE COALESCE(f.source, '') <> 'seed' AND COALESCE(fr.source, '') <> 'seed';
+$$;
+
+-- Farmers, each with one county: the county on the farmer's record when it matches a county, otherwise the
+-- county of their first farm, otherwise none (Unassigned). A farmer is counted once, whatever their farms.
+CREATE OR REPLACE FUNCTION public.insights_farmer_county()
+RETURNS TABLE (id UUID, gender TEXT, county_id UUID)
+LANGUAGE sql STABLE SET search_path = public AS $$
+  SELECT fr.id, public.gender_key(fr.gender),
+         COALESCE(
+           (SELECT c.id FROM public.counties c WHERE public.county_key(fr.county) <> '' AND public.county_key(c.name) = public.county_key(fr.county) LIMIT 1),
+           (SELECT fb.county_id FROM public.insights_farm_base() fb WHERE fb.farmer_id = fr.id AND fb.county_id IS NOT NULL ORDER BY fb.created_at, fb.id LIMIT 1)
+         )
+  FROM public.farmers fr
+  WHERE COALESCE(fr.source, '') <> 'seed';
+$$;
+
+-- Harvests that count, with their weight in kg (NULL when it cannot be known), after the filters.
+CREATE OR REPLACE FUNCTION public.insights_harvest_base(p_year INTEGER, p_crop UUID, p_approved_only BOOLEAN)
+RETURNS TABLE (id UUID, farm_id UUID, county_id UUID, gender TEXT, district TEXT, crop_id UUID, kg NUMERIC)
+LANGUAGE sql STABLE SET search_path = public AS $$
+  SELECT h.id, h.farm_id, fb.county_id, fb.gender, fb.district, h.crop_id,
+         public.harvest_weight_kg(h.quantity, h.unit, h.quantity_kg, h.kg_per_unit)
+  FROM public.harvest_batches h
+  JOIN public.insights_farm_base() fb ON fb.id = h.farm_id
+  WHERE h.deleted_at IS NULL
+    AND COALESCE(h.is_latest, TRUE)
+    AND COALESCE(h.source, '') <> 'seed'
+    AND (p_year IS NULL OR EXTRACT(YEAR FROM h.harvest_date)::INTEGER = p_year)
+    AND (p_crop IS NULL OR h.crop_id = p_crop)
+    AND (NOT p_approved_only OR h.status::text = 'approved');
+$$;
+
+REVOKE ALL ON FUNCTION public.insights_farm_base() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.insights_farmer_county() FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.insights_harvest_base(INTEGER, UUID, BOOLEAN) FROM PUBLIC, anon, authenticated;
+
+-- 1. One row per county ------------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION public.admin_county_insights(
+  p_year INTEGER DEFAULT NULL,
+  p_crop UUID DEFAULT NULL,
+  p_approved_only BOOLEAN DEFAULT FALSE
+) RETURNS JSONB
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  result JSONB;
+BEGIN
+  IF NOT public.is_insights_admin() THEN
+    RAISE EXCEPTION 'not_allowed' USING ERRCODE = '42501';
+  END IF;
+
+  WITH
+  all_counties AS (
+    SELECT c.id, c.name, 1 AS ord FROM public.counties c
+    UNION ALL
+    SELECT NULL::UUID, 'Unassigned county', 2
+  ),
+  fa AS (
+    SELECT county_id, count(*) AS farmers,
+           count(*) FILTER (WHERE gender = 'male') AS male,
+           count(*) FILTER (WHERE gender = 'female') AS female,
+           count(*) FILTER (WHERE gender = 'unrecorded') AS unrecorded
+    FROM public.insights_farmer_county() GROUP BY county_id
+  ),
+  ma AS (
+    SELECT county_id, count(*) AS farms,
+           count(*) FILTER (WHERE gender = 'male') AS male,
+           count(*) FILTER (WHERE gender = 'female') AS female,
+           count(*) FILTER (WHERE gender = 'unrecorded') AS unrecorded
+    FROM public.insights_farm_base() GROUP BY county_id
+  ),
+  ha AS (
+    SELECT county_id,
+           count(*) AS harvests,
+           count(*) FILTER (WHERE kg IS NULL) AS no_weight,
+           COALESCE(sum(kg), 0) AS kg,
+           COALESCE(sum(kg) FILTER (WHERE gender = 'male'), 0) AS male,
+           COALESCE(sum(kg) FILTER (WHERE gender = 'female'), 0) AS female,
+           COALESCE(sum(kg) FILTER (WHERE gender = 'unrecorded'), 0) AS unrecorded
+    FROM public.insights_harvest_base(p_year, p_crop, p_approved_only) GROUP BY county_id
+  ),
+  county_rows AS (
+    SELECT r.id, r.name, r.ord,
+           COALESCE(fa.farmers, 0) AS farmers, COALESCE(fa.male, 0) AS farmers_male, COALESCE(fa.female, 0) AS farmers_female, COALESCE(fa.unrecorded, 0) AS farmers_unrecorded,
+           COALESCE(ma.farms, 0) AS farms, COALESCE(ma.male, 0) AS farms_male, COALESCE(ma.female, 0) AS farms_female, COALESCE(ma.unrecorded, 0) AS farms_unrecorded,
+           COALESCE(ha.harvests, 0) AS harvests, COALESCE(ha.no_weight, 0) AS harvests_no_weight,
+           COALESCE(ha.kg, 0) AS kg, COALESCE(ha.male, 0) AS kg_male, COALESCE(ha.female, 0) AS kg_female, COALESCE(ha.unrecorded, 0) AS kg_unrecorded
+    FROM all_counties r
+    LEFT JOIN fa ON fa.county_id IS NOT DISTINCT FROM r.id
+    LEFT JOIN ma ON ma.county_id IS NOT DISTINCT FROM r.id
+    LEFT JOIN ha ON ha.county_id IS NOT DISTINCT FROM r.id
+  )
+  SELECT jsonb_build_object(
+    'generated_at', now(),
+    'filters', jsonb_build_object('year', p_year, 'crop', p_crop, 'approved_only', p_approved_only),
+    'counties', (SELECT jsonb_agg(jsonb_build_object(
+        'county_id', id, 'county', name, 'is_unassigned', id IS NULL,
+        'farmers', farmers, 'farmers_male', farmers_male, 'farmers_female', farmers_female, 'farmers_unrecorded', farmers_unrecorded,
+        'farms', farms, 'farms_male', farms_male, 'farms_female', farms_female, 'farms_unrecorded', farms_unrecorded,
+        'harvests', harvests, 'harvests_no_weight', harvests_no_weight,
+        'harvest_kg', round(kg, 2), 'harvest_kg_male', round(kg_male, 2), 'harvest_kg_female', round(kg_female, 2), 'harvest_kg_unrecorded', round(kg_unrecorded, 2)
+      ) ORDER BY ord, name) FROM county_rows),
+    'national', (SELECT jsonb_build_object(
+        'farmers', sum(farmers), 'farmers_male', sum(farmers_male), 'farmers_female', sum(farmers_female), 'farmers_unrecorded', sum(farmers_unrecorded),
+        'farms', sum(farms), 'farms_male', sum(farms_male), 'farms_female', sum(farms_female), 'farms_unrecorded', sum(farms_unrecorded),
+        'harvests', sum(harvests), 'harvests_no_weight', sum(harvests_no_weight), 'harvest_kg', round(sum(kg), 2)
+      ) FROM county_rows),
+    'excluded', jsonb_build_object(
+        'sample_farmers', (SELECT count(*) FROM public.farmers WHERE COALESCE(source, '') = 'seed'),
+        'sample_farms', (SELECT count(*) FROM public.farms WHERE COALESCE(source, '') = 'seed'),
+        'sample_harvests', (SELECT count(*) FROM public.harvest_batches WHERE COALESCE(source, '') = 'seed'),
+        'deleted_harvests', (SELECT count(*) FROM public.harvest_batches WHERE deleted_at IS NOT NULL),
+        'replaced_harvests', (SELECT count(*) FROM public.harvest_batches WHERE is_latest IS FALSE)
+    )
+  ) INTO result;
+
+  RETURN result;
+END $$;
+
+-- 2. One county in detail: districts and top crops --------------------------------------------------------------
+-- A district with fewer than 5 farmers shows no gender split (small_group = true), so a person cannot be
+-- picked out. p_county NULL means the "Unassigned county" group.
+CREATE OR REPLACE FUNCTION public.admin_county_detail(
+  p_county UUID,
+  p_year INTEGER DEFAULT NULL,
+  p_crop UUID DEFAULT NULL,
+  p_approved_only BOOLEAN DEFAULT FALSE
+) RETURNS JSONB
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = public AS $$
+DECLARE
+  result JSONB;
+BEGIN
+  IF NOT public.is_insights_admin() THEN
+    RAISE EXCEPTION 'not_allowed' USING ERRCODE = '42501';
+  END IF;
+
+  WITH
+  farms_here AS (
+    SELECT fb.id, fb.farmer_id, fb.gender, COALESCE(fb.district, 'Not recorded') AS district
+    FROM public.insights_farm_base() fb
+    WHERE fb.county_id IS NOT DISTINCT FROM p_county
+  ),
+  harvest_here AS (
+    SELECT hb.* FROM public.insights_harvest_base(p_year, p_crop, p_approved_only) hb
+    WHERE hb.county_id IS NOT DISTINCT FROM p_county
+  ),
+  dist AS (
+    SELECT fh.district,
+           count(DISTINCT fh.farmer_id) AS farmers,
+           count(DISTINCT fh.farmer_id) FILTER (WHERE fh.gender = 'male') AS male,
+           count(DISTINCT fh.farmer_id) FILTER (WHERE fh.gender = 'female') AS female,
+           count(DISTINCT fh.farmer_id) FILTER (WHERE fh.gender = 'unrecorded') AS unrecorded,
+           count(*) AS farms
+    FROM farms_here fh GROUP BY fh.district
+  ),
+  dist_kg AS (
+    SELECT COALESCE(hh.district, 'Not recorded') AS district, COALESCE(sum(hh.kg), 0) AS kg, count(*) FILTER (WHERE hh.kg IS NULL) AS no_weight
+    FROM harvest_here hh GROUP BY COALESCE(hh.district, 'Not recorded')
+  ),
+  crops_here AS (
+    SELECT COALESCE(c.name, 'Not recorded') AS crop, COALESCE(sum(hh.kg), 0) AS kg
+    FROM harvest_here hh LEFT JOIN public.crops c ON c.id = hh.crop_id
+    GROUP BY COALESCE(c.name, 'Not recorded')
+  )
+  SELECT jsonb_build_object(
+    'generated_at', now(),
+    'county', COALESCE((SELECT name FROM public.counties WHERE id = p_county), 'Unassigned county'),
+    'districts', COALESCE((SELECT jsonb_agg(jsonb_build_object(
+        'district', d.district,
+        'farmers', d.farmers,
+        'farms', d.farms,
+        'harvest_kg', round(COALESCE(k.kg, 0), 2),
+        'harvests_no_weight', COALESCE(k.no_weight, 0),
+        'small_group', d.farmers < 5,
+        'farmers_male', CASE WHEN d.farmers < 5 THEN NULL ELSE d.male END,
+        'farmers_female', CASE WHEN d.farmers < 5 THEN NULL ELSE d.female END,
+        'farmers_unrecorded', CASE WHEN d.farmers < 5 THEN NULL ELSE d.unrecorded END
+      ) ORDER BY COALESCE(k.kg, 0) DESC, d.district) FROM dist d LEFT JOIN dist_kg k ON k.district = d.district), '[]'::jsonb),
+    'top_crops', COALESCE((SELECT jsonb_agg(jsonb_build_object('crop', crop, 'harvest_kg', round(kg, 2)) ORDER BY kg DESC, crop)
+                           FROM (SELECT * FROM crops_here ORDER BY kg DESC, crop LIMIT 5) t), '[]'::jsonb)
+  ) INTO result;
+
+  RETURN result;
+END $$;
+
+REVOKE ALL ON FUNCTION public.admin_county_insights(INTEGER, UUID, BOOLEAN) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.admin_county_detail(UUID, INTEGER, UUID, BOOLEAN) FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.is_insights_admin() FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.admin_county_insights(INTEGER, UUID, BOOLEAN) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.admin_county_detail(UUID, INTEGER, UUID, BOOLEAN) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_insights_admin() TO authenticated, service_role;
