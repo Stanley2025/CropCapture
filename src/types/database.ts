@@ -5,7 +5,8 @@ export type UserRole =
   | 'cooperative_manager'
   | 'extension_officer'
   | 'quality_inspector'
-  | 'public_viewer';
+  | 'public_viewer'
+  | 'buyer';
 
 export type SeasonStatus = 'planned' | 'active' | 'harvesting' | 'completed' | 'cancelled';
 
@@ -177,6 +178,8 @@ export interface FarmActivity {
   quantity?: number | null;
   unit?: string | null;
   cost: number;
+  /** currency of cost: USD (default) or LRD */
+  currency?: 'USD' | 'LRD';
   labor_count: number;
   photo_url?: string | null;
   recorded_by?: string | null;
@@ -239,6 +242,8 @@ export interface HarvestBatch {
   quantity: number;
   unit: string;
   total_value?: number | null;
+  /** currency of total_value: USD (default) or LRD */
+  currency?: 'USD' | 'LRD';
   unit_price?: number | null;
   /** Quantity in kg (local units such as cups and tins are converted when recorded). */
   quantity_kg?: number | null;

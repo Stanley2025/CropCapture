@@ -108,6 +108,19 @@ export const PERSONAS: Record<string, PersonaDetails> = {
       updated_at: new Date().toISOString(),
     },
   },
+  buyer: {
+    title: 'Buyer',
+    badge: 'BUYER',
+    badgeVariant: 'warning',
+    description: 'Scan a harvest QR code to see the farmer photos, the facts and what was done on the farm.',
+    profile: {
+      id: 'p0000000-0000-0000-0000-000000000005',
+      full_name: 'Buyer',
+      role: 'buyer',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    },
+  },
 };
 
 interface AppState {
@@ -250,6 +263,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (cleanEmail.includes('extension')) targetRole = 'extension_officer';
       else if (cleanEmail.includes('inspect')) targetRole = 'quality_inspector';
       else if (cleanEmail.includes('admin') || cleanEmail.includes('coop')) targetRole = 'cooperative_manager';
+      else if (cleanEmail.includes('buyer')) targetRole = 'buyer';
       else targetRole = 'farmer';
     }
 
@@ -468,9 +482,21 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   refreshPendingSyncCount: async () => {
     const queue = await localDb.getSyncQueue();
-    const count = queue.filter(
-      (i) => i.status === 'waiting_to_sync' || i.status === 'sync_failed'
-    ).length;
+    let waiting = queue.filter((i) => i.status === 'waiting_to_sync' || i.status === 'sync_failed');
+    // A farmer sees only their own waiting records. Records left on the phone by someone who used it before
+    // are not "waiting" for this farmer, so they must not show up as a sync count after signing in.
+    const { currentRole, currentFarmer } = get();
+    if (currentRole === 'farmer' && currentFarmer?.id) {
+      const myFarmIds = new Set((await localDb.getFarms()).filter((f) => f.farmer_id === currentFarmer.id).map((f) => f.id));
+      waiting = waiting.filter((i) => {
+        const p: any = i.payload || {};
+        if (p.farmer_id) return p.farmer_id === currentFarmer.id;
+        if (p.farm_id) return myFarmIds.has(p.farm_id);
+        if (i.entity_type === 'farm') return myFarmIds.has(p.id);
+        return true;
+      });
+    }
+    const count = waiting.length;
     set({
       pendingSyncCount: count,
       syncStatus: get().isOfflineMode

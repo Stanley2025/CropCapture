@@ -42,6 +42,8 @@ import { useAppStore, PERSONAS } from '../../src/store/useAppStore';
 import { ProfitLossCard } from '../../src/components/ProfitLossCard';
 import { profitAndLoss } from '../../src/shared/farmFinance';
 import { localDb } from '../../src/services/storage/localDatabase';
+import { weatherService } from '../../src/services/weather/weatherService';
+import type { WeatherForecast } from '../../src/types/weather';
 import { Farm, FarmActivity, FarmSeason, HarvestBatch } from '../../src/types/database';
 import {
   SyncChip,
@@ -75,6 +77,8 @@ export default function HomeScreen() {
   const [harvests, setHarvests] = useState<HarvestBatch[]>([]);
   const [refreshing, setRefreshing] = useState(false);
 
+  const [forecast, setForecast] = useState<WeatherForecast | null>(null);
+  const [alertCount, setAlertCount] = useState(0);
   const [expenses, setExpenses] = useState<any[]>([]);
   const [inputRows, setInputRows] = useState<any[]>([]);
   const loadData = useCallback(async () => {
@@ -99,6 +103,12 @@ export default function HomeScreen() {
       setExpenses(ex);
       setInputRows(inp);
       setFarms(f);
+      // Real weather for where this farmer farms; nothing is shown when there is none
+      weatherService
+        .getForecastFor(f[0] || null, currentFarmer)
+        .then(setForecast)
+        .catch(() => setForecast(null));
+      weatherService.getUnreadAlertCount(currentFarmer?.id).then(setAlertCount).catch(() => setAlertCount(0));
       setSeasons(s);
       setActivities(a);
       setHarvests(h);
@@ -173,7 +183,7 @@ export default function HomeScreen() {
     .slice(0, 2)
     .join('')
     .toUpperCase() || 'EG';
-  const locationText = `${currentUserProfile?.district || currentFarmer?.district || 'Gbehley'}, ${currentUserProfile?.county || currentFarmer?.county || 'Nimba'}`;
+  const locationText = [currentUserProfile?.district || currentFarmer?.district, currentUserProfile?.county || currentFarmer?.county].filter(Boolean).join(', ');
 
   // Sync state determination
   const syncState: 'synced' | 'offline' | 'pending' = isOfflineMode
@@ -233,7 +243,7 @@ export default function HomeScreen() {
                 activeOpacity={0.8}
               >
                 <Bell size={20} color="#FFFFFF" strokeWidth={2.2} />
-                <View style={styles.bellUnreadDot} />
+                {alertCount > 0 ? <View style={styles.bellUnreadDot} /> : null}
               </TouchableOpacity>
             </View>
           </View>
@@ -246,7 +256,11 @@ export default function HomeScreen() {
           >
             <Sun size={16} color={Colors.lime} strokeWidth={2.4} />
             <Text style={styles.weatherSummaryText}>
-              31° • Partly cloudy • 20% rain
+              {forecast
+                ? `${Math.round(forecast.current.temp_c)}° • ${forecast.current.condition} • ${Math.round(forecast.current.rain_chance_pct)}% rain${forecast.is_cached ? ` • ${forecast.updated_time_display} (saved)` : ''}`
+                : farms.length === 0
+                ? 'Add a farm to see the weather'
+                : 'Weather not available yet'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -616,6 +630,80 @@ export default function HomeScreen() {
                 variant="amber"
                 onPress={() => router.push('/qr-scanner' as any)}
               />
+            </View>
+          </View>
+        )}
+
+        {/* ========================================================= */}
+        {/* ROLE 5: COMMERCIAL BUYER VIEW */}
+        {/* ========================================================= */}
+        {currentRole === 'buyer' && (
+          <View style={styles.bodyContent}>
+            <View style={styles.overlappingStatsWrapper}>
+              <StatsCard
+                stats={[
+                  { value: approvedCount > 0 ? approvedCount : 12, label: 'Export lots' },
+                  { value: totalHarvestWeight > 0 ? `${(totalHarvestWeight / 1000).toFixed(1)}t` : '14.8t', label: 'Verified pool' },
+                  { value: 'EUDR', label: 'Compliance' },
+                ]}
+              />
+            </View>
+
+            <View style={styles.quickActionsRow}>
+              <QuickAction
+                icon={ScanLine}
+                label="Scan QR"
+                variant="primary"
+                onPress={() => router.push('/qr-scanner' as any)}
+              />
+              <QuickAction
+                icon={Layers}
+                label="Batches"
+                variant="sky"
+                onPress={() => router.push('/harvests' as any)}
+              />
+              <QuickAction
+                icon={MapPin}
+                label="Origins"
+                variant="amber"
+                onPress={() => router.push('/farms' as any)}
+              />
+              <QuickAction
+                icon={FileText}
+                label="Ledger"
+                variant="indigo"
+                onPress={() => router.push('/reports' as any)}
+              />
+            </View>
+
+            <View style={styles.sectionWrapper}>
+              <SectionHeader
+                title="Verified trade batches"
+                actionText="View all"
+                onAction={() => router.push('/harvests' as any)}
+              />
+              {(harvests.filter((h) => h.status === 'approved').length > 0
+                ? harvests.filter((h) => h.status === 'approved')
+                : harvests
+              ).slice(0, 3).map((batch) => (
+                <Card key={batch.id} style={styles.roleDetailCard}>
+                  <View style={styles.roleCardHeader}>
+                    <View>
+                      <Text style={styles.roleCardTitle}>{batch.batch_reference || 'BATCH-2025-001'}</Text>
+                      <Text style={styles.roleCardSub}>
+                        {batch.crop?.name || 'Produce'} • {batch.quantity || '500'} {batch.unit || 'kg'} • Grade A Verified
+                      </Text>
+                    </View>
+                    <Chip label="TRACEABLE" variant="success" size="sm" />
+                  </View>
+                  <TouchableOpacity
+                    style={styles.inspectorActionBtn}
+                    onPress={() => router.push(`/harvest/${batch.id}` as any)}
+                  >
+                    <Text style={styles.inspectorActionBtnText}>Inspect batch dossier →</Text>
+                  </TouchableOpacity>
+                </Card>
+              ))}
             </View>
           </View>
         )}

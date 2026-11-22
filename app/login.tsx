@@ -15,7 +15,8 @@ import {
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
-import { Leaf, Compass, ShieldCheck, Users } from 'lucide-react-native';
+import { Leaf, Compass, ShieldCheck, Users, ShoppingBag } from 'lucide-react-native';
+import { homeRouteFor } from '../src/constants/roleHome';
 import {
   Colors,
   FontFamily,
@@ -23,6 +24,7 @@ import {
   Typography,
   Shadows,
 } from '../src/constants/theme';
+import { Logo } from '../src/components/Logo';
 import { useAppStore } from '../src/store/useAppStore';
 import { UserRole } from '../src/types/database';
 import { DatePickerField } from '../src/components/DatePickerField';
@@ -60,6 +62,12 @@ const ROLE_TABS: RoleTab[] = [
     label: 'Co-op',
     IconComponent: Users,
     defaultEmail: 'admin@cropcapture.app',
+  },
+  {
+    key: 'buyer',
+    label: 'Buyer',
+    IconComponent: ShoppingBag,
+    defaultEmail: 'buyer@cropcapture.app',
   },
 ];
 
@@ -110,7 +118,7 @@ export default function LoginScreen() {
     setIsLoading(true);
     try {
       await login(email, password, selectedRole);
-      router.replace('/(tabs)');
+      router.replace(homeRouteFor(selectedRole) as any);
     } catch (e: any) {
       Alert.alert('Sign-In Error', e?.message || 'Authentication failed.');
     } finally {
@@ -226,6 +234,7 @@ export default function LoginScreen() {
               ))}
             </Svg>
 
+            <Logo tone="onGreen" height={30} style={{ marginBottom: 14 }} />
             <Text style={styles.headingTitle}>
               {authMode === 'signin' ? 'Welcome back' : 'Create account'}
             </Text>
@@ -353,9 +362,9 @@ export default function LoginScreen() {
                   {/* Date of Birth with Calendar Selector */}
                   <DatePickerField
                     label="Date of Birth"
+                    mode="dob"
                     value={dateOfBirth}
                     onChange={setDateOfBirth}
-                    placeholder="Select your birth date"
                   />
 
                   {/* Gender Selector */}
@@ -500,16 +509,17 @@ const styles = StyleSheet.create({
   },
   roleGrid: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
     marginBottom: 20,
   },
   roleSquircle: {
     flex: 1,
-    height: 72,
-    borderRadius: 18,
+    height: 68,
+    borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
+    gap: 4,
+    paddingHorizontal: 2,
   },
   roleSquircleActive: {
     backgroundColor: Colors.tintSoft,
@@ -523,7 +533,7 @@ const styles = StyleSheet.create({
   },
   roleText: {
     fontFamily: FontFamily.medium,
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.text,
   },
   roleTextActive: {
