@@ -8,6 +8,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "test": "node --test __tests__/**/*.test.js",
+    "test:perf": "node --test __tests__/perf/*.perf.js",
     "ussd": "node server/index.js",
     "ussd:memory": "node server/index.js --memory",
     "ussd:seed": "node server/seed.js"

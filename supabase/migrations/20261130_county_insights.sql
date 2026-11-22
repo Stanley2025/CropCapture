@@ -3,7 +3,7 @@
 -- Description: Numbers for the admin "Counties" section: farmers, farms and harvest per county, with the
 --   gender split. Everything is counted in the database (never in the browser).
 --
---   admin_county_insights(year, crop, approved_only)   one row per county + "Unassigned county" + national totals
+--   admin_county_insights(year, crop, approved_only)        one row per county + "Unassigned county" + national totals
 --   admin_county_detail(county, year, crop, approved_only)  districts and top crops of one county
 --
 -- Who can call them: only a signed-in user whose profile role is super_admin or agricultural_admin. The
@@ -16,6 +16,8 @@
 
 -- Indexes for the queries below -------------------------------------------------------------------
 CREATE INDEX IF NOT EXISTS idx_farms_farmer_id ON public.farms(farmer_id);
+CREATE INDEX IF NOT EXISTS idx_farms_county_id ON public.farms(county_id);
+CREATE INDEX IF NOT EXISTS idx_harvest_batches_farm_date ON public.harvest_batches(farm_id, harvest_date);
 CREATE INDEX IF NOT EXISTS idx_harvest_batches_crop ON public.harvest_batches(crop_id);
 CREATE INDEX IF NOT EXISTS idx_harvest_batches_farm_live ON public.harvest_batches(farm_id, harvest_date) WHERE deleted_at IS NULL;
 
@@ -62,58 +64,15 @@ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
   );
 $$;
 
--- The records the section counts (internal; not callable by the apps) -----------------------------------
--- Farms, each with its county (the farm's own county_id, else its county text matched by name),
--- its district, and the gender of the farmer who owns it.
-CREATE OR REPLACE FUNCTION public.insights_farm_base()
-RETURNS TABLE (id UUID, farmer_id UUID, gender TEXT, county_id UUID, district TEXT, created_at TIMESTAMPTZ)
-LANGUAGE sql STABLE SET search_path = public AS $$
-  SELECT f.id, f.farmer_id, public.gender_key(fr.gender),
-         COALESCE(
-           (SELECT c.id FROM public.counties c WHERE c.id = f.county_id),
-           (SELECT c.id FROM public.counties c WHERE public.county_key(f.county) <> '' AND public.county_key(c.name) = public.county_key(f.county) LIMIT 1)
-         ),
-         COALESCE(d.name, NULLIF(btrim(f.district), '')),
-         f.created_at
-  FROM public.farms f
-  JOIN public.farmers fr ON fr.id = f.farmer_id
-  LEFT JOIN public.districts d ON d.id = f.district_id
-  WHERE COALESCE(f.source, '') <> 'seed' AND COALESCE(fr.source, '') <> 'seed';
-$$;
-
--- Farmers, each with one county: the county on the farmer's record when it matches a county, otherwise the
--- county of their first farm, otherwise none (Unassigned). A farmer is counted once, whatever their farms.
-CREATE OR REPLACE FUNCTION public.insights_farmer_county()
-RETURNS TABLE (id UUID, gender TEXT, county_id UUID)
-LANGUAGE sql STABLE SET search_path = public AS $$
-  SELECT fr.id, public.gender_key(fr.gender),
-         COALESCE(
-           (SELECT c.id FROM public.counties c WHERE public.county_key(fr.county) <> '' AND public.county_key(c.name) = public.county_key(fr.county) LIMIT 1),
-           (SELECT fb.county_id FROM public.insights_farm_base() fb WHERE fb.farmer_id = fr.id AND fb.county_id IS NOT NULL ORDER BY fb.created_at, fb.id LIMIT 1)
-         )
-  FROM public.farmers fr
-  WHERE COALESCE(fr.source, '') <> 'seed';
-$$;
-
--- Harvests that count, with their weight in kg (NULL when it cannot be known), after the filters.
-CREATE OR REPLACE FUNCTION public.insights_harvest_base(p_year INTEGER, p_crop UUID, p_approved_only BOOLEAN)
-RETURNS TABLE (id UUID, farm_id UUID, county_id UUID, gender TEXT, district TEXT, crop_id UUID, kg NUMERIC)
-LANGUAGE sql STABLE SET search_path = public AS $$
-  SELECT h.id, h.farm_id, fb.county_id, fb.gender, fb.district, h.crop_id,
-         public.harvest_weight_kg(h.quantity, h.unit, h.quantity_kg, h.kg_per_unit)
-  FROM public.harvest_batches h
-  JOIN public.insights_farm_base() fb ON fb.id = h.farm_id
-  WHERE h.deleted_at IS NULL
-    AND COALESCE(h.is_latest, TRUE)
-    AND COALESCE(h.source, '') <> 'seed'
-    AND (p_year IS NULL OR EXTRACT(YEAR FROM h.harvest_date)::INTEGER = p_year)
-    AND (p_crop IS NULL OR h.crop_id = p_crop)
-    AND (NOT p_approved_only OR h.status::text = 'approved');
-$$;
-
-REVOKE ALL ON FUNCTION public.insights_farm_base() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.insights_farmer_county() FROM PUBLIC, anon, authenticated;
-REVOKE ALL ON FUNCTION public.insights_harvest_base(INTEGER, UUID, BOOLEAN) FROM PUBLIC, anon, authenticated;
+-- The two functions below use the same four building blocks (written out in each, so each query is planned as
+-- one statement and every block is read once):
+--   ctys   the counties, with a comparable name
+--   fm     farms: the county (the farm's own county_id, else its county text matched by name), the district,
+--          and the gender of the farmer who owns the farm. Sample farms and sample farmers are left out.
+--   fc     farmers: ONE row per farmer, with one county: the county on the farmer's record when it matches a
+--          county, otherwise the county of their first farm, otherwise none (Unassigned). A farmer with
+--          several farms is counted once.
+--   hv     harvests that count (not deleted, not replaced, not sample, after the filters) with their kg
 
 -- 1. One row per county ------------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.admin_county_insights(
@@ -130,6 +89,50 @@ BEGIN
   END IF;
 
   WITH
+  ctys AS MATERIALIZED (
+    SELECT c.id, c.name, public.county_key(c.name) AS k FROM public.counties c
+  ),
+  ckeys AS MATERIALIZED (
+    -- one county per comparable name, so matching by name can never repeat a farm or a farmer
+    SELECT DISTINCT ON (k) id, k FROM ctys WHERE k <> '' ORDER BY k, name
+  ),
+  fm AS MATERIALIZED (
+    SELECT x.id, x.farmer_id, x.gender, COALESCE(c1.id, c2.id) AS county_id, x.district, x.created_at
+    FROM (
+      SELECT f.id, f.farmer_id, public.gender_key(fr.gender) AS gender, f.county_id,
+             NULLIF(public.county_key(f.county), '') AS ck,
+             COALESCE(d.name, NULLIF(btrim(f.district), '')) AS district, f.created_at
+      FROM public.farms f
+      JOIN public.farmers fr ON fr.id = f.farmer_id AND COALESCE(fr.source, '') <> 'seed'
+      LEFT JOIN public.districts d ON d.id = f.district_id
+      WHERE COALESCE(f.source, '') <> 'seed'
+    ) x
+    LEFT JOIN ctys c1 ON c1.id = x.county_id
+    LEFT JOIN ckeys c2 ON c1.id IS NULL AND c2.k = x.ck
+  ),
+  fc AS MATERIALIZED (
+    SELECT fr.id, public.gender_key(fr.gender) AS gender, COALESCE(c.id, ff.county_id) AS county_id
+    FROM (SELECT f.id, f.gender, NULLIF(public.county_key(f.county), '') AS ck
+          FROM public.farmers f WHERE COALESCE(f.source, '') <> 'seed') fr
+    LEFT JOIN ckeys c ON c.k = fr.ck
+    LEFT JOIN (SELECT DISTINCT ON (m.farmer_id) m.farmer_id, m.county_id
+               FROM fm m WHERE m.county_id IS NOT NULL ORDER BY m.farmer_id, m.created_at, m.id) ff ON ff.farmer_id = fr.id
+  ),
+  hv AS MATERIALIZED (
+    -- one pass over the harvests: each farm's harvests added up, so the big table is never joined row by row
+    SELECT w.farm_id, count(*) AS n, count(*) FILTER (WHERE w.kg IS NULL) AS no_weight, sum(w.kg) AS kg
+    FROM (
+      SELECT h.farm_id, public.harvest_weight_kg(h.quantity, h.unit, h.quantity_kg, h.kg_per_unit) AS kg
+      FROM public.harvest_batches h
+      WHERE h.deleted_at IS NULL
+        AND COALESCE(h.is_latest, TRUE)
+        AND COALESCE(h.source, '') <> 'seed'
+        AND (p_year IS NULL OR (h.harvest_date >= make_date(p_year, 1, 1) AND h.harvest_date < make_date(p_year + 1, 1, 1)))
+        AND (p_crop IS NULL OR h.crop_id = p_crop)
+        AND (NOT p_approved_only OR h.status::text = 'approved')
+    ) w
+    GROUP BY w.farm_id
+  ),
   all_counties AS (
     SELECT c.id, c.name, 1 AS ord FROM public.counties c
     UNION ALL
@@ -140,24 +143,25 @@ BEGIN
            count(*) FILTER (WHERE gender = 'male') AS male,
            count(*) FILTER (WHERE gender = 'female') AS female,
            count(*) FILTER (WHERE gender = 'unrecorded') AS unrecorded
-    FROM public.insights_farmer_county() GROUP BY county_id
+    FROM fc GROUP BY county_id
   ),
   ma AS (
     SELECT county_id, count(*) AS farms,
            count(*) FILTER (WHERE gender = 'male') AS male,
            count(*) FILTER (WHERE gender = 'female') AS female,
            count(*) FILTER (WHERE gender = 'unrecorded') AS unrecorded
-    FROM public.insights_farm_base() GROUP BY county_id
+    FROM fm GROUP BY county_id
   ),
   ha AS (
-    SELECT county_id,
-           count(*) AS harvests,
-           count(*) FILTER (WHERE kg IS NULL) AS no_weight,
-           COALESCE(sum(kg), 0) AS kg,
-           COALESCE(sum(kg) FILTER (WHERE gender = 'male'), 0) AS male,
-           COALESCE(sum(kg) FILTER (WHERE gender = 'female'), 0) AS female,
-           COALESCE(sum(kg) FILTER (WHERE gender = 'unrecorded'), 0) AS unrecorded
-    FROM public.insights_harvest_base(p_year, p_crop, p_approved_only) GROUP BY county_id
+    SELECT m.county_id,
+           sum(v.n) AS harvests,
+           sum(v.no_weight) AS no_weight,
+           COALESCE(sum(v.kg), 0) AS kg,
+           COALESCE(sum(v.kg) FILTER (WHERE m.gender = 'male'), 0) AS male,
+           COALESCE(sum(v.kg) FILTER (WHERE m.gender = 'female'), 0) AS female,
+           COALESCE(sum(v.kg) FILTER (WHERE m.gender = 'unrecorded'), 0) AS unrecorded
+    FROM fm m JOIN hv v ON v.farm_id = m.id
+    GROUP BY m.county_id
   ),
   county_rows AS (
     SELECT r.id, r.name, r.ord,
@@ -215,31 +219,61 @@ BEGIN
   END IF;
 
   WITH
-  farms_here AS (
-    SELECT fb.id, fb.farmer_id, fb.gender, COALESCE(fb.district, 'Not recorded') AS district
-    FROM public.insights_farm_base() fb
-    WHERE fb.county_id IS NOT DISTINCT FROM p_county
+  ctys AS MATERIALIZED (
+    SELECT c.id, c.name, public.county_key(c.name) AS k FROM public.counties c
   ),
-  harvest_here AS (
-    SELECT hb.* FROM public.insights_harvest_base(p_year, p_crop, p_approved_only) hb
-    WHERE hb.county_id IS NOT DISTINCT FROM p_county
+  ckeys AS MATERIALIZED (
+    -- one county per comparable name, so matching by name can never repeat a farm or a farmer
+    SELECT DISTINCT ON (k) id, k FROM ctys WHERE k <> '' ORDER BY k, name
+  ),
+  fm AS MATERIALIZED (
+    SELECT x.id, x.farmer_id, x.gender, COALESCE(x.district, 'Not recorded') AS district
+    FROM (
+      SELECT f.id, f.farmer_id, public.gender_key(fr.gender) AS gender, f.county_id,
+             NULLIF(public.county_key(f.county), '') AS ck,
+             COALESCE(d.name, NULLIF(btrim(f.district), '')) AS district
+      FROM public.farms f
+      JOIN public.farmers fr ON fr.id = f.farmer_id AND COALESCE(fr.source, '') <> 'seed'
+      LEFT JOIN public.districts d ON d.id = f.district_id
+      WHERE COALESCE(f.source, '') <> 'seed'
+    ) x
+    LEFT JOIN ctys c1 ON c1.id = x.county_id
+    LEFT JOIN ckeys c2 ON c1.id IS NULL AND c2.k = x.ck
+    WHERE COALESCE(c1.id, c2.id) IS NOT DISTINCT FROM p_county
+  ),
+  hv AS MATERIALIZED (
+    SELECT w.farm_id, w.crop_id, count(*) AS n, count(*) FILTER (WHERE w.kg IS NULL) AS no_weight, sum(w.kg) AS kg
+    FROM (
+      SELECT h.farm_id, h.crop_id, public.harvest_weight_kg(h.quantity, h.unit, h.quantity_kg, h.kg_per_unit) AS kg
+      FROM public.harvest_batches h
+      WHERE h.deleted_at IS NULL
+        AND COALESCE(h.is_latest, TRUE)
+        AND COALESCE(h.source, '') <> 'seed'
+        AND (p_year IS NULL OR (h.harvest_date >= make_date(p_year, 1, 1) AND h.harvest_date < make_date(p_year + 1, 1, 1)))
+        AND (p_crop IS NULL OR h.crop_id = p_crop)
+        AND (NOT p_approved_only OR h.status::text = 'approved')
+    ) w
+    GROUP BY w.farm_id, w.crop_id
+  ),
+  hvd AS (
+    SELECT m.district, v.crop_id, v.no_weight, v.kg FROM hv v JOIN fm m ON m.id = v.farm_id
   ),
   dist AS (
-    SELECT fh.district,
-           count(DISTINCT fh.farmer_id) AS farmers,
-           count(DISTINCT fh.farmer_id) FILTER (WHERE fh.gender = 'male') AS male,
-           count(DISTINCT fh.farmer_id) FILTER (WHERE fh.gender = 'female') AS female,
-           count(DISTINCT fh.farmer_id) FILTER (WHERE fh.gender = 'unrecorded') AS unrecorded,
+    SELECT m.district,
+           count(DISTINCT m.farmer_id) AS farmers,
+           count(DISTINCT m.farmer_id) FILTER (WHERE m.gender = 'male') AS male,
+           count(DISTINCT m.farmer_id) FILTER (WHERE m.gender = 'female') AS female,
+           count(DISTINCT m.farmer_id) FILTER (WHERE m.gender = 'unrecorded') AS unrecorded,
            count(*) AS farms
-    FROM farms_here fh GROUP BY fh.district
+    FROM fm m GROUP BY m.district
   ),
   dist_kg AS (
-    SELECT COALESCE(hh.district, 'Not recorded') AS district, COALESCE(sum(hh.kg), 0) AS kg, count(*) FILTER (WHERE hh.kg IS NULL) AS no_weight
-    FROM harvest_here hh GROUP BY COALESCE(hh.district, 'Not recorded')
+    SELECT v.district, COALESCE(sum(v.kg), 0) AS kg, COALESCE(sum(v.no_weight), 0) AS no_weight
+    FROM hvd v GROUP BY v.district
   ),
   crops_here AS (
-    SELECT COALESCE(c.name, 'Not recorded') AS crop, COALESCE(sum(hh.kg), 0) AS kg
-    FROM harvest_here hh LEFT JOIN public.crops c ON c.id = hh.crop_id
+    SELECT COALESCE(c.name, 'Not recorded') AS crop, COALESCE(sum(v.kg), 0) AS kg
+    FROM hvd v LEFT JOIN public.crops c ON c.id = v.crop_id
     GROUP BY COALESCE(c.name, 'Not recorded')
   )
   SELECT jsonb_build_object(
@@ -269,3 +303,9 @@ REVOKE ALL ON FUNCTION public.is_insights_admin() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.admin_county_insights(INTEGER, UUID, BOOLEAN) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.admin_county_detail(UUID, INTEGER, UUID, BOOLEAN) TO authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.is_insights_admin() TO authenticated, service_role;
+
+-- The first version of this migration made three internal helper functions. They are replaced by the queries
+-- above; remove them if an earlier run created them.
+DROP FUNCTION IF EXISTS public.insights_farm_base();
+DROP FUNCTION IF EXISTS public.insights_farmer_county();
+DROP FUNCTION IF EXISTS public.insights_harvest_base(INTEGER, UUID, BOOLEAN);

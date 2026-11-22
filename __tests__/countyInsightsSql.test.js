@@ -163,15 +163,20 @@ test('only an administrator can read the numbers; everyone else is refused', asy
   assert.ok(await insights(db, ID.agri, 2026), 'an agricultural administrator can too');
 });
 
-test('the signed-out app key cannot call the functions at all, and the helpers are private', async () => {
+test('the signed-out app key cannot call the functions at all; a signed-in non-admin is refused inside them', async () => {
   const db = await makeDb();
   await db.exec('SET ROLE anon');
   await assert.rejects(db.query('SELECT public.admin_county_insights(2026, NULL, false)'), /permission denied/i);
-  await assert.rejects(db.query('SELECT * FROM public.insights_farm_base()'), /permission denied/i);
+  await assert.rejects(db.query('SELECT public.admin_county_detail(NULL, 2026, NULL, false)'), /permission denied/i);
+  await assert.rejects(db.query('SELECT public.is_insights_admin()'), /permission denied/i);
   await db.exec('RESET ROLE');
   await db.exec('SET ROLE authenticated');
-  await assert.rejects(db.query('SELECT * FROM public.insights_farm_base()'), /permission denied/i, 'a signed-in user cannot read the raw base either');
+  await db.query(`SELECT set_config('test.uid', $1, false)`, [ID.farmerUser]);
+  await assert.rejects(db.query('SELECT public.admin_county_insights(2026, NULL, false)'), /not_allowed/i);
   await db.exec('RESET ROLE');
+  // the internal helper functions of the first version are gone
+  const left = await db.query(`SELECT count(*)::int AS n FROM pg_proc WHERE proname LIKE 'insights_%'`);
+  assert.equal(left.rows[0].n, 0);
 });
 
 test('the result holds counts and totals only: no names, phones, ids of a person or places of a farm', async () => {
