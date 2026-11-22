@@ -43,6 +43,7 @@ const NAVIGATION_SECTIONS: NavSection[] = [
     title: 'Overview',
     items: [
       { title: 'Dashboard', href: '/dashboard', icon: LayoutGrid },
+      { title: 'Counties', href: '/dashboard/counties', icon: MapPin },
     ],
   },
   {
