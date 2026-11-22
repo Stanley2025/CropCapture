@@ -9,7 +9,7 @@ import {
   Image,
   Dimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   MapPin,
@@ -108,6 +108,14 @@ export default function HomeScreen() {
     }
   }, [refreshPendingSyncCount, currentRole, currentFarmer?.id]);
 
+  // This screen stays open while another is shown on top of it (for example after registering a
+  // second harvest), so read the saved records again every time it comes back into view.
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
+
   useEffect(() => {
     loadData();
   }, [loadData, currentRole, currentFarmer?.id]);
@@ -121,7 +129,30 @@ export default function HomeScreen() {
 
   // Metrics computation
   const totalFarms = farms.length;
-  const totalCultivatedArea = seasons.reduce((acc, s) => acc + (Number(s.cultivated_area) || 0), 0);
+
+  // Calculate total farm acreage across all registered parcels
+  const totalFarmAcres = farms.reduce((acc, f: any) => {
+    const rawSize = Number(f.size);
+    if (!isNaN(rawSize) && rawSize > 0) {
+      const inAcres = f.size_unit === 'hectares' ? rawSize * 2.47105 : rawSize;
+      return acc + inAcres;
+    }
+    const rawTotal = Number(f.total_area);
+    if (!isNaN(rawTotal) && rawTotal > 0) {
+      return acc + rawTotal;
+    }
+    const rawHectares = Number(f.size_hectares);
+    if (!isNaN(rawHectares) && rawHectares > 0) {
+      return acc + (rawHectares * 2.47105);
+    }
+    return acc;
+  }, 0);
+
+  // Total cultivated area from active / recorded seasons
+  const seasonCultivatedArea = seasons.reduce((acc, s) => acc + (Number(s.cultivated_area) || 0), 0);
+
+  // Use the total registered farm acres; if no farm size was recorded, fallback to season cultivated area
+  const totalCultivatedArea = totalFarmAcres > 0 ? totalFarmAcres : seasonCultivatedArea;
   const activeSeasonsCount = seasons.filter((s) => s.status === 'active' || s.status === 'harvesting').length;
   const totalHarvestWeight = harvests.reduce((acc, h) => acc + (Number(h.quantity) || 0), 0);
   const pendingInspectionsCount = harvests.filter(
@@ -350,7 +381,13 @@ export default function HomeScreen() {
                       : f.crop_type?.toLowerCase().includes('cocoa')
                       ? 'cocoa'
                       : 'rice';
-                    const areaVal = f.total_area || f.size_hectares || '3.5';
+                    const sizeRaw =
+                      f.size != null && !isNaN(Number(f.size)) && Number(f.size) > 0
+                        ? f.size_unit === 'hectares'
+                          ? (Number(f.size) * 2.47105).toFixed(1)
+                          : Number(f.size).toString()
+                        : f.total_area || f.size_hectares || '3.5';
+                    const areaVal = sizeRaw;
                     const cropLabel = f.crop_type
                       ? f.crop_type.charAt(0).toUpperCase() + f.crop_type.slice(1)
                       : 'Rice';
